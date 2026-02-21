@@ -431,6 +431,38 @@ async function init() {
 
     loadSidebarChats();
     setInterval(loadSidebarChats, 5000);
+
+    bindSidebarToggle();
+}
+
+function bindSidebarToggle() {
+    const sidebar = document.getElementById('app-sidebar');
+    const toggleBtn = document.getElementById('sidebar-toggle-mobile');
+    const backdrop = document.getElementById('mobile-overlay-backdrop');
+    if (!sidebar || !toggleBtn || !backdrop) return;
+
+    const isMobileLayout = () => window.innerWidth < 1024;
+
+    const setSidebarOpen = (open) => {
+        sidebar.classList.toggle('mobile-open', open);
+        backdrop.classList.toggle('visible', open);
+    };
+
+    toggleBtn.addEventListener('click', () => {
+        if (!isMobileLayout()) return;
+        const isOpen = sidebar.classList.contains('mobile-open');
+        // Close notification panel if open
+        const notifPanel = document.getElementById('notification-history-panel');
+        if (notifPanel) notifPanel.classList.remove('mobile-open');
+        setSidebarOpen(!isOpen);
+    });
+
+    backdrop.addEventListener('click', () => {
+        setSidebarOpen(false);
+        // Also close the notification panel if it's open on mobile
+        const notifPanel = document.getElementById('notification-history-panel');
+        if (notifPanel) notifPanel.classList.remove('mobile-open');
+    });
 }
 
 window.sendFriendRequest = sendFriendRequest;

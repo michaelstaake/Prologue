@@ -27,6 +27,33 @@
             0% { transform: scaleX(1); }
             100% { transform: scaleX(0); }
         }
+        @media (max-width: 1023px) {
+            #app-sidebar { display: none; }
+            #app-sidebar.mobile-open {
+                display: flex;
+                position: fixed;
+                top: 0; left: 0; bottom: 0;
+                width: min(85vw, 18rem);
+                z-index: 50;
+            }
+            #notification-history-panel { display: none; }
+            #notification-history-panel.mobile-open {
+                display: flex;
+                position: fixed;
+                top: 0; right: 0; bottom: 0;
+                width: min(95vw, 24rem);
+                z-index: 50;
+                border-left: 1px solid #3f3f46;
+            }
+            #mobile-overlay-backdrop { display: none; }
+            #mobile-overlay-backdrop.visible {
+                display: block;
+                position: fixed;
+                inset: 0;
+                background: rgba(0,0,0,0.5);
+                z-index: 49;
+            }
+        }
     </style>
 </head>
 <body class="h-screen text-gray-200 overflow-hidden">
@@ -66,7 +93,7 @@
     ?>
     <?php if ($currentUser): ?>
     <div id="app-layout" class="flex h-screen">
-        <aside class="w-72 sidebar border-r border-zinc-800 flex flex-col">
+        <aside id="app-sidebar" class="w-72 sidebar border-r border-zinc-800 flex flex-col">
             <a href="<?= htmlspecialchars(base_url('/'), ENT_QUOTES, 'UTF-8') ?>" class="p-4 border-b border-zinc-700 flex items-center gap-3 hover:bg-zinc-800/40 transition">
                 <i class="fa-solid fa-comments text-2xl prologue-accent"></i>
                 <span class="text-2xl font-bold">Prologue</span>
@@ -143,6 +170,21 @@
             </div>
             <div id="notification-history-list" class="hidden flex-1 overflow-auto"></div>
         </aside>
+    </div>
+
+    <div id="mobile-overlay-backdrop"></div>
+
+    <div class="lg:hidden fixed bottom-5 left-5 z-30">
+        <button id="sidebar-toggle-mobile" class="w-14 h-14 rounded-2xl bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 shadow-lg flex items-center justify-center" aria-label="Open menu">
+            <i class="fa-solid fa-bars text-lg"></i>
+        </button>
+    </div>
+
+    <div class="lg:hidden fixed bottom-5 right-5 z-30">
+        <button id="notification-history-button-mobile" class="relative w-14 h-14 rounded-2xl bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 shadow-lg flex items-center justify-center" aria-label="Open notifications">
+            <i class="fa-regular fa-bell text-lg"></i>
+            <span id="notification-history-count-mobile" class="hidden absolute -top-2 -right-2 min-w-[1.25rem] h-5 px-1 rounded-full bg-emerald-600 text-white text-xs flex items-center justify-center">0</span>
+        </button>
     </div>
 
     <div id="report-modal" class="hidden fixed inset-0 bg-black/70 z-50 p-4 md:p-6" aria-hidden="true">

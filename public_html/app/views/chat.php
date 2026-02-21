@@ -407,7 +407,7 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
             <button type="button" id="attachments-toggle" class="w-14 rounded-3xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-700" aria-label="Open attachments menu" aria-expanded="false" aria-controls="attachments-drawer">
                 <i class="fa-solid fa-paperclip"></i>
             </button>
-            <button type="button" id="emoji-toggle" class="w-14 rounded-3xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-700" aria-label="Open emoji picker" aria-expanded="false" aria-controls="emoji-drawer">
+            <button type="button" id="emoji-toggle" class="hidden lg:block w-14 rounded-3xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-700" aria-label="Open emoji picker" aria-expanded="false" aria-controls="emoji-drawer">
                 <i class="fa-regular fa-face-smile"></i>
             </button>
             <input type="text" id="message-input" class="flex-1 bg-zinc-800 border border-zinc-700 rounded-3xl px-6 py-4" placeholder="Message..." required>

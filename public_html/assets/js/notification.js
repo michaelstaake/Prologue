@@ -55,7 +55,12 @@ function clearActiveToastPopup(toastId) {
 }
 
 function isLoggedInNotificationView() {
-    return Boolean(document.getElementById('notification-history-panel'));
+    const panel = document.getElementById('notification-history-panel');
+    if (!panel) return false;
+    if (window.innerWidth < 1024) {
+        return panel.classList.contains('mobile-open');
+    }
+    return true;
 }
 
 function scheduleToastExpirySweep() {
@@ -704,6 +709,16 @@ function renderToastHistory() {
         }
     }
 
+    const mobileBadge = document.getElementById('notification-history-count-mobile');
+    if (mobileBadge) {
+        if (visibleToasts.length > 0) {
+            mobileBadge.textContent = String(Math.min(visibleToasts.length, 99));
+            mobileBadge.classList.remove('hidden');
+        } else {
+            mobileBadge.classList.add('hidden');
+        }
+    }
+
     if (!list) return;
 
     list.innerHTML = visibleToasts.map(toast => {
@@ -794,16 +809,28 @@ async function handleToastHistoryClick(event) {
 
 function bindNotificationHistory() {
     const button = document.getElementById('notification-history-button');
+    const mobileButton = document.getElementById('notification-history-button-mobile');
     const panel = document.getElementById('notification-history-panel');
     const list = document.getElementById('notification-history-list');
     const title = document.getElementById('notification-history-title');
     const header = document.getElementById('notification-history-header');
     if (!button || !panel) return;
 
+    const isMobileLayout = () => window.innerWidth < 1024;
+
     const setExpanded = (expanded) => {
-        panel.classList.toggle('w-20', !expanded);
-        panel.classList.toggle('w-96', expanded);
-        panel.classList.toggle('max-w-[95vw]', expanded);
+        if (isMobileLayout()) {
+            panel.classList.toggle('mobile-open', expanded);
+            // Close sidebar if open, then show/hide shared backdrop
+            const sidebar = document.getElementById('app-sidebar');
+            if (sidebar) sidebar.classList.remove('mobile-open');
+            const backdrop = document.getElementById('mobile-overlay-backdrop');
+            if (backdrop) backdrop.classList.toggle('visible', expanded);
+        } else {
+            panel.classList.toggle('w-20', !expanded);
+            panel.classList.toggle('w-96', expanded);
+            panel.classList.toggle('max-w-[95vw]', expanded);
+        }
         if (list) {
             list.classList.toggle('hidden', !expanded);
         }
@@ -819,13 +846,13 @@ function bindNotificationHistory() {
     };
 
     let expanded = Boolean(window.NOTIFICATION_SIDEBAR_EXPANDED);
-    if (toastHistory.length === 0) {
+    if (toastHistory.length === 0 || isMobileLayout()) {
         expanded = false;
     }
     window.NOTIFICATION_SIDEBAR_EXPANDED = expanded;
     setExpanded(expanded);
 
-    button.addEventListener('click', () => {
+    const handleToggle = () => {
         expanded = !expanded;
         setExpanded(expanded);
         window.NOTIFICATION_SIDEBAR_EXPANDED = expanded;
@@ -838,7 +865,13 @@ function bindNotificationHistory() {
             csrf_token: getCsrfToken(),
             expanded: expanded ? '1' : '0'
         }).catch(() => {});
-    });
+    };
+
+    button.addEventListener('click', handleToggle);
+
+    if (mobileButton) {
+        mobileButton.addEventListener('click', handleToggle);
+    }
 
     if (list) {
         list.addEventListener('click', (event) => {
