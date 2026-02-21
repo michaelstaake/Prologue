@@ -232,8 +232,14 @@
     </section>
 
     <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-2xl">
-        <h2 class="text-xl font-semibold mb-4">Storage</h2>
+        <h2 class="text-xl font-semibold mb-1">Diagnostics</h2>
+        <p class="text-sm text-zinc-400 mb-5">Server environment checks relevant to file uploads and storage.</p>
         <div class="space-y-3">
+            <div class="flex items-center justify-between gap-4 rounded-xl border border-zinc-700 bg-zinc-800/30 px-4 py-3">
+                <span class="text-zinc-100">PHP version</span>
+                <span class="text-sm font-mono text-zinc-200"><?= htmlspecialchars((string)($php_version ?? '—'), ENT_QUOTES, 'UTF-8') ?></span>
+            </div>
+
             <div class="flex items-center justify-between gap-4 rounded-xl border border-zinc-700 bg-zinc-800/30 px-4 py-3">
                 <span class="text-zinc-100">Storage directory</span>
                 <?php if ($storage_writable): ?>
@@ -241,6 +247,30 @@
                 <?php else: ?>
                     <span class="text-xs px-2.5 py-1 rounded-full border border-red-600/50 bg-red-900/30 text-red-300">Not writable</span>
                 <?php endif; ?>
+            </div>
+
+            <div class="flex items-center justify-between gap-4 rounded-xl border border-zinc-700 bg-zinc-800/30 px-4 py-3">
+                <span class="text-zinc-100">PHP <code class="text-xs text-zinc-400">file_uploads</code></span>
+                <?php if ($php_file_uploads): ?>
+                    <span class="text-xs px-2.5 py-1 rounded-full border border-green-600/50 bg-green-900/30 text-green-300">On</span>
+                <?php else: ?>
+                    <span class="text-xs px-2.5 py-1 rounded-full border border-red-600/50 bg-red-900/30 text-red-300">Off</span>
+                <?php endif; ?>
+            </div>
+
+            <div class="flex items-center justify-between gap-4 rounded-xl border border-zinc-700 bg-zinc-800/30 px-4 py-3">
+                <span class="text-zinc-100">PHP <code class="text-xs text-zinc-400">upload_max_filesize</code></span>
+                <span class="text-sm font-mono text-zinc-200"><?= htmlspecialchars((string)($php_upload_max_filesize ?? '—'), ENT_QUOTES, 'UTF-8') ?></span>
+            </div>
+
+            <div class="flex items-center justify-between gap-4 rounded-xl border border-zinc-700 bg-zinc-800/30 px-4 py-3">
+                <span class="text-zinc-100">PHP <code class="text-xs text-zinc-400">post_max_size</code></span>
+                <span class="text-sm font-mono text-zinc-200"><?= htmlspecialchars((string)($php_post_max_size ?? '—'), ENT_QUOTES, 'UTF-8') ?></span>
+            </div>
+
+            <div class="flex items-center justify-between gap-4 rounded-xl border border-zinc-700 bg-zinc-800/30 px-4 py-3">
+                <span class="text-zinc-100">PHP <code class="text-xs text-zinc-400">memory_limit</code></span>
+                <span class="text-sm font-mono text-zinc-200"><?= htmlspecialchars((string)($php_memory_limit ?? '—'), ENT_QUOTES, 'UTF-8') ?></span>
             </div>
         </div>
     </section>

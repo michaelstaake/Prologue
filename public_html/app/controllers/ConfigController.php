@@ -39,6 +39,11 @@ class ConfigController extends Controller {
             'failed_registration_attempts_24h' => $bruteForceProtection['failed_registration_attempts_24h'],
             'active_banned_ips' => $bruteForceProtection['active_banned_ips'],
             'storage_writable' => is_dir($storageRoot) && is_writable($storageRoot),
+            'php_version' => PHP_VERSION,
+            'php_file_uploads' => (bool)ini_get('file_uploads'),
+            'php_upload_max_filesize' => ini_get('upload_max_filesize'),
+            'php_post_max_size' => ini_get('post_max_size'),
+            'php_memory_limit' => ini_get('memory_limit'),
             'app_version' => APP_VERSION,
             'database_version' => (string)(Setting::get('database_version') ?? 'unknown'),
         ]);
