@@ -83,38 +83,58 @@ class Attachment extends Model {
     }
 
     public static function createPendingFromUpload(int $chatId, $user, array $file): array {
+        $attachmentLogging = Setting::get('attachment_logging') === '1';
+        $logFailure = function(string $reason, string $step) use ($attachmentLogging, $chatId, $user, $file): void {
+            if (!$attachmentLogging) return;
+            ErrorHandler::logToDirectory('attachment.log', 'upload_failed', [
+                'step' => $step,
+                'reason' => $reason,
+                'chat_id' => $chatId,
+                'user_id' => (int)($user->id ?? 0),
+                'original_name' => $file['name'] ?? '',
+                'size' => $file['size'] ?? 0,
+            ]);
+        };
+
         $errorCode = (int)($file['error'] ?? UPLOAD_ERR_NO_FILE);
         if ($errorCode !== UPLOAD_ERR_OK) {
+            $logFailure('attachment_upload_failed', 'php_upload_error:' . $errorCode);
             return ['error' => 'attachment_upload_failed'];
         }
 
         $tmpPath = $file['tmp_name'] ?? '';
         if (!is_string($tmpPath) || $tmpPath === '' || !is_uploaded_file($tmpPath)) {
+            $logFailure('attachment_upload_failed', 'invalid_tmp_file');
             return ['error' => 'attachment_upload_failed'];
         }
 
         $size = (int)($file['size'] ?? 0);
         if ($size <= 0 || $size > self::maxFileSizeBytes()) {
+            $logFailure('attachment_too_large', 'size_check');
             return ['error' => 'attachment_too_large'];
         }
 
         $originalName = self::normalizeOriginalName((string)($file['name'] ?? ''));
         if ($originalName === null || substr_count($originalName, '.') !== 1) {
+            $logFailure('attachment_invalid_name', 'normalize_name');
             return ['error' => 'attachment_invalid_name'];
         }
 
         $imageInfo = @getimagesize($tmpPath);
         if (!$imageInfo) {
+            $logFailure('attachment_invalid_type', 'getimagesize');
             return ['error' => 'attachment_invalid_type'];
         }
 
         $mime = strtolower((string)($imageInfo['mime'] ?? ''));
         if (!isset(self::ALLOWED_MIME_TO_EXT[$mime])) {
+            $logFailure('attachment_invalid_type', 'mime_not_allowed:' . $mime);
             return ['error' => 'attachment_invalid_type'];
         }
 
         $extension = self::ALLOWED_MIME_TO_EXT[$mime];
         if (!in_array($extension, self::acceptedExtensions(), true)) {
+            $logFailure('attachment_invalid_type', 'extension_not_accepted:' . $extension);
             return ['error' => 'attachment_invalid_type'];
         }
 
@@ -123,34 +143,50 @@ class Attachment extends Model {
             $nameExt = 'jpg';
         }
         if ($nameExt !== $extension) {
+            $logFailure('attachment_invalid_name', 'extension_mime_mismatch:' . $nameExt . '_vs_' . $extension);
             return ['error' => 'attachment_invalid_name'];
         }
 
         $width = (int)($imageInfo[0] ?? 0);
         $height = (int)($imageInfo[1] ?? 0);
         if ($width <= 0 || $height <= 0 || $width > 10000 || $height > 10000) {
+            $logFailure('attachment_invalid_type', 'dimensions:' . $width . 'x' . $height);
             return ['error' => 'attachment_invalid_type'];
         }
 
         $userId = (int)$user->id;
         $userNumber = preg_replace('/\D+/', '', (string)$user->user_number);
         if (!preg_match('/^\d{16}$/', $userNumber)) {
+            $logFailure('attachment_upload_failed', 'invalid_user_number');
             return ['error' => 'attachment_upload_failed'];
         }
 
         $dir = self::directoryForUserNumber($userNumber);
         if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
+            $logFailure('attachment_upload_failed', 'storage_dir_error:' . $dir);
             return ['error' => 'attachment_upload_failed'];
         }
 
         $fileBase = self::generateUniqueFileBaseForUser($userId);
         if ($fileBase === null) {
+            $logFailure('attachment_upload_failed', 'unique_filename_error');
             return ['error' => 'attachment_upload_failed'];
         }
 
         $targetPath = $dir . '/' . $fileBase . '.' . $extension;
+
+        if ($mime === 'image/jpeg' && (!function_exists('imagecreatefromjpeg') || !function_exists('imagejpeg'))) {
+            $logFailure('attachment_upload_failed', 'gd_jpeg_not_available');
+            return ['error' => 'attachment_upload_failed'];
+        }
+        if ($mime === 'image/png' && (!function_exists('imagecreatefrompng') || !function_exists('imagepng'))) {
+            $logFailure('attachment_upload_failed', 'gd_png_not_available');
+            return ['error' => 'attachment_upload_failed'];
+        }
+
         $write = self::writeSanitizedImage($tmpPath, $mime, $targetPath);
         if (!$write) {
+            $logFailure('attachment_upload_failed', 'write_sanitized_image:' . $targetPath);
             return ['error' => 'attachment_upload_failed'];
         }
 
@@ -159,6 +195,7 @@ class Attachment extends Model {
         $storedSize = (int)@filesize($targetPath);
         if ($storedSize <= 0 || $storedSize > self::maxFileSizeBytes()) {
             @unlink($targetPath);
+            $logFailure('attachment_too_large', 'stored_size:' . $storedSize);
             return ['error' => 'attachment_too_large'];
         }
 
@@ -169,6 +206,18 @@ class Attachment extends Model {
         );
 
         $id = (int)Database::getInstance()->lastInsertId();
+
+        if ($attachmentLogging) {
+            ErrorHandler::logToDirectory('attachment.log', 'upload_success', [
+                'chat_id' => $chatId,
+                'user_id' => $userId,
+                'original_name' => $originalName,
+                'file_name' => $fileBase . '.' . $extension,
+                'size' => $storedSize,
+                'width' => $width,
+                'height' => $height,
+            ]);
+        }
 
         return [
             'success' => true,
@@ -329,29 +378,31 @@ class Attachment extends Model {
     }
 
     private static function writeSanitizedImage(string $tmpPath, string $mime, string $targetPath): bool {
-        if (!function_exists('imagecreatefromjpeg') || !function_exists('imagecreatefrompng')) {
-            return false;
-        }
-
         if ($mime === 'image/jpeg') {
+            if (!function_exists('imagecreatefromjpeg') || !function_exists('imagejpeg')) {
+                return false;
+            }
             $resource = @imagecreatefromjpeg($tmpPath);
             if (!$resource) {
                 return false;
             }
-
             $ok = @imagejpeg($resource, $targetPath, 90);
+            imagedestroy($resource);
             return (bool)$ok;
         }
 
         if ($mime === 'image/png') {
+            if (!function_exists('imagecreatefrompng') || !function_exists('imagepng')) {
+                return false;
+            }
             $resource = @imagecreatefrompng($tmpPath);
             if (!$resource) {
                 return false;
             }
-
             imagealphablending($resource, false);
             imagesavealpha($resource, true);
             $ok = @imagepng($resource, $targetPath, 6);
+            imagedestroy($resource);
             return (bool)$ok;
         }
 
@@ -364,7 +415,7 @@ class Attachment extends Model {
 
     private static function publicUrl(string $userNumber, string $fileName, string $extension): string {
         $userNumber = preg_replace('/\D+/', '', $userNumber);
-        return base_url('/storage/attachments/' . $userNumber . '/' . $fileName . '.' . $extension);
+        return base_url('/a/' . $userNumber . '/' . $fileName . '.' . $extension);
     }
 
     private static function generateUniqueFileBaseForUser(int $userId): ?string {

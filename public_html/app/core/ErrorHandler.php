@@ -9,14 +9,14 @@ class ErrorHandler {
     public static function register() {
         ini_set('display_errors', '0');
         ini_set('log_errors', '1');
-        $logFile = trim((string)(getenv('ERROR_LOG_FILE') ?: ''));
-        if ($logFile === '' && defined('APP_ERROR_LOG_FILE')) {
-            $logFile = trim((string)APP_ERROR_LOG_FILE);
+        $logDir = trim((string)(getenv('LOG_DIRECTORY') ?: ''));
+        if ($logDir === '' && defined('APP_LOG_DIRECTORY')) {
+            $logDir = trim((string)APP_LOG_DIRECTORY);
         }
-        if ($logFile !== '') {
-            $logDir = dirname($logFile);
+        if ($logDir !== '') {
+            $logDir = rtrim($logDir, '/');
             if (is_dir($logDir) || @mkdir($logDir, 0775, true)) {
-                ini_set('error_log', $logFile);
+                ini_set('error_log', $logDir . '/error.log');
             }
         }
         error_reporting(E_ALL);
@@ -159,6 +159,23 @@ class ErrorHandler {
     private static function logError($type, $context = []) {
         $contextJson = json_encode($context, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         error_log('[Prologue][' . $type . '] ' . $contextJson);
+    }
+
+    public static function logToDirectory(string $filename, string $type, array $context = []): void {
+        $contextJson = json_encode($context, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        $line = '[' . date('Y-m-d H:i:s') . '][Prologue][' . $type . '] ' . $contextJson . PHP_EOL;
+
+        if (defined('APP_LOG_DIRECTORY')) {
+            $dir = rtrim((string)APP_LOG_DIRECTORY, '/');
+            if ($dir !== '' && (is_dir($dir) || @mkdir($dir, 0775, true))) {
+                $path = $dir . '/' . $filename;
+                if (file_put_contents($path, $line, FILE_APPEND | LOCK_EX) !== false) {
+                    return;
+                }
+            }
+        }
+
+        error_log('[Prologue][' . $type . '][fallback:' . $filename . '] ' . $contextJson);
     }
 
     private static function isApiRequest() {

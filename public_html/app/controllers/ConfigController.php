@@ -35,6 +35,7 @@ class ConfigController extends Controller {
             'invite_codes_per_user' => (int)(Setting::get('invite_codes_per_user') ?? 3),
             'email_verification_required' => (string)(Setting::get('email_verification_required') ?? '1') === '1',
             'error_display' => (string)(Setting::get('error_display') ?? '0') === '1',
+            'attachment_logging' => (string)(Setting::get('attachment_logging') ?? '0') === '1',
             'failed_login_attempts_24h' => $bruteForceProtection['failed_login_attempts_24h'],
             'failed_registration_attempts_24h' => $bruteForceProtection['failed_registration_attempts_24h'],
             'active_banned_ips' => $bruteForceProtection['active_banned_ips'],
@@ -68,6 +69,7 @@ class ConfigController extends Controller {
 
         Setting::set('error_display', isset($_POST['error_display']) ? '1' : '0');
         ErrorHandler::setDebugMode(isset($_POST['error_display']));
+        Setting::set('attachment_logging', isset($_POST['attachment_logging']) ? '1' : '0');
 
         $this->flash('success', 'more_saved');
         $this->redirect('/config');

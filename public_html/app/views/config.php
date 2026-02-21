@@ -304,6 +304,14 @@
                 <input type="checkbox" name="error_display" value="1" <?= !empty($error_display) ? 'checked' : '' ?> class="w-5 h-5 accent-emerald-500 shrink-0">
             </label>
 
+            <label class="flex items-center justify-between gap-4 rounded-xl border border-zinc-700 bg-zinc-800/30 px-4 py-3 cursor-pointer">
+                <div>
+                    <span class="block text-zinc-100">Detailed attachment logging</span>
+                    <span class="block text-xs text-zinc-500 mt-0.5">Log every attachment upload attempt (success or failure) to attachment.log in the log directory.</span>
+                </div>
+                <input type="checkbox" name="attachment_logging" value="1" <?= !empty($attachment_logging) ? 'checked' : '' ?> class="w-5 h-5 accent-emerald-500 shrink-0">
+            </label>
+
             <div class="pt-2">
                 <button type="submit" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-medium transition">Save</button>
             </div>

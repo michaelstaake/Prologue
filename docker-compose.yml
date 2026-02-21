@@ -21,7 +21,7 @@ services:
       STORAGE_FILESYSTEM_ROOT: /var/www/storage
       DATABASE_SCHEMA_FILE: /var/www/database.sql
       ERROR_DISPLAY: "true"
-      ERROR_LOG_FILE: /var/www/storage/logs/php-error.log
+      ERROR_LOG_FILE: /var/www/storage/logs/error.log
 
   chat-db:
     image: mysql:8.0

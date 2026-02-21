@@ -13,10 +13,10 @@ $CONFIG_DB_PASS = 'example';
 $CONFIG_DB_NAME = 'example';
 
 $CONFIG_APP_URL = 'https://example.com'; //example: https://example.com or https://prologue.example.com
-$CONFIG_APP_BASE_PATH = ''; //leave this blank unless running in a subfolder. if using a subfolder like https://example.com/prologue the value of this would be the name of the subfolder in this case prologue
+$CONFIG_APP_SUBFOLDER = ''; //leave this blank unless running in a subfolder. if using a subfolder like https://example.com/prologue the value of this would be the name of the subfolder in this case prologue
 
 $CONFIG_STORAGE_FILESYSTEM_ROOT = '/home/example/storage';
-$CONFIG_ERROR_LOG_FILE = '/home/example/storage/logs/php-error.log';
+$CONFIG_LOG_DIRECTORY = '/home/example/storage/logs';
 $CONFIG_DATABASE_SCHEMA_FILE = '/home/example/database.sql';
 
 $CONFIG_CSRF_SECRET = 'change-this-to-random-64-chars';
@@ -41,7 +41,7 @@ define('DB_NAME', getenv('DB_NAME') ?: $CONFIG_DB_NAME);
 $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
 $host = $_SERVER['HTTP_HOST'] ?? 'localhost:8088';
 
-$appBasePath = trim((string)(getenv('APP_BASE_PATH') ?: $CONFIG_APP_BASE_PATH), " \t\n\r\0\x0B/");
+$appBasePath = trim((string)(getenv('APP_BASE_PATH') ?: $CONFIG_APP_SUBFOLDER), " \t\n\r\0\x0B/");
 if ($appBasePath === '') {
 	$scriptName = (string)($_SERVER['SCRIPT_NAME'] ?? '');
 	$detectedBasePath = $scriptName !== '' ? trim((string)dirname($scriptName), " \t\n\r\0\x0B/") : '';
@@ -60,8 +60,8 @@ if ($appUrlFromEnv !== '') {
 $storageRootFromEnv = trim((string)(getenv('STORAGE_FILESYSTEM_ROOT') ?: $CONFIG_STORAGE_FILESYSTEM_ROOT));
 define('STORAGE_FILESYSTEM_ROOT', rtrim($storageRootFromEnv, '/'));
 
-$errorLogFromEnv = trim((string)(getenv('ERROR_LOG_FILE') ?: $CONFIG_ERROR_LOG_FILE));
-define('APP_ERROR_LOG_FILE', $errorLogFromEnv !== '' ? $errorLogFromEnv : (STORAGE_FILESYSTEM_ROOT . '/logs/php-error.log'));
+$logDirFromEnv = trim((string)(getenv('LOG_DIRECTORY') ?: $CONFIG_LOG_DIRECTORY));
+define('APP_LOG_DIRECTORY', $logDirFromEnv !== '' ? $logDirFromEnv : (STORAGE_FILESYSTEM_ROOT . '/logs'));
 
 $databaseSchemaFileFromEnv = trim((string)(getenv('DATABASE_SCHEMA_FILE') ?: $CONFIG_DATABASE_SCHEMA_FILE));
 if ($databaseSchemaFileFromEnv !== '') {

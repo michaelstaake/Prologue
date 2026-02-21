@@ -173,6 +173,9 @@ $router->post('/friends/cancel', 'FriendController@cancelRequest');
 $router->post('/friends/unfriend', 'FriendController@unfriend');
 $router->post('/friends/favorite', 'FriendController@toggleFavorite');
 
+// Attachments
+$router->get('/a/{user_number}/{filename}', 'AttachmentController@serve');
+
 // Chat
 $router->get('/c/{chat_number}', 'ChatController@show');
 $router->post('/api/messages', 'ChatController@sendMessage'); // also used by web
