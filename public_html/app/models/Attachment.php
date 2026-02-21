@@ -26,17 +26,39 @@ class Attachment extends Model {
         return array_keys($allowed);
     }
 
-    public static function maxFileSizeBytes(): int {
-        $raw = (string)(Setting::get('attachments_maximum_file_size_mb') ?? '10');
-        $sizeMb = (int)preg_replace('/\D+/', '', $raw);
-        if ($sizeMb <= 0) {
-            $sizeMb = 10;
+    private static function parsePhpBytes(string $val): int {
+        $val = trim($val);
+        $unit = strtolower(substr($val, -1));
+        $num = (int)$val;
+        switch ($unit) {
+            case 'g': return $num * 1024 * 1024 * 1024;
+            case 'm': return $num * 1024 * 1024;
+            case 'k': return $num * 1024;
+            default:  return $num;
         }
-        if ($sizeMb > 100) {
-            $sizeMb = 100;
+    }
+
+    public static function maxFileSizeBytes(): int {
+        $hardCap = 512 * 1024 * 1024;
+
+        $uploadMax = self::parsePhpBytes((string)ini_get('upload_max_filesize'));
+        $postMax = self::parsePhpBytes((string)ini_get('post_max_size'));
+
+        $phpLimit = $hardCap;
+        if ($uploadMax > 0) {
+            $phpLimit = min($phpLimit, $uploadMax);
+        }
+        if ($postMax > 0) {
+            $phpLimit = min($phpLimit, $postMax);
         }
 
-        return $sizeMb * 1024 * 1024;
+        $raw = (string)(Setting::get('attachments_maximum_file_size_mb') ?? '');
+        $sizeMb = (int)preg_replace('/\D+/', '', $raw);
+        if ($sizeMb > 0) {
+            return min($sizeMb * 1024 * 1024, $phpLimit);
+        }
+
+        return $phpLimit;
     }
 
     public static function listPendingForChatUser(int $chatId, int $userId): array {

@@ -60,10 +60,7 @@ if (is_readable($openMojiCsvPath)) {
 }
 
 $attachmentAcceptedTypes = strtolower((string)(Setting::get('attachments_accepted_file_types') ?? 'png,jpg'));
-$attachmentMaxSizeMb = (int)preg_replace('/\D+/', '', (string)(Setting::get('attachments_maximum_file_size_mb') ?? '10'));
-if ($attachmentMaxSizeMb <= 0) {
-    $attachmentMaxSizeMb = 10;
-}
+$attachmentMaxSizeMb = (int)round(Attachment::maxFileSizeBytes() / (1024 * 1024));
 
 $isGroupChat = (($chat->type ?? 'personal') === 'group');
 $isPersonalChat = !$isGroupChat;
