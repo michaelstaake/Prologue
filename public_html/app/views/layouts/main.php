@@ -59,6 +59,11 @@
 <body class="h-screen text-gray-200 overflow-hidden">
     <?php $currentUser = Auth::user(); ?>
     <?php
+        $requestPath = (string)parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH);
+        $isChatRoute = preg_match('#(?:^|/)c/[^/]+$#', $requestPath) === 1;
+        $mobileFabBottomClass = $isChatRoute ? 'bottom-44 sm:bottom-24' : 'bottom-5';
+    ?>
+    <?php
         $browserNotificationsEnabled = false;
         $friendRequestSoundEnabled = true;
         $newMessageSoundEnabled = true;
@@ -174,13 +179,13 @@
 
     <div id="mobile-overlay-backdrop"></div>
 
-    <div class="lg:hidden fixed bottom-5 left-5 z-30">
+    <div class="lg:hidden fixed <?= $mobileFabBottomClass ?> left-5 z-30">
         <button id="sidebar-toggle-mobile" class="w-14 h-14 rounded-2xl bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 shadow-lg flex items-center justify-center" aria-label="Open menu">
             <i class="fa-solid fa-bars text-lg"></i>
         </button>
     </div>
 
-    <div class="lg:hidden fixed bottom-5 right-5 z-30">
+    <div class="lg:hidden fixed <?= $mobileFabBottomClass ?> right-5 z-30">
         <button id="notification-history-button-mobile" class="relative w-14 h-14 rounded-2xl bg-zinc-900 border border-zinc-700 hover:bg-zinc-800 shadow-lg flex items-center justify-center" aria-label="Open notifications">
             <i class="fa-regular fa-bell text-lg"></i>
             <span id="notification-history-count-mobile" class="hidden absolute -top-2 -right-2 min-w-[1.25rem] h-5 px-1 rounded-full bg-emerald-600 text-white text-xs flex items-center justify-center">0</span>

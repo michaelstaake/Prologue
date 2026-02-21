@@ -2,6 +2,8 @@
 
 let messageInteractionHandlersBound = false;
 let openReactionPickerMessageId = 0;
+let lastRenderedChatId = 0;
+let lastRenderedMessagesSignature = '';
 
 const MESSAGE_REACTION_OPTIONS = [
     { code: '1F44D', label: 'Like' },
@@ -1297,7 +1299,21 @@ async function pollMessages(options = {}) {
     const data = await res.json();
     const messages = data.messages || [];
     const typingUsers = data.typing_users || [];
-    renderMessages(messages, { scrollMode: options.scrollMode || 'preserve' });
+    const forceRender = options.forceRender === true;
+    const activeChatId = Number(currentChat.id || 0);
+    const nextMessagesSignature = buildMessagesSignature(messages);
+    const hasNewMessageState = (
+        forceRender
+        || activeChatId !== lastRenderedChatId
+        || nextMessagesSignature !== lastRenderedMessagesSignature
+    );
+
+    if (hasNewMessageState) {
+        renderMessages(messages, { scrollMode: options.scrollMode || 'preserve' });
+        lastRenderedChatId = activeChatId;
+        lastRenderedMessagesSignature = nextMessagesSignature;
+    }
+
     updatePersonalChatHeaderStatusFromMessages(messages);
     renderTypingIndicator(typingUsers);
     refreshChatCallStatusBar();
@@ -1313,6 +1329,53 @@ async function pollMessages(options = {}) {
     if (Object.prototype.hasOwnProperty.call(data, 'can_start_call')) {
         setChatCallEnabled(Boolean(data.can_start_call));
     }
+}
+
+function buildMessagesSignature(messages) {
+    if (!Array.isArray(messages) || messages.length === 0) {
+        return 'empty';
+    }
+
+    return messages.map((msg) => {
+        const messageId = Number(msg?.id || 0);
+        const content = String(msg?.content || '');
+        const createdAt = String(msg?.created_at || '');
+        const quotedMessageId = Number(msg?.quoted_message_id || 0);
+        const mentionMap = normalizeMentionMap(msg?.mention_map || {});
+        const mentionMapKeys = Object.keys(mentionMap).sort();
+        const mentionMapFingerprint = mentionMapKeys.map((key) => `${key}:${mentionMap[key]}`).join(',');
+
+        const attachmentFingerprint = Array.isArray(msg?.attachments)
+            ? msg.attachments
+                .map((attachment) => normalizeAttachment(attachment))
+                .filter(Boolean)
+                .map((attachment) => `${attachment.id}:${attachment.file_size}`)
+                .join(',')
+            : '';
+
+        const reactionFingerprint = Array.isArray(msg?.reactions)
+            ? msg.reactions
+                .map((reaction) => {
+                    const code = normalizeReactionCode(reaction?.reaction_code || '');
+                    const count = Number(reaction?.count || 0);
+                    const reacted = Number(reaction?.reacted_by_current_user || 0);
+                    return `${code}:${count}:${reacted}`;
+                })
+                .filter(Boolean)
+                .sort()
+                .join(',')
+            : '';
+
+        return [
+            messageId,
+            createdAt,
+            quotedMessageId,
+            content,
+            mentionMapFingerprint,
+            attachmentFingerprint,
+            reactionFingerprint
+        ].join('|');
+    }).join('\n');
 }
 
 function getPersonalChatMessageRestrictionText(reason) {
