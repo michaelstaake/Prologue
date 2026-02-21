@@ -1,5 +1,10 @@
 // Extracted from app.js for feature-focused organization.
 
+// ── Speaking detection state ──────────────────────────────────────────────────
+let speakingAudioCtx = null;
+let localSpeakingRaf = null;
+const remoteAnalysers = new Map();
+
 function setChatCallEnabled(enabled) {
     const isEnabled = Boolean(enabled);
 
@@ -229,6 +234,9 @@ async function cleanupLocalCallSession(options = {}) {
     callPeerConnections.clear();
     callPeerStates.clear();
 
+    stopLocalSpeakingDetection();
+    stopAllRemoteSpeakingDetection();
+
     remoteAudioElements.forEach((audioEl) => {
         if (audioEl?.parentNode) {
             audioEl.parentNode.removeChild(audioEl);
@@ -386,6 +394,7 @@ async function startVoiceCall() {
         syncCallRingingState({ state: 'ringing', callId: Number(currentCallId || 0), ringingDirection: 'outgoing', incomingAlert: false });
     }
     localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    startLocalSpeakingDetection();
     const localVideo = document.getElementById('local-video');
     if (localVideo) localVideo.srcObject = localStream;
 
@@ -1015,6 +1024,8 @@ function refreshActiveRemoteTile() {
     remoteVideo.play().catch(() => {});
     updateDynamicRemotePeerTiles(activeRemotePeerId);
     updateRemoteUsernameLabel();
+    const _activeSpeaking = activeRemotePeerId ? remoteAnalysers.get(activeRemotePeerId)?.speaking : false;
+    setTileSpeaking(document.getElementById('remote-video-container'), Boolean(_activeSpeaking));
 }
 
 function removePeerConnection(peerId) {
@@ -1024,6 +1035,8 @@ function removePeerConnection(peerId) {
     }
     callPeerConnections.delete(peerId);
     callPeerStates.delete(peerId);
+
+    stopRemoteSpeakingDetection(peerId);
 
     const audioEl = remoteAudioElements.get(peerId);
     if (audioEl?.parentNode) {
@@ -1105,6 +1118,7 @@ function ensurePeerConnection(peerId, username = '') {
                 audioEl.srcObject = stream;
             }
             audioEl.play().catch(() => {});
+            startRemoteSpeakingDetection(numericPeerId);
         }
 
         if (event.track.kind === 'video' && !activeRemotePeerId) {
@@ -1314,4 +1328,136 @@ async function declineCall() {
     document.getElementById('accept-call-btn')?.classList.add('hidden');
     document.getElementById('decline-call-btn')?.classList.add('hidden');
     document.getElementById('join-call-btn')?.classList.remove('hidden');
+}
+
+// ── Speaking detection ────────────────────────────────────────────────────────
+
+const SPEAKING_THRESHOLD = 8;   // RMS on 0-255 scale
+const SPEAKING_ONSET_MS  = 80;  // must exceed threshold for this long before "speaking"
+const SPEAKING_DECAY_MS  = 500; // hold "speaking" this long after audio drops
+
+function getOrCreateAudioContext() {
+    if (!speakingAudioCtx || speakingAudioCtx.state === 'closed') {
+        speakingAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (speakingAudioCtx.state === 'suspended') {
+        speakingAudioCtx.resume().catch(() => {});
+    }
+    return speakingAudioCtx;
+}
+
+function setTileSpeaking(container, speaking) {
+    if (!container) return;
+    container.style.borderColor = speaking ? '#34d399' : '';
+}
+
+function makeSpeakingAnalyser(stream, onSpeakingChange) {
+    const ctx = getOrCreateAudioContext();
+    const source = ctx.createMediaStreamSource(stream);
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 512;
+    analyser.smoothingTimeConstant = 0.4;
+    source.connect(analyser);
+
+    const data = new Uint8Array(analyser.fftSize);
+    let onsetAt = 0;
+    let decayAt  = 0;
+    let speaking = false;
+    let rafId;
+
+    function tick() {
+        rafId = requestAnimationFrame(tick);
+        analyser.getByteTimeDomainData(data);
+        let sum = 0;
+        for (let i = 0; i < data.length; i++) {
+            const s = (data[i] - 128) / 128;
+            sum += s * s;
+        }
+        const rms = Math.sqrt(sum / data.length) * 255;
+        const now = performance.now();
+        const active = rms > SPEAKING_THRESHOLD;
+
+        if (active) {
+            decayAt = now + SPEAKING_DECAY_MS;
+            if (!speaking) {
+                if (!onsetAt) onsetAt = now;
+                if (now - onsetAt >= SPEAKING_ONSET_MS) {
+                    speaking = true;
+                    onSpeakingChange(true);
+                }
+            }
+        } else {
+            onsetAt = 0;
+            if (speaking && now >= decayAt) {
+                speaking = false;
+                onSpeakingChange(false);
+            }
+        }
+    }
+
+    tick();
+    return { stop() { cancelAnimationFrame(rafId); }, get speaking() { return speaking; } };
+}
+
+function startLocalSpeakingDetection() {
+    stopLocalSpeakingDetection();
+    if (!localStream || !localStream.getAudioTracks().length) return;
+
+    const handle = makeSpeakingAnalyser(localStream, (speaking) => {
+        if (isMuted) return;
+        setTileSpeaking(document.getElementById('local-media-container'), speaking);
+    });
+    localSpeakingRaf = handle;
+}
+
+function stopLocalSpeakingDetection() {
+    if (localSpeakingRaf) {
+        localSpeakingRaf.stop();
+        localSpeakingRaf = null;
+    }
+    setTileSpeaking(document.getElementById('local-media-container'), false);
+}
+
+function startRemoteSpeakingDetection(peerId) {
+    const numericPeerId = Number(peerId || 0);
+    if (!numericPeerId) return;
+    stopRemoteSpeakingDetection(numericPeerId);
+
+    const state = callPeerStates.get(numericPeerId);
+    if (!state || !state.remoteStream || !state.remoteStream.getAudioTracks().length) return;
+
+    const handle = makeSpeakingAnalyser(state.remoteStream, (speaking) => {
+        const entry = remoteAnalysers.get(numericPeerId);
+        if (entry) entry.speaking = speaking;
+        updateRemoteSpeakingIndicator(numericPeerId, speaking);
+    });
+    remoteAnalysers.set(numericPeerId, { handle, speaking: false });
+}
+
+function stopRemoteSpeakingDetection(peerId) {
+    const numericPeerId = Number(peerId || 0);
+    const entry = remoteAnalysers.get(numericPeerId);
+    if (!entry) return;
+    entry.handle.stop();
+    remoteAnalysers.delete(numericPeerId);
+    updateRemoteSpeakingIndicator(numericPeerId, false);
+}
+
+function stopAllRemoteSpeakingDetection() {
+    remoteAnalysers.forEach((entry, peerId) => {
+        entry.handle.stop();
+        updateRemoteSpeakingIndicator(peerId, false);
+    });
+    remoteAnalysers.clear();
+}
+
+function updateRemoteSpeakingIndicator(peerId, speaking) {
+    const numericPeerId = Number(peerId || 0);
+    if (numericPeerId === Number(activeRemotePeerId || 0)) {
+        setTileSpeaking(document.getElementById('remote-video-container'), speaking);
+    }
+    const tile = document.querySelector(`.js-remote-peer-tile[data-peer-id="${numericPeerId}"]`);
+    if (tile) {
+        setTileSpeaking(tile.querySelector('div'), speaking);
+    }
 }
