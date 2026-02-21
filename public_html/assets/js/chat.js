@@ -712,10 +712,13 @@ function bindEmojiDrawer() {
 
     if (!toggle || !drawer || !search || !grid || !input) return;
 
+    const previewImg = document.getElementById('emoji-preview-img');
+    const previewLabel = document.getElementById('emoji-preview-label');
+
     const renderGrid = (items) => {
         const safeItems = items.filter((item) => item.character);
         grid.innerHTML = safeItems.map((item) => `
-            <button type="button" class="w-12 h-12 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 flex items-center justify-center" data-emoji="${escapeHtml(item.character)}" title="${escapeHtml(item.key)}">
+            <button type="button" class="w-12 h-12 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 flex items-center justify-center" data-emoji="${escapeHtml(item.character)}" data-url="${escapeHtml(item.url)}" data-annotation="${escapeHtml(item.annotation || item.key)}" title="${escapeHtml(item.key)}">
                 <img src="${escapeHtml(item.url)}" alt="${escapeHtml(item.character)}" class="w-9 h-9" loading="lazy" decoding="async">
             </button>
         `).join('') || '<div class="col-span-full text-xs text-zinc-400 py-4 text-center">No emoji found</div>';
@@ -757,6 +760,33 @@ function bindEmojiDrawer() {
         if (!emoji) return;
 
         insertTextAtCursor(input, emoji);
+    });
+
+    grid.addEventListener('mouseover', (event) => {
+        const button = event.target.closest('[data-emoji]');
+        if (!button) return;
+        const url = button.getAttribute('data-url') || '';
+        const annotation = button.getAttribute('data-annotation') || '';
+        if (previewImg && url) {
+            previewImg.src = url;
+            previewImg.alt = annotation;
+            previewImg.classList.remove('hidden');
+        }
+        if (previewLabel) {
+            previewLabel.textContent = annotation;
+            previewLabel.classList.remove('hidden');
+        }
+    });
+
+    grid.addEventListener('mouseleave', () => {
+        if (previewImg) {
+            previewImg.classList.add('hidden');
+            previewImg.src = '';
+        }
+        if (previewLabel) {
+            previewLabel.classList.add('hidden');
+            previewLabel.textContent = '';
+        }
     });
 
     document.addEventListener('click', (event) => {

@@ -414,9 +414,17 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
             <button type="submit" class="bg-emerald-600 px-10 rounded-3xl">Send</button>
         </div>
         <div id="message-disabled-notice" class="w-full bg-zinc-900 border border-zinc-700 rounded-2xl px-4 py-3 text-sm text-amber-300 <?= $canSendMessages ? 'hidden' : '' ?>"><?= htmlspecialchars($messageDisabledNoticeText, ENT_QUOTES, 'UTF-8') ?></div>
-        <div id="emoji-drawer" class="hidden absolute left-6 bottom-[calc(100%+0.75rem)] w-[30rem] max-w-[calc(100%-3rem)] bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl p-4 z-30">
-            <input type="text" id="emoji-search" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2 text-sm mb-3" placeholder="Search emoji (type char or code, e.g. 1f44d)">
-            <div id="emoji-grid" class="grid grid-cols-6 justify-start gap-3 max-h-72 overflow-y-auto pr-1"></div>
+        <div id="emoji-drawer" class="hidden absolute left-6 bottom-[calc(100%+0.75rem)] w-[32rem] max-w-[calc(100%-3rem)] bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl p-4 z-30">
+            <div class="flex gap-3 items-start">
+                <div class="flex-1 min-w-0">
+                    <input type="text" id="emoji-search" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2 text-sm mb-3" placeholder="Search emoji (type char or code, e.g. 1f44d)">
+                    <div id="emoji-grid" class="grid grid-cols-6 justify-start gap-3 max-h-72 overflow-y-auto pr-1"></div>
+                </div>
+                <div id="emoji-preview" class="w-20 flex-shrink-0 flex flex-col items-center gap-2 pt-10">
+                    <img id="emoji-preview-img" src="" alt="" class="w-14 h-14 hidden">
+                    <div id="emoji-preview-label" class="text-xs text-zinc-400 text-center leading-tight break-words w-full hidden"></div>
+                </div>
+            </div>
         </div>
         <div id="attachments-drawer" class="hidden absolute left-6 right-6 bottom-[calc(100%+0.75rem)] bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl p-4 z-30">
             <div class="flex items-center justify-between gap-3 mb-3">
