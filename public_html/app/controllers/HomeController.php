@@ -449,24 +449,48 @@ class HomeController extends Controller {
         Auth::requireAuth();
         Auth::csrfValidate();
         $userId = Auth::user()->id;
-        $hasAvatarUpload = isset($_FILES['avatar'])
-            && is_array($_FILES['avatar'])
-            && (int)($_FILES['avatar']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE;
-        $avatarRemoved = false;
+        $isAjax = strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest';
 
-        if (isset($_POST['remove_avatar']) && !$hasAvatarUpload) {
-            $avatarRemoved = $this->removeAvatarForUser($userId);
-        }
-
-        if (isset($_FILES['avatar']) && is_array($_FILES['avatar'])) {
-            $avatarError = $this->handleAvatarUpload($userId, $_FILES['avatar']);
-            if ($avatarError !== null) {
-                $this->flash('error', $avatarError);
-                $this->redirect('/settings');
+        if (!isset($_FILES['avatar']) || !is_array($_FILES['avatar'])) {
+            if ($isAjax) {
+                $this->json(['error' => 'avatar_upload_failed'], 400);
             }
+            $this->flash('error', 'avatar_upload_failed');
+            $this->redirect('/settings');
         }
 
-        $this->flash('success', $avatarRemoved ? 'avatar_removed' : 'avatar_saved');
+        $avatarError = $this->handleAvatarUpload($userId, $_FILES['avatar']);
+        if ($avatarError !== null) {
+            if ($isAjax) {
+                $this->json(['error' => $avatarError], 400);
+            }
+            $this->flash('error', $avatarError);
+            $this->redirect('/settings');
+        }
+
+        if ($isAjax) {
+            $updatedUser = Database::query("SELECT * FROM users WHERE id = ?", [$userId])->fetch();
+            $avatarUrl = User::avatarUrl($updatedUser);
+            $this->json(['success' => true, 'avatar_url' => $avatarUrl]);
+        }
+
+        $this->flash('success', 'avatar_saved');
+        $this->redirect('/settings');
+    }
+
+    public function deleteAvatarSettings() {
+        Auth::requireAuth();
+        Auth::csrfValidate();
+        $userId = Auth::user()->id;
+        $isAjax = strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest';
+
+        $this->removeAvatarForUser($userId);
+
+        if ($isAjax) {
+            $this->json(['success' => true]);
+        }
+
+        $this->flash('success', 'avatar_removed');
         $this->redirect('/settings');
     }
 
@@ -595,19 +619,58 @@ class HomeController extends Controller {
         }
 
         $mime = strtolower((string)($imageInfo['mime'] ?? ''));
-        $allowedMime = [
-            'image/jpeg' => 'jpg',
-            'image/png' => 'png'
-        ];
+        $allowedMime = ['image/jpeg', 'image/png'];
 
-        if (!isset($allowedMime[$mime])) {
+        if (!in_array($mime, $allowedMime, true)) {
             return 'avatar_invalid_type';
         }
 
         $width = (int)($imageInfo[0] ?? 0);
         $height = (int)($imageInfo[1] ?? 0);
-        if ($width < 1 || $height < 1 || $width > 100 || $height > 100) {
-            return 'avatar_invalid_size';
+        if ($width < 1 || $height < 1) {
+            return 'avatar_upload_failed';
+        }
+
+        if ($width > 2048 || $height > 2048) {
+            return 'avatar_too_large';
+        }
+
+        if ($mime === 'image/jpeg') {
+            $src = @imagecreatefromjpeg($tmpPath);
+        } else {
+            $src = @imagecreatefrompng($tmpPath);
+        }
+
+        if (!$src) {
+            return 'avatar_upload_failed';
+        }
+
+        $targetSize = 256;
+        $needsResize = ($width !== $height || $width > $targetSize || $height > $targetSize);
+
+        if ($needsResize) {
+            $squareSize = min($width, $height);
+            $srcX = (int)(($width - $squareSize) / 2);
+            $srcY = (int)(($height - $squareSize) / 2);
+
+            $dst = imagecreatetruecolor($targetSize, $targetSize);
+            if (!$dst) {
+                return 'avatar_upload_failed';
+            }
+
+            imagealphablending($dst, false);
+            imagesavealpha($dst, true);
+            $transparent = imagecolorallocatealpha($dst, 0, 0, 0, 127);
+            imagefilledrectangle($dst, 0, 0, $targetSize - 1, $targetSize - 1, $transparent);
+            imagealphablending($dst, true);
+
+            if (!imagecopyresampled($dst, $src, 0, 0, $srcX, $srcY, $targetSize, $targetSize, $squareSize, $squareSize)) {
+                return 'avatar_upload_failed';
+            }
+
+            $finalImage = $dst;
+        } else {
+            $finalImage = $src;
         }
 
         $storageRoot = rtrim((string)(defined('STORAGE_FILESYSTEM_ROOT') ? STORAGE_FILESYSTEM_ROOT : (dirname(__DIR__, 3) . '/storage')), '/');
@@ -616,10 +679,12 @@ class HomeController extends Controller {
             return 'avatar_upload_failed';
         }
 
-        $newFilename = 'u' . (int)$userId . '.' . $allowedMime[$mime];
+        $newFilename = 'u' . (int)$userId . '.png';
         $targetPath = $avatarsDir . '/' . $newFilename;
 
-        if (!move_uploaded_file($tmpPath, $targetPath)) {
+        $saveResult = imagepng($finalImage, $targetPath, 6);
+
+        if (!$saveResult) {
             return 'avatar_upload_failed';
         }
 

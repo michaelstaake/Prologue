@@ -100,8 +100,8 @@
         } elseif ($flashError === 'avatar_invalid_type') {
             $toastMessage = 'Avatar must be a JPG or PNG image.';
             $toastKind = 'error';
-        } elseif ($flashError === 'avatar_invalid_size') {
-            $toastMessage = 'Avatar must be at most 100 x 100 pixels.';
+        } elseif ($flashError === 'avatar_too_large') {
+            $toastMessage = 'Image is too large. Maximum size is 2048 x 2048 pixels.';
             $toastKind = 'error';
         } elseif ($flashError === 'avatar_upload_failed') {
             $toastMessage = 'Avatar upload failed. Please try again.';
@@ -215,33 +215,60 @@
     </section>
 
     <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-2xl">
-        <h2 class="text-xl font-semibold mb-4">Avatar settings</h2>
-        <form method="POST" enctype="multipart/form-data" action="<?= htmlspecialchars(base_url('/settings/avatar'), ENT_QUOTES, 'UTF-8') ?>">
-            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
-            <div class="border border-zinc-700 rounded-xl p-4 bg-zinc-800/40">
-                <p class="text-sm text-zinc-300 mb-3">Avatar (JPG or PNG, max 100 x 100)</p>
-                <div class="flex items-center gap-4 mb-3">
+        <h2 class="text-xl font-semibold mb-4">Avatar</h2>
+        <div class="border border-zinc-700 rounded-xl p-4 bg-zinc-800/40">
+            <p class="text-sm text-zinc-400 mb-4">JPG or PNG. Images are resized to 256 &times; 256. Maximum 2048 &times; 2048 pixels.</p>
+            <div class="flex items-center gap-5">
+                <div
+                    id="avatar-preview-wrap"
+                    class="relative shrink-0"
+                    data-initial="<?= htmlspecialchars(User::avatarInitial($user->username), ENT_QUOTES, 'UTF-8') ?>"
+                    data-initials-class="w-16 h-16 rounded-full border border-zinc-700 flex items-center justify-center text-xl font-semibold <?= htmlspecialchars(User::avatarColorClasses($user->user_number), ENT_QUOTES, 'UTF-8') ?>"
+                >
                     <?php if ($currentAvatarUrl): ?>
-                        <img src="<?= htmlspecialchars($currentAvatarUrl, ENT_QUOTES, 'UTF-8') ?>" alt="Your avatar" class="w-14 h-14 rounded-full object-cover border border-zinc-700">
+                        <img
+                            id="avatar-preview-img"
+                            src="<?= htmlspecialchars($currentAvatarUrl, ENT_QUOTES, 'UTF-8') ?>"
+                            alt="Your avatar"
+                            class="w-16 h-16 rounded-full object-cover border border-zinc-700"
+                        >
                     <?php else: ?>
-                        <div class="w-14 h-14 rounded-full border border-zinc-700 flex items-center justify-center font-semibold <?= htmlspecialchars(User::avatarColorClasses($user->user_number), ENT_QUOTES, 'UTF-8') ?>">
+                        <div
+                            id="avatar-preview-initials"
+                            class="w-16 h-16 rounded-full border border-zinc-700 flex items-center justify-center text-xl font-semibold <?= htmlspecialchars(User::avatarColorClasses($user->user_number), ENT_QUOTES, 'UTF-8') ?>"
+                        >
                             <?= htmlspecialchars(User::avatarInitial($user->username), ENT_QUOTES, 'UTF-8') ?>
                         </div>
                     <?php endif; ?>
-                    <label class="cursor-pointer bg-zinc-700 hover:bg-zinc-600 px-4 py-2 rounded-lg text-sm">
-                        <span>Choose image</span>
-                        <input type="file" name="avatar" accept="image/jpeg,image/png" class="hidden">
-                    </label>
+                    <div id="avatar-upload-spinner" class="hidden absolute inset-0 rounded-full bg-black/60 flex items-center justify-center">
+                        <i class="fa-solid fa-spinner fa-spin text-white text-lg"></i>
+                    </div>
                 </div>
-                <?php if ($currentAvatarUrl): ?>
-                    <label class="inline-flex items-center gap-2 text-sm text-zinc-300">
-                        <input type="checkbox" name="remove_avatar" value="1" class="w-4 h-4 accent-red-500">
-                        Remove current avatar
+                <div class="flex flex-wrap gap-3">
+                    <label id="avatar-upload-label" class="cursor-pointer bg-zinc-700 hover:bg-zinc-600 px-4 py-2 rounded-lg text-sm select-none">
+                        <span id="avatar-upload-label-text"><?= $currentAvatarUrl ? 'Change avatar' : 'Upload avatar' ?></span>
+                        <input id="avatar-file-input" type="file" accept="image/jpeg,image/png" class="hidden">
                     </label>
-                <?php endif; ?>
+                    <?php if ($currentAvatarUrl): ?>
+                        <button
+                            id="avatar-delete-btn"
+                            type="button"
+                            class="px-4 py-2 rounded-lg text-sm bg-zinc-800 border border-zinc-600 hover:border-red-500 hover:text-red-400 text-zinc-300"
+                        >
+                            Delete avatar
+                        </button>
+                    <?php else: ?>
+                        <button
+                            id="avatar-delete-btn"
+                            type="button"
+                            class="hidden px-4 py-2 rounded-lg text-sm bg-zinc-800 border border-zinc-600 hover:border-red-500 hover:text-red-400 text-zinc-300"
+                        >
+                            Delete avatar
+                        </button>
+                    <?php endif; ?>
+                </div>
             </div>
-            <button type="submit" class="mt-6 bg-emerald-600 hover:bg-emerald-500 px-8 py-3 rounded-xl">Save avatar</button>
-        </form>
+        </div>
     </section>
 
     <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-2xl">
@@ -451,6 +478,23 @@
 <?php if ($autoOpenModalId !== ''): ?>
     <div id="settings-modal-autoload" data-modal-id="<?= htmlspecialchars($autoOpenModalId, ENT_QUOTES, 'UTF-8') ?>" class="hidden" aria-hidden="true"></div>
 <?php endif; ?>
+
+<div id="delete-avatar-modal" class="fixed inset-0 z-50 hidden" role="dialog" aria-modal="true" aria-labelledby="delete-avatar-title">
+    <div class="absolute inset-0 bg-black/70" data-modal-close="delete-avatar-modal"></div>
+    <div class="relative z-10 flex min-h-full items-center justify-center p-4">
+        <div class="w-full max-w-sm rounded-2xl border border-zinc-700 bg-zinc-900 p-6">
+            <div class="mb-4 flex items-center justify-between">
+                <h3 id="delete-avatar-title" class="text-xl font-semibold">Delete avatar?</h3>
+                <button type="button" data-modal-close="delete-avatar-modal" class="rounded-lg px-2 py-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200">✕</button>
+            </div>
+            <p class="text-sm text-zinc-300 mb-6">Your avatar will be removed and replaced with your initials.</p>
+            <div class="flex gap-3">
+                <button id="avatar-delete-confirm-btn" type="button" class="bg-red-600 hover:bg-red-500 px-6 py-2 rounded-xl text-sm">Delete</button>
+                <button type="button" data-modal-close="delete-avatar-modal" class="bg-zinc-700 hover:bg-zinc-600 px-6 py-2 rounded-xl text-sm">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <div id="change-email-modal" class="fixed inset-0 z-50 hidden" role="dialog" aria-modal="true" aria-labelledby="change-email-title">
     <div class="absolute inset-0 bg-black/70" data-modal-close="change-email-modal"></div>
@@ -664,5 +708,166 @@
                 openModal(modalId);
             }
         }
+    })();
+</script>
+
+<script>
+    (function () {
+        const avatarFileInput = document.getElementById('avatar-file-input');
+        const avatarPreviewWrap = document.getElementById('avatar-preview-wrap');
+        const avatarUploadSpinner = document.getElementById('avatar-upload-spinner');
+        const avatarUploadLabel = document.getElementById('avatar-upload-label');
+        const avatarUploadLabelText = document.getElementById('avatar-upload-label-text');
+        const avatarDeleteBtn = document.getElementById('avatar-delete-btn');
+        const avatarDeleteConfirmBtn = document.getElementById('avatar-delete-confirm-btn');
+        const deleteAvatarModal = document.getElementById('delete-avatar-modal');
+
+        function getAvatarInitials() {
+            const el = document.getElementById('avatar-preview-initials');
+            return el || null;
+        }
+
+        function setAvatarImg(url) {
+            let img = document.getElementById('avatar-preview-img');
+            const initials = getAvatarInitials();
+
+            if (initials) {
+                initials.remove();
+            }
+
+            if (!img) {
+                img = document.createElement('img');
+                img.id = 'avatar-preview-img';
+                img.alt = 'Your avatar';
+                img.className = 'w-16 h-16 rounded-full object-cover border border-zinc-700';
+                avatarPreviewWrap.insertBefore(img, avatarUploadSpinner);
+            }
+
+            img.src = url;
+            avatarUploadLabelText.textContent = 'Change avatar';
+
+            if (avatarDeleteBtn) {
+                avatarDeleteBtn.classList.remove('hidden');
+            }
+        }
+
+        function clearAvatarImg() {
+            const img = document.getElementById('avatar-preview-img');
+            if (img) {
+                img.remove();
+            }
+
+            if (!getAvatarInitials()) {
+                const div = document.createElement('div');
+                div.id = 'avatar-preview-initials';
+                div.className = avatarPreviewWrap.dataset.initialsClass || 'w-16 h-16 rounded-full border border-zinc-700 flex items-center justify-center text-xl font-semibold bg-emerald-700 text-emerald-100';
+                div.textContent = avatarPreviewWrap.dataset.initial || '?';
+                avatarPreviewWrap.insertBefore(div, avatarUploadSpinner);
+            }
+
+            avatarUploadLabelText.textContent = 'Upload avatar';
+
+            if (avatarDeleteBtn) {
+                avatarDeleteBtn.classList.add('hidden');
+            }
+        }
+
+        if (avatarFileInput) {
+            avatarFileInput.addEventListener('change', function () {
+                const file = avatarFileInput.files && avatarFileInput.files[0];
+                if (!file) return;
+
+                const allowed = ['image/jpeg', 'image/png'];
+                if (!allowed.includes(file.type)) {
+                    showToast('Avatar must be a JPG or PNG image.', 'error');
+                    avatarFileInput.value = '';
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('csrf_token', window.CSRF_TOKEN || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '');
+                formData.append('avatar', file);
+
+                if (avatarUploadSpinner) avatarUploadSpinner.classList.remove('hidden');
+                if (avatarUploadLabel) avatarUploadLabel.style.pointerEvents = 'none';
+
+                fetch(<?= json_encode(base_url('/settings/avatar')) ?>, {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: formData
+                })
+                .then(function (res) { return res.json(); })
+                .then(function (data) {
+                    if (data && data.success && data.avatar_url) {
+                        setAvatarImg(data.avatar_url);
+                        showToast('Avatar updated.', 'success');
+                    } else {
+                        const errorMap = {
+                            'avatar_invalid_type': 'Avatar must be a JPG or PNG image.',
+                            'avatar_too_large': 'Image is too large. Maximum size is 2048 \u00d7 2048 pixels.',
+                            'avatar_upload_failed': 'Avatar upload failed. Please try again.'
+                        };
+                        showToast(errorMap[data && data.error] || 'Avatar upload failed. Please try again.', 'error');
+                    }
+                })
+                .catch(function () {
+                    showToast('Avatar upload failed. Please try again.', 'error');
+                })
+                .finally(function () {
+                    if (avatarUploadSpinner) avatarUploadSpinner.classList.add('hidden');
+                    if (avatarUploadLabel) avatarUploadLabel.style.pointerEvents = '';
+                    avatarFileInput.value = '';
+                });
+            });
+        }
+
+        if (avatarDeleteBtn && deleteAvatarModal) {
+            avatarDeleteBtn.addEventListener('click', function () {
+                deleteAvatarModal.classList.remove('hidden');
+                document.body.classList.add('overflow-hidden');
+            });
+        }
+
+        if (avatarDeleteConfirmBtn) {
+            avatarDeleteConfirmBtn.addEventListener('click', function () {
+                avatarDeleteConfirmBtn.disabled = true;
+                avatarDeleteConfirmBtn.textContent = 'Deleting\u2026';
+
+                const formData = new URLSearchParams();
+                formData.append('csrf_token', window.CSRF_TOKEN || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '');
+
+                fetch(<?= json_encode(base_url('/settings/avatar/delete')) ?>, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: formData.toString()
+                })
+                .then(function (res) { return res.json(); })
+                .then(function (data) {
+                    if (data && data.success) {
+                        clearAvatarImg();
+                        showToast('Avatar removed.', 'success');
+                        if (deleteAvatarModal) {
+                            deleteAvatarModal.classList.add('hidden');
+                            document.body.classList.remove('overflow-hidden');
+                        }
+                    } else {
+                        showToast('Could not remove avatar. Please try again.', 'error');
+                    }
+                })
+                .catch(function () {
+                    showToast('Could not remove avatar. Please try again.', 'error');
+                })
+                .finally(function () {
+                    avatarDeleteConfirmBtn.disabled = false;
+                    avatarDeleteConfirmBtn.textContent = 'Delete';
+                });
+            });
+        }
+
     })();
 </script>
