@@ -232,6 +232,34 @@
     </section>
 
     <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-2xl">
+        <h2 class="text-xl font-semibold mb-4">Storage</h2>
+        <div class="space-y-3">
+            <div class="flex items-center justify-between gap-4 rounded-xl border border-zinc-700 bg-zinc-800/30 px-4 py-3">
+                <span class="text-zinc-100">Storage directory</span>
+                <?php if ($storage_writable): ?>
+                    <span class="text-xs px-2.5 py-1 rounded-full border border-green-600/50 bg-green-900/30 text-green-300">Writable</span>
+                <?php else: ?>
+                    <span class="text-xs px-2.5 py-1 rounded-full border border-red-600/50 bg-red-900/30 text-red-300">Not writable</span>
+                <?php endif; ?>
+            </div>
+        </div>
+    </section>
+
+    <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-2xl">
+        <h2 class="text-xl font-semibold mb-4">Version</h2>
+        <div class="space-y-3 text-zinc-200">
+            <div class="flex items-center justify-between gap-4 border border-zinc-700 bg-zinc-800/40 rounded-xl px-4 py-3">
+                <span class="text-zinc-400">App version</span>
+                <span class="font-semibold"><?= htmlspecialchars((string)$app_version, ENT_QUOTES, 'UTF-8') ?></span>
+            </div>
+            <div class="flex items-center justify-between gap-4 border border-zinc-700 bg-zinc-800/40 rounded-xl px-4 py-3">
+                <span class="text-zinc-400">Database version</span>
+                <span class="font-semibold"><?= htmlspecialchars((string)$database_version, ENT_QUOTES, 'UTF-8') ?></span>
+            </div>
+        </div>
+    </section>
+
+    <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-2xl">
         <h2 class="text-xl font-semibold mb-1">More</h2>
         <p class="text-sm text-zinc-400 mb-5">Additional server-level settings.</p>
 

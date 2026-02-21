@@ -20,6 +20,7 @@ class ConfigController extends Controller {
     public function index() {
         $user = $this->requireAdminUser();
         $bruteForceProtection = $this->getBruteForceProtectionData();
+        $storageRoot = rtrim((string)(defined('STORAGE_FILESYSTEM_ROOT') ? STORAGE_FILESYSTEM_ROOT : (dirname(__DIR__, 3) . '/storage')), '/');
 
         $this->view('config', [
             'user' => $user,
@@ -37,6 +38,9 @@ class ConfigController extends Controller {
             'failed_login_attempts_24h' => $bruteForceProtection['failed_login_attempts_24h'],
             'failed_registration_attempts_24h' => $bruteForceProtection['failed_registration_attempts_24h'],
             'active_banned_ips' => $bruteForceProtection['active_banned_ips'],
+            'storage_writable' => is_dir($storageRoot) && is_writable($storageRoot),
+            'app_version' => APP_VERSION,
+            'database_version' => (string)(Setting::get('database_version') ?? 'unknown'),
         ]);
     }
 

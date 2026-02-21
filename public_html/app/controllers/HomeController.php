@@ -151,8 +151,6 @@ class HomeController extends Controller {
 
         $this->view('system', [
             'user' => $user,
-            'appVersion' => APP_VERSION,
-            'databaseVersion' => (string)(Setting::get('database_version') ?? 'unknown'),
             'csrf' => $this->csrfToken()
         ]);
     }

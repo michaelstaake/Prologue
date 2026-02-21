@@ -37,22 +37,6 @@
     </section>
 
     <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-2xl">
-        <h2 class="text-xl font-semibold mb-4">Version</h2>
-
-        <div class="space-y-3 text-zinc-200">
-            <div class="flex items-center justify-between gap-4 border border-zinc-700 bg-zinc-800/40 rounded-xl px-4 py-3">
-                <span class="text-zinc-400">App version</span>
-                <span class="font-semibold"><?= htmlspecialchars((string)$appVersion, ENT_QUOTES, 'UTF-8') ?></span>
-            </div>
-
-            <div class="flex items-center justify-between gap-4 border border-zinc-700 bg-zinc-800/40 rounded-xl px-4 py-3">
-                <span class="text-zinc-400">Database version</span>
-                <span class="font-semibold"><?= htmlspecialchars((string)$databaseVersion, ENT_QUOTES, 'UTF-8') ?></span>
-            </div>
-        </div>
-    </section>
-
-    <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-2xl">
         <h2 class="text-xl font-semibold mb-4">Licensing and Attribution</h2>
 
         <div class="space-y-3 text-zinc-200">
