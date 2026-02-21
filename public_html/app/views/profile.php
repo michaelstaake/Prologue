@@ -24,10 +24,10 @@
             $profileActionWarnClass = $profileActionBaseClass . ' bg-amber-600 text-white hover:bg-amber-500 focus:ring-amber-400';
             $profileActionDangerClass = $profileActionBaseClass . ' bg-red-700 text-white hover:bg-red-600 focus:ring-red-400';
         ?>
+        <?php if ((int)$profile->id !== (int)$currentUserId): ?>
         <div class="mt-1">
             <div class="text-xs uppercase tracking-wide text-zinc-500 mb-3">Actions</div>
             <div class="flex flex-wrap gap-2">
-            <?php if ((int)$profile->id !== (int)$currentUserId): ?>
             <?php if (($friendshipStatus ?? null) === 'accepted'): ?>
             <button type="button" onclick="openUnfriendModal(<?= (int)$profile->id ?>)" class="<?= htmlspecialchars($profileActionDangerClass, ENT_QUOTES, 'UTF-8') ?>"><i class="fa fa-user-minus text-xs"></i> Unfriend</button>
             <button type="button" onclick="toggleFavoriteUser(<?= (int)$profile->id ?>, <?= !empty($isFavorite ?? false) ? '0' : '1' ?>)" class="<?= htmlspecialchars(!empty($isFavorite ?? false) ? $profileActionWarnClass : $profileActionNeutralClass, ENT_QUOTES, 'UTF-8') ?>">
@@ -45,9 +45,9 @@
             <button onclick="sendFriendRequestByValue('<?= htmlspecialchars(User::formatUserNumber($profile->user_number), ENT_QUOTES, 'UTF-8') ?>')" class="<?= htmlspecialchars($profileActionSuccessClass, ENT_QUOTES, 'UTF-8') ?>"><i class="fa fa-user-plus text-xs"></i> Add Friend</button>
             <?php endif; ?>
             <button onclick="reportTarget('user', <?= (int)$profile->id ?>)" class="<?= htmlspecialchars($profileActionDangerClass, ENT_QUOTES, 'UTF-8') ?>"><i class="fa fa-flag text-xs"></i> Report User</button>
-            <?php endif; ?>
             </div>
         </div>
+        <?php endif; ?>
     </div>
 </div>
 
