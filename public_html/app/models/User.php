@@ -89,7 +89,7 @@ class User extends Model {
         }
 
         $safeFilename = basename($filename);
-        if ($safeFilename !== $filename || !preg_match('/^u\d+\.(jpg|jpeg|png)$/i', $safeFilename)) {
+        if ($safeFilename !== $filename || !preg_match('/^\d{16}\.png$/', $safeFilename)) {
             return null;
         }
 
@@ -98,7 +98,7 @@ class User extends Model {
             return null;
         }
 
-        return base_url('/storage/avatars/' . rawurlencode($safeFilename)) . '?v=' . (int)filemtime($path);
+        return base_url('/avatars/' . rawurlencode($safeFilename)) . '?v=' . (int)filemtime($path);
     }
 
     public static function avatarInitial($username) {

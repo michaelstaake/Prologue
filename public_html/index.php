@@ -176,6 +176,9 @@ $router->post('/friends/favorite', 'FriendController@toggleFavorite');
 // Attachments
 $router->get('/a/{user_number}/{filename}', 'AttachmentController@serve');
 
+// Avatars
+$router->get('/avatars/{filename}', 'AvatarController@serve');
+
 // Chat
 $router->get('/c/{chat_number}', 'ChatController@show');
 $router->post('/api/messages', 'ChatController@sendMessage'); // also used by web

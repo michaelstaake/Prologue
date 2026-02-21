@@ -677,7 +677,13 @@ class HomeController extends Controller {
             return 'avatar_upload_failed';
         }
 
-        $newFilename = 'u' . (int)$userId . '.png';
+        $userRow = Database::query("SELECT user_number FROM users WHERE id = ?", [(int)$userId])->fetch();
+        $userNumber = (string)($userRow->user_number ?? '');
+        if (!preg_match('/^\d{16}$/', $userNumber)) {
+            return 'avatar_upload_failed';
+        }
+
+        $newFilename = $userNumber . '.png';
         $targetPath = $avatarsDir . '/' . $newFilename;
 
         $saveResult = imagepng($finalImage, $targetPath, 6);
@@ -713,7 +719,7 @@ class HomeController extends Controller {
             return null;
         }
 
-        if (!preg_match('/^u\d+\.(jpg|jpeg|png)$/i', $safeFilename)) {
+        if (!preg_match('/^\d{16}\.png$/', $safeFilename)) {
             return null;
         }
 
