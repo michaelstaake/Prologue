@@ -2,5 +2,6 @@
 .docker/
 public_html/app/config/config.php
 storage/*
+!storage/.gitkeep
 .DS_Store
 **/.DS_Store
