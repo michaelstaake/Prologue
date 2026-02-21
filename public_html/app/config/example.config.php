@@ -12,7 +12,7 @@ $CONFIG_DB_USER = 'example';
 $CONFIG_DB_PASS = 'example';
 $CONFIG_DB_NAME = 'example';
 
-$CONFIG_APP_URL = 'https://prologue.prologue.chat'; //example: https://example.com or https://prologue.example.com
+$CONFIG_APP_URL = 'https://example.com'; //example: https://example.com or https://prologue.example.com
 $CONFIG_APP_BASE_PATH = ''; //leave this blank unless running in a subfolder. if using a subfolder like https://example.com/prologue the value of this would be the name of the subfolder in this case prologue
 
 $CONFIG_STORAGE_FILESYSTEM_ROOT = '/home/example/storage';
