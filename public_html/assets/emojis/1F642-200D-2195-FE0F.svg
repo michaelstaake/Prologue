@@ -1,0 +1,15 @@
+<svg id="emoji" viewBox="0 0 72 72" version="1.1" xmlns="http://www.w3.org/2000/svg">
+  <g id="color">
+    <circle cx="36.3418" cy="38.8602" r="19.6582" fill="#fcea2b" stroke-width="0"/>
+  </g>
+  <g id="line">
+    <path fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M40.9591,50.7159c-.9211,1.0397-2.5008,1.7046-4.7409,1.7046-2.2233,0-3.8046-.6574-4.7354-1.6846"/>
+    <path fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M32.639,43.6306c-3.3356,1.779-6.56,0-6.56,0"/>
+    <path fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M46.784,43.6306c-3.3356,1.779-6.56,0-6.56,0"/>
+    <path fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M49.1052,52.7456c-3.3586,3.0888-7.8407,4.9747-12.7634,4.9747-10.4162,0-18.8602-8.444-18.8602-18.8602s8.444-18.8602,18.8602-18.8602c3.0401,0,5.9121.7193,8.4553,1.9969"/>
+    <path fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M55.202,38.8602c0,1.905-.2824,3.7439-.8077,5.4774"/>
+    <path fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M48,56.7023s2,15.0145,4-8.7023"/>
+    <path fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M50.5,22c1.5,1,2.5,6,2.548,12.9295"/>
+    <path fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M45.6129,17.6831c1.5,1,2.5,6,2.548,12.9295"/>
+  </g>
+</svg>

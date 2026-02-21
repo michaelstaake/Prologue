@@ -1,0 +1,373 @@
+<?php
+class Attachment extends Model {
+    private const ALLOWED_MIME_TO_EXT = [
+        'image/png' => 'png',
+        'image/jpeg' => 'jpg'
+    ];
+
+    public static function acceptedExtensions(): array {
+        $raw = strtolower((string)(Setting::get('attachments_accepted_file_types') ?? 'png,jpg'));
+        $parts = array_filter(array_map('trim', explode(',', $raw)));
+        $allowed = [];
+
+        foreach ($parts as $part) {
+            if ($part === 'jpeg') {
+                $part = 'jpg';
+            }
+            if ($part === 'png' || $part === 'jpg') {
+                $allowed[$part] = true;
+            }
+        }
+
+        if (count($allowed) === 0) {
+            $allowed = ['png' => true, 'jpg' => true];
+        }
+
+        return array_keys($allowed);
+    }
+
+    public static function maxFileSizeBytes(): int {
+        $raw = (string)(Setting::get('attachments_maximum_file_size_mb') ?? '10');
+        $sizeMb = (int)preg_replace('/\D+/', '', $raw);
+        if ($sizeMb <= 0) {
+            $sizeMb = 10;
+        }
+        if ($sizeMb > 100) {
+            $sizeMb = 100;
+        }
+
+        return $sizeMb * 1024 * 1024;
+    }
+
+    public static function listPendingForChatUser(int $chatId, int $userId): array {
+        try {
+            $rows = Database::query(
+                "SELECT a.id, a.original_name, a.file_name, a.file_extension, a.mime_type, a.file_size, a.width, a.height, a.created_at, u.user_number
+                 FROM attachments a
+                 JOIN users u ON u.id = a.user_id
+                 WHERE chat_id = ? AND user_id = ? AND status = 'pending'
+                 ORDER BY created_at ASC",
+                [$chatId, $userId]
+            )->fetchAll();
+        } catch (Throwable $e) {
+            return [];
+        }
+
+        foreach ($rows as $row) {
+            $row->url = self::publicUrl((string)$row->user_number, (string)$row->file_name, (string)$row->file_extension);
+        }
+
+        return $rows;
+    }
+
+    public static function createPendingFromUpload(int $chatId, $user, array $file): array {
+        $errorCode = (int)($file['error'] ?? UPLOAD_ERR_NO_FILE);
+        if ($errorCode !== UPLOAD_ERR_OK) {
+            return ['error' => 'attachment_upload_failed'];
+        }
+
+        $tmpPath = $file['tmp_name'] ?? '';
+        if (!is_string($tmpPath) || $tmpPath === '' || !is_uploaded_file($tmpPath)) {
+            return ['error' => 'attachment_upload_failed'];
+        }
+
+        $size = (int)($file['size'] ?? 0);
+        if ($size <= 0 || $size > self::maxFileSizeBytes()) {
+            return ['error' => 'attachment_too_large'];
+        }
+
+        $originalName = self::normalizeOriginalName((string)($file['name'] ?? ''));
+        if ($originalName === null || substr_count($originalName, '.') !== 1) {
+            return ['error' => 'attachment_invalid_name'];
+        }
+
+        $imageInfo = @getimagesize($tmpPath);
+        if (!$imageInfo) {
+            return ['error' => 'attachment_invalid_type'];
+        }
+
+        $mime = strtolower((string)($imageInfo['mime'] ?? ''));
+        if (!isset(self::ALLOWED_MIME_TO_EXT[$mime])) {
+            return ['error' => 'attachment_invalid_type'];
+        }
+
+        $extension = self::ALLOWED_MIME_TO_EXT[$mime];
+        if (!in_array($extension, self::acceptedExtensions(), true)) {
+            return ['error' => 'attachment_invalid_type'];
+        }
+
+        $nameExt = strtolower((string)pathinfo($originalName, PATHINFO_EXTENSION));
+        if ($nameExt === 'jpeg') {
+            $nameExt = 'jpg';
+        }
+        if ($nameExt !== $extension) {
+            return ['error' => 'attachment_invalid_name'];
+        }
+
+        $width = (int)($imageInfo[0] ?? 0);
+        $height = (int)($imageInfo[1] ?? 0);
+        if ($width <= 0 || $height <= 0 || $width > 10000 || $height > 10000) {
+            return ['error' => 'attachment_invalid_type'];
+        }
+
+        $userId = (int)$user->id;
+        $userNumber = preg_replace('/\D+/', '', (string)$user->user_number);
+        if (!preg_match('/^\d{16}$/', $userNumber)) {
+            return ['error' => 'attachment_upload_failed'];
+        }
+
+        $dir = self::directoryForUserNumber($userNumber);
+        if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
+            return ['error' => 'attachment_upload_failed'];
+        }
+
+        $fileBase = self::generateUniqueFileBaseForUser($userId);
+        if ($fileBase === null) {
+            return ['error' => 'attachment_upload_failed'];
+        }
+
+        $targetPath = $dir . '/' . $fileBase . '.' . $extension;
+        $write = self::writeSanitizedImage($tmpPath, $mime, $targetPath);
+        if (!$write) {
+            return ['error' => 'attachment_upload_failed'];
+        }
+
+        @chmod($targetPath, 0644);
+        clearstatcache(true, $targetPath);
+        $storedSize = (int)@filesize($targetPath);
+        if ($storedSize <= 0 || $storedSize > self::maxFileSizeBytes()) {
+            @unlink($targetPath);
+            return ['error' => 'attachment_too_large'];
+        }
+
+        Database::query(
+            "INSERT INTO attachments (chat_id, user_id, original_name, file_name, file_extension, mime_type, file_size, width, height, status)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
+            [$chatId, $userId, $originalName, $fileBase, $extension, $mime, $storedSize, $width, $height]
+        );
+
+        $id = (int)Database::getInstance()->lastInsertId();
+
+        return [
+            'success' => true,
+            'attachment' => [
+                'id' => $id,
+                'original_name' => $originalName,
+                'file_name' => $fileBase,
+                'file_extension' => $extension,
+                'mime_type' => $mime,
+                'file_size' => $storedSize,
+                'width' => $width,
+                'height' => $height,
+                'url' => self::publicUrl($userNumber, $fileBase, $extension)
+            ]
+        ];
+    }
+
+    public static function deletePendingByIdForUser(int $attachmentId, int $userId): bool {
+        $attachment = Database::query(
+            "SELECT a.id, a.file_name, a.file_extension, u.user_number
+             FROM attachments a
+             JOIN users u ON u.id = a.user_id
+             WHERE a.id = ? AND a.user_id = ? AND a.status = 'pending'
+             LIMIT 1",
+            [$attachmentId, $userId]
+        )->fetch();
+
+        if (!$attachment) {
+            return false;
+        }
+
+        $path = self::directoryForUserNumber((string)$attachment->user_number) . '/' . $attachment->file_name . '.' . $attachment->file_extension;
+        if (is_file($path)) {
+            @unlink($path);
+        }
+
+        Database::query("DELETE FROM attachments WHERE id = ? AND user_id = ? AND status = 'pending'", [$attachmentId, $userId]);
+        return true;
+    }
+
+    public static function markPendingSubmitted(int $chatId, int $userId, int $messageId, array $attachmentIds): void {
+        if (count($attachmentIds) === 0) {
+            return;
+        }
+
+        $safeIds = [];
+        foreach ($attachmentIds as $id) {
+            $number = (int)$id;
+            if ($number > 0) {
+                $safeIds[$number] = true;
+            }
+        }
+
+        if (count($safeIds) === 0) {
+            return;
+        }
+
+        $placeholders = implode(',', array_fill(0, count($safeIds), '?'));
+        $params = array_merge([$messageId], [$chatId, $userId], array_keys($safeIds));
+
+        Database::query(
+            "UPDATE attachments
+             SET status = 'submitted', message_id = ?, submitted_at = NOW()
+             WHERE chat_id = ? AND user_id = ? AND status = 'pending' AND id IN ($placeholders)",
+            $params
+        );
+    }
+
+    public static function attachSubmittedToMessages(array &$messages): void {
+        if (count($messages) === 0) {
+            return;
+        }
+
+        $messageIds = [];
+        foreach ($messages as $message) {
+            $message->attachments = [];
+            $id = (int)($message->id ?? 0);
+            if ($id > 0) {
+                $messageIds[$id] = true;
+            }
+        }
+
+        if (count($messageIds) === 0) {
+            return;
+        }
+
+        $placeholders = implode(',', array_fill(0, count($messageIds), '?'));
+        try {
+            $rows = Database::query(
+                "SELECT a.id, a.user_id, a.message_id, a.original_name, a.file_name, a.file_extension, a.mime_type, a.file_size, a.width, a.height, u.user_number
+                 FROM attachments a
+                 JOIN users u ON u.id = a.user_id
+                 WHERE a.status = 'submitted' AND a.message_id IN ($placeholders)
+                 ORDER BY a.id ASC",
+                array_keys($messageIds)
+            )->fetchAll();
+        } catch (Throwable $e) {
+            return;
+        }
+
+        $byMessage = [];
+        foreach ($rows as $row) {
+            $row->url = self::publicUrl((string)$row->user_number, (string)$row->file_name, (string)$row->file_extension);
+            $byMessage[(int)$row->message_id][] = $row;
+        }
+
+        foreach ($messages as $message) {
+            $message->attachments = $byMessage[(int)$message->id] ?? [];
+        }
+    }
+
+    public static function cleanupPendingForUser($user): void {
+        $userId = (int)($user->id ?? 0);
+        $userNumber = preg_replace('/\D+/', '', (string)($user->user_number ?? ''));
+        if ($userId <= 0 || !preg_match('/^\d{16}$/', $userNumber)) {
+            return;
+        }
+
+        try {
+            $pending = Database::query(
+                "SELECT file_name, file_extension FROM attachments WHERE user_id = ? AND status = 'pending'",
+                [$userId]
+            )->fetchAll();
+        } catch (Throwable $e) {
+            return;
+        }
+
+        foreach ($pending as $row) {
+            $path = self::directoryForUserNumber($userNumber) . '/' . $row->file_name . '.' . $row->file_extension;
+            if (is_file($path)) {
+                @unlink($path);
+            }
+        }
+
+        Database::query("DELETE FROM attachments WHERE user_id = ? AND status = 'pending'", [$userId]);
+    }
+
+    private static function normalizeOriginalName(string $name): ?string {
+        $name = trim($name);
+        if ($name === '') {
+            return null;
+        }
+
+        $base = basename($name);
+        if ($base !== $name) {
+            return null;
+        }
+
+        if (!preg_match('/^[A-Za-z0-9 _.-]+$/', $base)) {
+            return null;
+        }
+
+        if (strpos($base, '..') !== false) {
+            return null;
+        }
+
+        return $base;
+    }
+
+    private static function writeSanitizedImage(string $tmpPath, string $mime, string $targetPath): bool {
+        if (!function_exists('imagecreatefromjpeg') || !function_exists('imagecreatefrompng')) {
+            return false;
+        }
+
+        if ($mime === 'image/jpeg') {
+            $resource = @imagecreatefromjpeg($tmpPath);
+            if (!$resource) {
+                return false;
+            }
+
+            $ok = @imagejpeg($resource, $targetPath, 90);
+            return (bool)$ok;
+        }
+
+        if ($mime === 'image/png') {
+            $resource = @imagecreatefrompng($tmpPath);
+            if (!$resource) {
+                return false;
+            }
+
+            imagealphablending($resource, false);
+            imagesavealpha($resource, true);
+            $ok = @imagepng($resource, $targetPath, 6);
+            return (bool)$ok;
+        }
+
+        return false;
+    }
+
+    private static function directoryForUserNumber(string $userNumber): string {
+        return self::storageBaseDirectory() . '/attachments/' . $userNumber;
+    }
+
+    private static function publicUrl(string $userNumber, string $fileName, string $extension): string {
+        $userNumber = preg_replace('/\D+/', '', $userNumber);
+        return base_url('/storage/attachments/' . $userNumber . '/' . $fileName . '.' . $extension);
+    }
+
+    private static function generateUniqueFileBaseForUser(int $userId): ?string {
+        for ($attempt = 0; $attempt < 10; $attempt++) {
+            $base = str_pad((string)random_int(0, 9999999999999999), 16, '0', STR_PAD_LEFT);
+            $exists = Database::query(
+                "SELECT id FROM attachments WHERE user_id = ? AND file_name = ? LIMIT 1",
+                [$userId, $base]
+            )->fetch();
+            if (!$exists) {
+                return $base;
+            }
+        }
+
+        return null;
+    }
+
+    private static function storageBaseDirectory(): string {
+        if (defined('STORAGE_FILESYSTEM_ROOT')) {
+            $configured = trim((string)STORAGE_FILESYSTEM_ROOT);
+            if ($configured !== '') {
+                return rtrim($configured, '/');
+            }
+        }
+
+        return dirname(__DIR__, 3) . '/storage';
+    }
+}

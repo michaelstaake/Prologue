@@ -1,0 +1,13 @@
+Options -Indexes
+RewriteEngine On
+
+# Let /storage be served as static files (e.g., via Apache Alias)
+RewriteRule ^storage/ - [L]
+
+# Serve existing files/directories directly
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Send all other requests through MVC front controller
+RewriteRule ^ index.php [L,QSA]

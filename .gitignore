@@ -1,0 +1,6 @@
+.claude/
+.docker/
+public_html/app/config/config.php
+storage/*
+.DS_Store
+**/.DS_Store
