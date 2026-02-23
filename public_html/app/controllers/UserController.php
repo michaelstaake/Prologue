@@ -5,12 +5,14 @@ class UserController extends Controller {
         $currentUserId = Auth::user()->id;
         $formattedNumber = (string)($params['user_number'] ?? '');
         if (!preg_match('/^\d{4}-\d{4}-\d{4}-\d{4}$/', $formattedNumber)) {
-            ErrorHandler::abort(404, 'User not found', ['user_number' => $formattedNumber]);
+            $this->flash('error', 'user_not_found');
+            $this->redirect('/');
         }
 
         $profile = User::findByUserNumber(str_replace('-', '', $formattedNumber));
         if (!$profile) {
-            ErrorHandler::abort(404, 'User not found', ['user_number' => $formattedNumber]);
+            $this->flash('error', 'user_not_found');
+            $this->redirect('/');
         }
 
         User::attachEffectiveStatus($profile);

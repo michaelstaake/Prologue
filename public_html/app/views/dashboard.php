@@ -2,6 +2,20 @@
     <h1 class="text-3xl font-bold mb-6">Friends</h1>
 
     <?php
+        $toastMessage = '';
+        $toastKind = 'error';
+        $flashError = flash_get('error');
+        if ($flashError === 'invalid_chat') {
+            $toastMessage = 'That chat was not found.';
+        } elseif ($flashError === 'user_not_found') {
+            $toastMessage = 'That user was not found.';
+        }
+    ?>
+    <?php if ($toastMessage !== ''): ?>
+        <div id="page-toast" data-toast-message="<?= htmlspecialchars($toastMessage, ENT_QUOTES, 'UTF-8') ?>" data-toast-kind="<?= htmlspecialchars($toastKind, ENT_QUOTES, 'UTF-8') ?>" class="hidden" aria-hidden="true"></div>
+    <?php endif; ?>
+
+    <?php
         $tab = $selectedTab ?? 'all';
         $requestsTab = $selectedRequestsTab ?? 'incoming';
         $friendList = $visibleFriends ?? $friends ?? [];
