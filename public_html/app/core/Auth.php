@@ -1,6 +1,10 @@
 <?php
 class Auth {
     public static function user() {
+        if (!isset($_SESSION['user_id'])) {
+            self::tryRestoreFromRememberCookie();
+        }
+
         if (!isset($_SESSION['user_id'])) return null;
 
         $sessionToken = trim((string)($_SESSION['auth_session_token'] ?? ''));
@@ -101,6 +105,65 @@ class Auth {
 
     private static function clearSessionState() {
         unset($_SESSION['user_id'], $_SESSION['auth_session_token'], $_SESSION['last_activity_touch_at']);
+    }
+
+    public static function setRememberCookie(int $userId, string $sessionToken): void {
+        $rememberToken = bin2hex(random_bytes(32));
+        Database::query(
+            "UPDATE user_sessions SET remember_token = ? WHERE user_id = ? AND session_token = ? AND revoked_at IS NULL",
+            [$rememberToken, $userId, $sessionToken]
+        );
+        $isHttps = is_https_request();
+        setcookie('remember_me', $rememberToken, [
+            'expires'  => time() + (30 * 24 * 60 * 60),
+            'path'     => '/',
+            'secure'   => $isHttps,
+            'httponly' => true,
+            'samesite' => 'Lax',
+        ]);
+    }
+
+    public static function clearRememberCookie(): void {
+        $isHttps = is_https_request();
+        setcookie('remember_me', '', [
+            'expires'  => time() - 3600,
+            'path'     => '/',
+            'secure'   => $isHttps,
+            'httponly' => true,
+            'samesite' => 'Lax',
+        ]);
+    }
+
+    private static function tryRestoreFromRememberCookie(): void {
+        $token = $_COOKIE['remember_me'] ?? '';
+        if ($token === '' || !preg_match('/^[a-f0-9]{64}$/', $token)) {
+            return;
+        }
+
+        $row = Database::query(
+            "SELECT user_id, session_token FROM user_sessions WHERE remember_token = ? AND revoked_at IS NULL LIMIT 1",
+            [$token]
+        )->fetch();
+
+        if (!$row) {
+            self::clearRememberCookie();
+            return;
+        }
+
+        session_regenerate_id(true);
+        $_SESSION['user_id'] = (int)$row->user_id;
+        $_SESSION['auth_session_token'] = $row->session_token;
+        $_SESSION['last_activity_touch_at'] = 0;
+
+        // Refresh cookie expiry (rolling 30-day window)
+        $isHttps = is_https_request();
+        setcookie('remember_me', $token, [
+            'expires'  => time() + (30 * 24 * 60 * 60),
+            'path'     => '/',
+            'secure'   => $isHttps,
+            'httponly' => true,
+            'samesite' => 'Lax',
+        ]);
     }
 
     private static function browserLabel($userAgent) {

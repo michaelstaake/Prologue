@@ -90,6 +90,7 @@ CREATE TABLE user_sessions (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
     session_token CHAR(64) NOT NULL,
+    remember_token CHAR(64) NULL,
     ip_address VARCHAR(45) NOT NULL,
     browser VARCHAR(120) NOT NULL,
     logged_in_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -97,6 +98,7 @@ CREATE TABLE user_sessions (
     revoked_at TIMESTAMP NULL,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     UNIQUE KEY (session_token),
+    UNIQUE KEY (remember_token),
     KEY idx_user_sessions_user_active (user_id, revoked_at, logged_in_at)
 );
 

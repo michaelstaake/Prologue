@@ -68,14 +68,17 @@ class AuthController extends Controller {
 
         $shouldBypassBootstrap2FA = $this->shouldBypassBootstrap2FA((int)$user->id);
 
+        $rememberMe = !empty($_POST['remember_me']);
+
         if (!$shouldBypassBootstrap2FA && Auth::needs2FA($user->id, $ip)) {
             $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
             $expires = date('Y-m-d H:i:s', strtotime('+10 minutes'));
-            Database::query("INSERT INTO twofa_codes (user_id, code, ip, expires_at) VALUES (?, ?, ?, ?)", 
+            Database::query("INSERT INTO twofa_codes (user_id, code, ip, expires_at) VALUES (?, ?, ?, ?)",
                 [$user->id, $code, $ip, $expires]);
 
             $this->sendEmail($user->email, 'Your Prologue 2FA Code', "Your login code is <b>{$code}</b> (valid 10 minutes).");
             $_SESSION['2fa_pending_user'] = $user->id;
+            $_SESSION['2fa_remember_me'] = $rememberMe;
             $this->redirect('/2fa');
         }
 
@@ -84,6 +87,9 @@ class AuthController extends Controller {
         session_regenerate_id(true);
         $_SESSION['user_id'] = (int)$user->id;
         $_SESSION['auth_session_token'] = Auth::registerLoginSession((int)$user->id, $ip, $userAgent);
+        if ($rememberMe) {
+            Auth::setRememberCookie((int)$user->id, $_SESSION['auth_session_token']);
+        }
         User::markLoggedIn((int)$user->id);
         Attachment::cleanupPendingForUser($user);
         $this->createSafariDesktopLoginNotice((int)$user->id, $userAgent);
@@ -128,11 +134,15 @@ class AuthController extends Controller {
         Database::query("DELETE FROM twofa_codes WHERE user_id = ?", [$userId]);
         Auth::markTrustedIP($userId, $ip);
 
-        unset($_SESSION['2fa_pending_user']);
+        $rememberMe = !empty($_SESSION['2fa_remember_me']);
+        unset($_SESSION['2fa_pending_user'], $_SESSION['2fa_remember_me']);
         $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
         session_regenerate_id(true);
         $_SESSION['user_id'] = (int)$userId;
         $_SESSION['auth_session_token'] = Auth::registerLoginSession((int)$userId, $ip, $userAgent);
+        if ($rememberMe) {
+            Auth::setRememberCookie((int)$userId, $_SESSION['auth_session_token']);
+        }
         User::markLoggedIn((int)$userId);
         $authedUser = User::find((int)$userId);
         if ($authedUser) {
@@ -379,6 +389,7 @@ class AuthController extends Controller {
             }
         }
 
+        Auth::clearRememberCookie();
         $_SESSION = [];
         if (ini_get('session.use_cookies')) {
             $params = session_get_cookie_params();

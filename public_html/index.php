@@ -125,6 +125,8 @@ try {
         Setting::set('database_version', APP_VERSION);
     }
     ErrorHandler::setDebugMode(Setting::get('error_display') === '1');
+
+
 } catch (Throwable $exception) {
 }
 

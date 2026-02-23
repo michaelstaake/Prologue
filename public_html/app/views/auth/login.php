@@ -31,7 +31,20 @@
     <form method="POST" action="<?= htmlspecialchars(base_url('/login'), ENT_QUOTES, 'UTF-8') ?>">
         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
         <input type="email" name="email" placeholder="Email" class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-4 mb-4" required autofocus>
-        <input type="password" name="password" placeholder="Password" class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-4 mb-6" required>
+        <input type="password" name="password" placeholder="Password" class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-4 mb-4" required>
+        <div class="flex items-center mb-6">
+            <label for="remember_me" class="flex items-center gap-3 cursor-pointer select-none group">
+                <div class="relative w-4 h-4 flex-shrink-0">
+                    <input type="checkbox" name="remember_me" id="remember_me" value="1" checked
+                           class="peer absolute inset-0 opacity-0 w-full h-full cursor-pointer m-0">
+                    <div class="w-4 h-4 rounded border border-zinc-600 bg-zinc-800 peer-checked:bg-emerald-600 peer-checked:border-emerald-600 peer-focus:ring-2 peer-focus:ring-emerald-500 peer-focus:ring-offset-1 peer-focus:ring-offset-zinc-900 transition-all duration-150 pointer-events-none"></div>
+                    <svg class="absolute inset-0 w-4 h-4 text-white scale-0 peer-checked:scale-100 transition-transform duration-150 pointer-events-none" viewBox="0 0 16 16" fill="none">
+                        <path d="M4 8.5l2.5 2.5 5.5-5.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                <span class="text-sm text-zinc-400 group-hover:text-zinc-300 transition-colors duration-150">Remember me</span>
+            </label>
+        </div>
         <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 py-4 rounded-2xl font-semibold">Log in</button>
     </form>
     <div class="text-center mt-6">
