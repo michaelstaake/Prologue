@@ -478,7 +478,7 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
             <button type="button" id="emoji-toggle" class="hidden lg:block order-3 sm:order-2 w-14 rounded-3xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-700" aria-label="Open emoji picker" aria-expanded="false" aria-controls="emoji-drawer">
                 <i class="fa-regular fa-face-smile"></i>
             </button>
-            <input type="text" id="message-input" class="order-1 sm:order-3 w-full sm:flex-1 bg-zinc-800 border border-zinc-700 rounded-3xl px-6 py-4" placeholder="Message..." required>
+            <input type="text" id="message-input" maxlength="16384" class="order-1 sm:order-3 w-full sm:flex-1 bg-zinc-800 border border-zinc-700 rounded-3xl px-6 py-4" placeholder="Message..." required>
             <button type="submit" class="order-2 sm:order-4 w-[calc(50%-0.375rem)] sm:w-auto bg-emerald-600 px-10 rounded-3xl min-h-12">Send</button>
         </div>
         <div id="message-disabled-notice" class="w-full bg-zinc-900 border border-zinc-700 rounded-2xl px-4 py-3 text-sm text-amber-300 <?= $canSendMessages ? 'hidden' : '' ?>"><?= htmlspecialchars($messageDisabledNoticeText, ENT_QUOTES, 'UTF-8') ?></div>

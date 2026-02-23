@@ -334,6 +334,10 @@ class ChatController extends Controller {
             $this->json(['error' => 'Invalid payload'], 400);
         }
 
+        if (mb_strlen($rawContent) > 16384) {
+            $this->json(['error' => 'Message exceeds the maximum length of 16,384 characters'], 400);
+        }
+
         $member = Database::query("SELECT id FROM chat_members WHERE chat_id = ? AND user_id = ?", [$chatId, $userId])->fetch();
         if (!$member) {
             $this->json(['error' => 'Access denied'], 403);

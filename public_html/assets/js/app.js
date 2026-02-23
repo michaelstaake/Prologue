@@ -403,6 +403,10 @@ async function init() {
             const quotedMessageInput = document.getElementById('quoted-message-id');
             const content = input?.value?.trim();
             if (!content || !currentChat) return;
+            if (content.length > 16384) {
+                showToast('Message exceeds the maximum length of 16,384 characters', 'error');
+                return;
+            }
             if (normalizeChatType(currentChat.type) === 'personal' && currentChat.can_send_messages === false) {
                 showToast(getPersonalChatMessageRestrictionToast(currentChat.message_restriction_reason), 'error');
                 return;
