@@ -439,7 +439,10 @@
             <?php else: ?>
                 <?php foreach ($sessions as $session): ?>
                     <?php
-                        $loggedInAt = strtotime((string)$session->logged_in_at);
+                        $loggedInAt = strtotime((string)$session->logged_in_at . ' UTC');
+                        if ($loggedInAt && preg_match('/^UTC([+-])(\d{1,2})(?::(\d{2}))?$/', $userTimezone ?? 'UTC+0', $_tzm)) {
+                            $loggedInAt += ($_tzm[1] === '+' ? 1 : -1) * ((int)$_tzm[2] * 3600 + (int)($_tzm[3] ?? 0) * 60);
+                        }
                         $loggedInLabel = $loggedInAt ? date('M j, Y g:i A', $loggedInAt) : (string)$session->logged_in_at;
                     ?>
                     <div class="bg-zinc-800 rounded-lg px-3 py-3 flex items-start justify-between gap-3">

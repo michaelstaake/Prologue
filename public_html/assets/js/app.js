@@ -155,8 +155,33 @@ function escapeHtml(value) {
 function formatCompactMessageTimestamp(value) {
     const fullTimestamp = String(value || '').trim();
     if (!fullTimestamp) return '';
-    return fullTimestamp.replace(/:(\d{2})(?!.*:\d{2})/, '');
+
+    const date = new Date(fullTimestamp.replace(' ', 'T') + 'Z');
+    if (isNaN(date.getTime())) {
+        return fullTimestamp.replace(/:(\d{2})(?!.*:\d{2})/, '');
+    }
+
+    const tz = String(window.USER_TIMEZONE || 'UTC+0');
+    const m = tz.match(/^UTC([+-])(\d{1,2})(?::(\d{2}))?$/);
+    const offsetMins = m
+        ? (m[1] === '+' ? 1 : -1) * (parseInt(m[2], 10) * 60 + parseInt(m[3] || '0', 10))
+        : 0;
+
+    const local = new Date(date.getTime() + offsetMins * 60 * 1000);
+    const year  = local.getUTCFullYear();
+    const month = String(local.getUTCMonth() + 1).padStart(2, '0');
+    const day   = String(local.getUTCDate()).padStart(2, '0');
+    const hours = String(local.getUTCHours()).padStart(2, '0');
+    const mins  = String(local.getUTCMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day} ${hours}:${mins}`;
 }
+
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('[data-utc]').forEach(function (el) {
+        const converted = formatCompactMessageTimestamp(el.dataset.utc);
+        if (converted) el.textContent = converted;
+    });
+});
 
 function formatFileSize(bytes) {
     const value = Number(bytes || 0);

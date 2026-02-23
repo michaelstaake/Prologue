@@ -350,7 +350,7 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                         </div>
 
                         <div class="text-xs flex items-center gap-3">
-                            <span class="text-zinc-500" title="<?= htmlspecialchars($fullTimestamp, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($compactTimestamp, ENT_QUOTES, 'UTF-8') ?></span>
+                            <span class="text-zinc-500" data-utc="<?= htmlspecialchars($fullTimestamp, ENT_QUOTES, 'UTF-8') ?>" title="<?= htmlspecialchars($fullTimestamp, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($compactTimestamp, ENT_QUOTES, 'UTF-8') ?></span>
                             <button type="button" class="text-zinc-400 hover:text-zinc-300 js-quote-link" data-quote-message-id="<?= (int)$message->id ?>" data-quote-username="<?= htmlspecialchars((string)$message->username, ENT_QUOTES, 'UTF-8') ?>" data-quote-user-number="<?= htmlspecialchars((string)$message->user_number, ENT_QUOTES, 'UTF-8') ?>" data-quote-content="<?= htmlspecialchars((string)$message->content, ENT_QUOTES, 'UTF-8') ?>" data-quote-mention-map="<?= htmlspecialchars($mentionMapJson, ENT_QUOTES, 'UTF-8') ?>">Quote</button>
                             <button type="button" class="text-zinc-400 hover:text-zinc-300 js-react-link" data-react-message-id="<?= (int)$message->id ?>">React</button>
                             <?php $messageReactions = is_array($message->reactions ?? null) ? $message->reactions : []; ?>

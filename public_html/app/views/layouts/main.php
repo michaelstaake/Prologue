@@ -70,6 +70,7 @@
         $otherNotificationSoundEnabled = true;
         $outgoingCallRingSoundEnabled = true;
         $notificationSidebarExpanded = false;
+        $userTimezone = 'UTC+0';
         if ($currentUser) {
             $notificationSetting = Database::query('SELECT `value` FROM settings WHERE `key` = ?', ['browser_notifications_' . $currentUser->id])->fetchColumn();
             $browserNotificationsEnabled = ((int)$notificationSetting) === 1;
@@ -85,6 +86,9 @@
 
             $notificationSidebarSetting = Database::query('SELECT `value` FROM settings WHERE `key` = ?', ['notif_sidebar_expanded_' . $currentUser->id])->fetchColumn();
             $notificationSidebarExpanded = ((int)$notificationSidebarSetting) === 1;
+
+            $userTimezoneSetting = Database::query('SELECT `value` FROM settings WHERE `key` = ?', ['timezone_' . $currentUser->id])->fetchColumn();
+            $userTimezone = $userTimezoneSetting !== false ? (string)$userTimezoneSetting : 'UTC+0';
 
             if (isset($incomingRequestCount)) {
                 $incomingFriendRequestCount = (int)$incomingRequestCount;
@@ -232,6 +236,7 @@
     window.NOTIFICATION_SOUND_OTHER_ENABLED = <?= $otherNotificationSoundEnabled ? 'true' : 'false' ?>;
     window.NOTIFICATION_SOUND_OUTGOING_CALL_RING_ENABLED = <?= $outgoingCallRingSoundEnabled ? 'true' : 'false' ?>;
     window.NOTIFICATION_SIDEBAR_EXPANDED = <?= $notificationSidebarExpanded ? 'true' : 'false' ?>;
+    window.USER_TIMEZONE = <?= json_encode($userTimezone) ?>;
 </script>
 <script src="<?= htmlspecialchars(base_url('/assets/js/notification.js'), ENT_QUOTES, 'UTF-8') ?>"></script>
 <script src="<?= htmlspecialchars(base_url('/assets/js/chat.js'), ENT_QUOTES, 'UTF-8') ?>"></script>
