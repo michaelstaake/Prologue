@@ -359,12 +359,56 @@ function bindNotificationSoundPreviewButtons() {
     const previewButtons = Array.from(document.querySelectorAll('[data-notification-sound-preview]'));
     if (previewButtons.length === 0) return;
 
+    let activeButton = null;
+    let activeAudio = null;
+
+    function stopActive() {
+        if (activeAudio) {
+            activeAudio.pause();
+            activeAudio.currentTime = 0;
+        }
+        if (activeButton) {
+            activeButton.textContent = 'Preview';
+        }
+        activeButton = null;
+        activeAudio = null;
+    }
+
     previewButtons.forEach((previewButton) => {
         previewButton.addEventListener('click', () => {
             const bucket = String(previewButton.dataset.notificationSoundPreview || '').trim();
             if (!bucket) return;
 
-            playNotificationSoundBucket(bucket);
+            if (activeButton === previewButton) {
+                stopActive();
+                return;
+            }
+
+            stopActive();
+
+            const soundFile = NOTIFICATION_SOUND_FILE_BY_BUCKET[bucket] || NOTIFICATION_SOUND_FILE_BY_BUCKET.other;
+            if (!soundFile) return;
+
+            let audio = notificationSoundAudioByBucket.get(bucket);
+            if (!audio) {
+                audio = new Audio(soundFile);
+                audio.preload = 'auto';
+                notificationSoundAudioByBucket.set(bucket, audio);
+            }
+
+            audio.currentTime = 0;
+            audio.play().catch(() => {});
+
+            activeButton = previewButton;
+            activeAudio = audio;
+            previewButton.textContent = 'Pause';
+
+            audio.addEventListener('ended', function onEnded() {
+                audio.removeEventListener('ended', onEnded);
+                if (activeButton === previewButton) {
+                    stopActive();
+                }
+            });
         });
     });
 }
