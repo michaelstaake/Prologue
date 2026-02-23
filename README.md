@@ -8,6 +8,7 @@ This app is the Prologue, and you and your friends create the story. Enjoy!
 
 ## Useful Links
 - [Project Home Page](https://prologue.chat/)
+- [Get the Latest Version](https://github.com/michaelstaake/Prologue/releases)
 - [Report Problems](https://github.com/michaelstaake/Prologue/issues)
 - [Community Forum](https://github.com/michaelstaake/Prologue/discussions)
 - [Documentation](https://github.com/michaelstaake/Prologue/wiki)
