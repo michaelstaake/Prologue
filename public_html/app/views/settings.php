@@ -128,7 +128,7 @@
             <div class="flex flex-wrap items-center gap-3">
                 <a
                     href="<?= htmlspecialchars(base_url('/reports'), ENT_QUOTES, 'UTF-8') ?>"
-                    class="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 px-6 py-2 rounded-xl"
+                    class="inline-flex items-center gap-2 <?= ((int)($pendingReportCount ?? 0) > 0) ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-zinc-700 hover:bg-zinc-600' ?> px-6 py-2 rounded-xl"
                 >
                     <i class="fa-regular fa-flag"></i>
                     <span>Reports</span>
