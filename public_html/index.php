@@ -220,7 +220,7 @@ $router->post('/config/more', 'ConfigController@saveMoreSettings');
 
 // Settings
 $router->get('/settings', 'HomeController@settings');
-$router->get('/system', 'HomeController@system');
+$router->get('/info', 'HomeController@info');
 $router->post('/settings/account/email', 'HomeController@saveAccountEmail');
 $router->post('/settings/account/email/verify', 'HomeController@verifyAccountEmailChange');
 $router->post('/settings/account/password', 'HomeController@saveAccountPassword');

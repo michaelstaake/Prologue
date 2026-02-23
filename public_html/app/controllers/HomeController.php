@@ -145,11 +145,11 @@ class HomeController extends Controller {
         ]);
     }
 
-    public function system() {
+    public function info() {
         Auth::requireAuth();
         $user = Auth::user();
 
-        $this->view('system', [
+        $this->view('info', [
             'user' => $user,
             'csrf' => $this->csrfToken()
         ]);

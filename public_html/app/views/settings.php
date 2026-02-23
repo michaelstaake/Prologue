@@ -468,7 +468,7 @@
     <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-2xl">
         <h2 class="text-xl font-semibold mb-4">Prologue <?= htmlspecialchars((string)APP_VERSION, ENT_QUOTES, 'UTF-8') ?></h2>
         <div class="space-y-3 text-sm">
-            <a href="<?= htmlspecialchars(base_url('/system'), ENT_QUOTES, 'UTF-8') ?>" class="inline-flex items-center gap-2 text-emerald-400 hover:text-emerald-300 underline decoration-emerald-500">
+            <a href="<?= htmlspecialchars(base_url('/info'), ENT_QUOTES, 'UTF-8') ?>" class="inline-flex items-center gap-2 text-emerald-400 hover:text-emerald-300 underline decoration-emerald-500">
                 More info
             </a>
         </div>
