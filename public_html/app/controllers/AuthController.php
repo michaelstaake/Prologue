@@ -232,6 +232,15 @@ class AuthController extends Controller {
             Database::query("UPDATE invite_codes SET used_by = ?, used_at = NOW() WHERE id = ?", [$newUserId, $invite->id]);
         }
 
+        if ((string)(Setting::get('new_user_notification') ?? '0') === '1') {
+            $referredBy = null;
+            if ($invite) {
+                $referrer = Database::query("SELECT username FROM users WHERE id = ?", [$invite->creator_id])->fetch();
+                $referredBy = $referrer ? (string)$referrer->username : null;
+            }
+            $this->sendNewUserNotification($username, $email, $ip, $referredBy);
+        }
+
         if ($emailVerificationRequired) {
             $this->startEmailVerificationFlow($newUserId);
             $this->flash('success', 'sent');
@@ -494,6 +503,24 @@ class AuthController extends Controller {
             $mail->send();
         } catch (Exception $e) {
             // log error in production
+        }
+    }
+
+    private function sendNewUserNotification(string $username, string $email, string $ip, ?string $referredBy) {
+        $admins = Database::query("SELECT email FROM users WHERE role = 'admin'")->fetchAll();
+
+        $referralLine = $referredBy !== null
+            ? '<b>Referred by:</b> ' . htmlspecialchars($referredBy, ENT_QUOTES, 'UTF-8')
+            : '<b>Referred by:</b> None';
+
+        $body = 'A new user has registered on Prologue.<br><br>'
+            . '<b>Username:</b> ' . htmlspecialchars($username, ENT_QUOTES, 'UTF-8') . '<br>'
+            . '<b>Email:</b> ' . htmlspecialchars($email, ENT_QUOTES, 'UTF-8') . '<br>'
+            . '<b>IP address:</b> ' . htmlspecialchars($ip, ENT_QUOTES, 'UTF-8') . '<br>'
+            . $referralLine;
+
+        foreach ($admins as $admin) {
+            $this->sendEmail($admin->email, 'New user registered', $body);
         }
     }
 

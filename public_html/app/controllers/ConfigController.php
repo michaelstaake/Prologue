@@ -38,6 +38,7 @@ class ConfigController extends Controller {
             'attachments_maximum_file_size_mb' => (int)(Setting::get('attachments_maximum_file_size_mb') ?? 10),
             'error_display' => (string)(Setting::get('error_display') ?? '0') === '1',
             'attachment_logging' => (string)(Setting::get('attachment_logging') ?? '0') === '1',
+            'new_user_notification' => (string)(Setting::get('new_user_notification') ?? '0') === '1',
             'failed_login_attempts_24h' => $bruteForceProtection['failed_login_attempts_24h'],
             'failed_registration_attempts_24h' => $bruteForceProtection['failed_registration_attempts_24h'],
             'active_banned_ips' => $bruteForceProtection['active_banned_ips'],
@@ -60,6 +61,7 @@ class ConfigController extends Controller {
         Setting::set('invites_enabled', isset($_POST['invites_enabled']) ? '1' : '0');
         Setting::set('invite_codes_per_user', (string)max(0, (int)($_POST['invite_codes_per_user'] ?? 3)));
         Setting::set('email_verification_required', isset($_POST['email_verification_required']) ? '1' : '0');
+        Setting::set('new_user_notification', isset($_POST['new_user_notification']) ? '1' : '0');
 
         $this->flash('success', 'accounts_saved');
         $this->redirect('/config');

@@ -192,6 +192,14 @@
                 <input type="checkbox" name="email_verification_required" value="1" <?= !empty($email_verification_required) ? 'checked' : '' ?> class="w-5 h-5 accent-emerald-500 shrink-0">
             </label>
 
+            <label class="flex items-center justify-between gap-4 rounded-xl border border-zinc-700 bg-zinc-800/30 px-4 py-3 cursor-pointer">
+                <div>
+                    <span class="block text-zinc-100">Email admin on new registration</span>
+                    <span class="block text-xs text-zinc-500 mt-0.5">Send a notification email to all admin accounts when a new user registers. Requires mail to be configured.</span>
+                </div>
+                <input type="checkbox" name="new_user_notification" value="1" <?= !empty($new_user_notification) ? 'checked' : '' ?> class="w-5 h-5 accent-emerald-500 shrink-0">
+            </label>
+
             <div class="pt-2">
                 <button type="submit" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-medium transition">Save account settings</button>
             </div>
