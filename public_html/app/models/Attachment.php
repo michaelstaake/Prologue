@@ -1,29 +1,59 @@
 <?php
 class Attachment extends Model {
-    private const ALLOWED_MIME_TO_EXT = [
-        'image/png' => 'png',
-        'image/jpeg' => 'jpg'
+    // Allowed MIME types per file extension (finfo detection)
+    private const EXT_ALLOWED_MIMES = [
+        'png'  => ['image/png'],
+        'jpg'  => ['image/jpeg'],
+        'webp' => ['image/webp'],
+        'mp4'  => ['video/mp4', 'video/quicktime'],
+        'webm' => ['video/webm'],
+        'pdf'  => ['application/pdf'],
+        'odt'  => ['application/vnd.oasis.opendocument.text', 'application/zip'],
+        'doc'  => ['application/msword', 'application/octet-stream'],
+        'docx' => ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/zip'],
+        'zip'  => ['application/zip', 'application/x-zip-compressed'],
+        '7z'   => ['application/x-7z-compressed'],
     ];
+
+    // Display category per extension
+    private const EXT_CATEGORY = [
+        'png' => 'image', 'jpg' => 'image', 'webp' => 'image',
+    ];
+
+    public static function extensionCategory(string $ext): string {
+        return self::EXT_CATEGORY[$ext] ?? 'file';
+    }
 
     public static function acceptedExtensions(): array {
         $raw = strtolower((string)(Setting::get('attachments_accepted_file_types') ?? 'png,jpg'));
         $parts = array_filter(array_map('trim', explode(',', $raw)));
+        $knownExtensions = array_keys(self::EXT_ALLOWED_MIMES);
         $allowed = [];
 
         foreach ($parts as $part) {
-            if ($part === 'jpeg') {
-                $part = 'jpg';
-            }
-            if ($part === 'png' || $part === 'jpg') {
+            if ($part === 'jpeg') $part = 'jpg';
+            if (in_array($part, $knownExtensions, true)) {
                 $allowed[$part] = true;
             }
         }
 
-        if (count($allowed) === 0) {
+        // Only fall back to defaults when the setting has never been saved (null = no DB row).
+        // An empty string means the admin explicitly disabled all types.
+        if (count($allowed) === 0 && Setting::get('attachments_accepted_file_types') === null) {
             $allowed = ['png' => true, 'jpg' => true];
         }
 
         return array_keys($allowed);
+    }
+
+    public static function acceptedMimeTypes(): array {
+        $mimes = [];
+        foreach (self::acceptedExtensions() as $ext) {
+            foreach ((self::EXT_ALLOWED_MIMES[$ext] ?? []) as $mime) {
+                $mimes[$mime] = true;
+            }
+        }
+        return array_keys($mimes);
     }
 
     private static function parsePhpBytes(string $val): int {
@@ -120,37 +150,30 @@ class Attachment extends Model {
             return ['error' => 'attachment_invalid_name'];
         }
 
-        $imageInfo = @getimagesize($tmpPath);
-        if (!$imageInfo) {
-            $logFailure('attachment_invalid_type', 'getimagesize');
-            return ['error' => 'attachment_invalid_type'];
-        }
-
-        $mime = strtolower((string)($imageInfo['mime'] ?? ''));
-        if (!isset(self::ALLOWED_MIME_TO_EXT[$mime])) {
-            $logFailure('attachment_invalid_type', 'mime_not_allowed:' . $mime);
-            return ['error' => 'attachment_invalid_type'];
-        }
-
-        $extension = self::ALLOWED_MIME_TO_EXT[$mime];
-        if (!in_array($extension, self::acceptedExtensions(), true)) {
-            $logFailure('attachment_invalid_type', 'extension_not_accepted:' . $extension);
-            return ['error' => 'attachment_invalid_type'];
-        }
-
+        // Determine extension from filename and normalize
         $nameExt = strtolower((string)pathinfo($originalName, PATHINFO_EXTENSION));
-        if ($nameExt === 'jpeg') {
-            $nameExt = 'jpg';
-        }
-        if ($nameExt !== $extension) {
-            $logFailure('attachment_invalid_name', 'extension_mime_mismatch:' . $nameExt . '_vs_' . $extension);
-            return ['error' => 'attachment_invalid_name'];
+        if ($nameExt === 'jpeg') $nameExt = 'jpg';
+
+        // Check extension is in the accepted list (from admin settings)
+        if (!in_array($nameExt, self::acceptedExtensions(), true)) {
+            $logFailure('attachment_invalid_type', 'extension_not_accepted:' . $nameExt);
+            return ['error' => 'attachment_invalid_type'];
         }
 
-        $width = (int)($imageInfo[0] ?? 0);
-        $height = (int)($imageInfo[1] ?? 0);
-        if ($width <= 0 || $height <= 0 || $width > 10000 || $height > 10000) {
-            $logFailure('attachment_invalid_type', 'dimensions:' . $width . 'x' . $height);
+        // Detect MIME type via finfo (reads file magic bytes, not extension)
+        $fi = function_exists('finfo_open') ? finfo_open(FILEINFO_MIME_TYPE) : false;
+        $mime = $fi ? strtolower((string)finfo_file($fi, $tmpPath)) : '';
+        if ($fi) finfo_close($fi);
+
+        if ($mime === '') {
+            $logFailure('attachment_upload_failed', 'finfo_unavailable');
+            return ['error' => 'attachment_upload_failed'];
+        }
+
+        // Check detected MIME is allowlisted for this extension
+        $allowedMimes = self::EXT_ALLOWED_MIMES[$nameExt] ?? [];
+        if (!in_array($mime, $allowedMimes, true)) {
+            $logFailure('attachment_invalid_type', 'mime_not_allowed_for_ext:' . $mime . '_ext:' . $nameExt);
             return ['error' => 'attachment_invalid_type'];
         }
 
@@ -173,21 +196,38 @@ class Attachment extends Model {
             return ['error' => 'attachment_upload_failed'];
         }
 
-        $targetPath = $dir . '/' . $fileBase . '.' . $extension;
+        $targetPath = $dir . '/' . $fileBase . '.' . $nameExt;
+        $category = self::extensionCategory($nameExt);
+        $width = null;
+        $height = null;
 
-        if ($mime === 'image/jpeg' && (!function_exists('imagecreatefromjpeg') || !function_exists('imagejpeg'))) {
-            $logFailure('attachment_upload_failed', 'gd_jpeg_not_available');
-            return ['error' => 'attachment_upload_failed'];
-        }
-        if ($mime === 'image/png' && (!function_exists('imagecreatefrompng') || !function_exists('imagepng'))) {
-            $logFailure('attachment_upload_failed', 'gd_png_not_available');
-            return ['error' => 'attachment_upload_failed'];
-        }
+        if ($category === 'image') {
+            // Validate image integrity and get dimensions
+            $imageInfo = @getimagesize($tmpPath);
+            if (!$imageInfo) {
+                $logFailure('attachment_invalid_type', 'getimagesize_failed');
+                return ['error' => 'attachment_invalid_type'];
+            }
 
-        $write = self::writeSanitizedImage($tmpPath, $mime, $targetPath);
-        if (!$write) {
-            $logFailure('attachment_upload_failed', 'write_sanitized_image:' . $targetPath);
-            return ['error' => 'attachment_upload_failed'];
+            $width = (int)($imageInfo[0] ?? 0);
+            $height = (int)($imageInfo[1] ?? 0);
+            if ($width <= 0 || $height <= 0 || $width > 10000 || $height > 10000) {
+                $logFailure('attachment_invalid_type', 'dimensions:' . $width . 'x' . $height);
+                return ['error' => 'attachment_invalid_type'];
+            }
+
+            // Re-encode through GD to strip any embedded malicious data
+            $write = self::writeSanitizedImage($tmpPath, $mime, $targetPath);
+            if (!$write) {
+                $logFailure('attachment_upload_failed', 'write_sanitized_image:' . $targetPath);
+                return ['error' => 'attachment_upload_failed'];
+            }
+        } else {
+            // For non-image files: copy directly after MIME validation above
+            if (!copy($tmpPath, $targetPath)) {
+                $logFailure('attachment_upload_failed', 'copy_failed:' . $targetPath);
+                return ['error' => 'attachment_upload_failed'];
+            }
         }
 
         @chmod($targetPath, 0644);
@@ -202,7 +242,7 @@ class Attachment extends Model {
         Database::query(
             "INSERT INTO attachments (chat_id, user_id, original_name, file_name, file_extension, mime_type, file_size, width, height, status)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
-            [$chatId, $userId, $originalName, $fileBase, $extension, $mime, $storedSize, $width, $height]
+            [$chatId, $userId, $originalName, $fileBase, $nameExt, $mime, $storedSize, $width, $height]
         );
 
         $id = (int)Database::getInstance()->lastInsertId();
@@ -212,7 +252,7 @@ class Attachment extends Model {
                 'chat_id' => $chatId,
                 'user_id' => $userId,
                 'original_name' => $originalName,
-                'file_name' => $fileBase . '.' . $extension,
+                'file_name' => $fileBase . '.' . $nameExt,
                 'size' => $storedSize,
                 'width' => $width,
                 'height' => $height,
@@ -225,12 +265,12 @@ class Attachment extends Model {
                 'id' => $id,
                 'original_name' => $originalName,
                 'file_name' => $fileBase,
-                'file_extension' => $extension,
+                'file_extension' => $nameExt,
                 'mime_type' => $mime,
                 'file_size' => $storedSize,
                 'width' => $width,
                 'height' => $height,
-                'url' => self::publicUrl($userNumber, $fileBase, $extension)
+                'url' => self::publicUrl($userNumber, $fileBase, $nameExt)
             ]
         ];
     }
@@ -402,6 +442,21 @@ class Attachment extends Model {
             imagealphablending($resource, false);
             imagesavealpha($resource, true);
             $ok = @imagepng($resource, $targetPath, 6);
+            imagedestroy($resource);
+            return (bool)$ok;
+        }
+
+        if ($mime === 'image/webp') {
+            if (!function_exists('imagecreatefromwebp') || !function_exists('imagewebp')) {
+                return false;
+            }
+            $resource = @imagecreatefromwebp($tmpPath);
+            if (!$resource) {
+                return false;
+            }
+            imagealphablending($resource, false);
+            imagesavealpha($resource, true);
+            $ok = @imagewebp($resource, $targetPath, 90);
             imagedestroy($resource);
             return (bool)$ok;
         }

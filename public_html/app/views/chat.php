@@ -61,6 +61,9 @@ if (is_readable($openMojiCsvPath)) {
 
 $attachmentAcceptedTypes = strtolower((string)(Setting::get('attachments_accepted_file_types') ?? 'png,jpg'));
 $attachmentMaxSizeMb = (int)round(Attachment::maxFileSizeBytes() / (1024 * 1024));
+$attachmentAcceptedExtensions = Attachment::acceptedExtensions();
+$attachmentsEnabled = count($attachmentAcceptedExtensions) > 0;
+$attachmentFileInputAccept = implode(',', array_map(fn($ext) => '.' . $ext, $attachmentAcceptedExtensions));
 
 $isGroupChat = (($chat->type ?? 'personal') === 'group');
 $isPersonalChat = !$isGroupChat;
@@ -345,32 +348,52 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                         <div class="mt-3 flex flex-wrap gap-3">
                             <?php foreach ($message->attachments as $attachment): ?>
                                 <?php
+                                    $attachmentExt = (string)($attachment->file_extension ?? '');
+                                    $attachmentCategory = Attachment::extensionCategory($attachmentExt);
+                                    $attachmentUrl = htmlspecialchars($attachment->url ?? '', ENT_QUOTES, 'UTF-8');
+                                    $attachmentName = htmlspecialchars($attachment->original_name ?? 'Attachment', ENT_QUOTES, 'UTF-8');
+                                    $attachmentDownloadName = htmlspecialchars(($attachment->file_name ?? '') . '.' . $attachmentExt, ENT_QUOTES, 'UTF-8');
                                     $attachmentSizeLabel = number_format(((int)$attachment->file_size) / 1024, 1) . ' KB';
                                     if ((int)$attachment->file_size >= 1024 * 1024) {
                                         $attachmentSizeLabel = number_format(((int)$attachment->file_size) / (1024 * 1024), 2) . ' MB';
                                     }
                                 ?>
                                 <div class="w-44 bg-zinc-800/70 border border-zinc-700 rounded-xl p-2">
-                                    <button
-                                        type="button"
-                                        class="js-lightbox-trigger block w-full"
-                                        data-image-url="<?= htmlspecialchars($attachment->url ?? '', ENT_QUOTES, 'UTF-8') ?>"
-                                        data-image-title="<?= htmlspecialchars($attachment->original_name ?? 'Attachment', ENT_QUOTES, 'UTF-8') ?>"
-                                    >
-                                        <img
-                                            src="<?= htmlspecialchars($attachment->url ?? '', ENT_QUOTES, 'UTF-8') ?>"
-                                            alt="<?= htmlspecialchars($attachment->original_name ?? 'Attachment', ENT_QUOTES, 'UTF-8') ?>"
-                                            class="w-full h-24 object-cover rounded-lg border border-zinc-700"
-                                            loading="lazy"
-                                            decoding="async"
+                                    <?php if ($attachmentCategory === 'image'): ?>
+                                        <button
+                                            type="button"
+                                            class="js-lightbox-trigger block w-full"
+                                            data-image-url="<?= $attachmentUrl ?>"
+                                            data-image-title="<?= $attachmentName ?>"
                                         >
-                                    </button>
-                                    <div class="mt-2 text-xs text-zinc-400 flex items-center justify-between gap-2">
-                                        <span><?= htmlspecialchars($attachmentSizeLabel, ENT_QUOTES, 'UTF-8') ?></span>
-                                        <a href="<?= htmlspecialchars($attachment->url ?? '', ENT_QUOTES, 'UTF-8') ?>" download="<?= htmlspecialchars(($attachment->file_name ?? '') . '.' . ($attachment->file_extension ?? ''), ENT_QUOTES, 'UTF-8') ?>" class="text-zinc-300 hover:text-zinc-100" title="Download">
-                                            <i class="fa-solid fa-download"></i>
+                                            <img
+                                                src="<?= $attachmentUrl ?>"
+                                                alt="<?= $attachmentName ?>"
+                                                class="w-full h-24 object-cover rounded-lg border border-zinc-700"
+                                                loading="lazy"
+                                                decoding="async"
+                                            >
+                                        </button>
+                                        <div class="mt-2 text-xs text-zinc-400 flex items-center justify-between gap-2">
+                                            <span><?= htmlspecialchars($attachmentSizeLabel, ENT_QUOTES, 'UTF-8') ?></span>
+                                            <a href="<?= $attachmentUrl ?>" download="<?= $attachmentDownloadName ?>" class="text-zinc-300 hover:text-zinc-100" title="Download">
+                                                <i class="fa-solid fa-download"></i>
+                                            </a>
+                                        </div>
+                                    <?php else: ?>
+                                        <a href="<?= $attachmentUrl ?>" download="<?= $attachmentDownloadName ?>" class="block w-full">
+                                            <div class="w-full h-24 rounded-lg border border-zinc-700 bg-zinc-800 flex flex-col items-center justify-center gap-1.5">
+                                                <i class="fa-solid fa-file text-2xl text-zinc-400"></i>
+                                                <span class="text-xs font-mono font-semibold text-zinc-300 uppercase">.<?= htmlspecialchars($attachmentExt, ENT_QUOTES, 'UTF-8') ?></span>
+                                            </div>
                                         </a>
-                                    </div>
+                                        <div class="mt-2 text-xs text-zinc-400 flex items-center justify-between gap-2">
+                                            <span class="truncate" title="<?= $attachmentName ?>"><?= $attachmentName ?></span>
+                                            <a href="<?= $attachmentUrl ?>" download="<?= $attachmentDownloadName ?>" class="text-zinc-300 hover:text-zinc-100 shrink-0" title="Download">
+                                                <i class="fa-solid fa-download"></i>
+                                            </a>
+                                        </div>
+                                    <?php endif; ?>
                                 </div>
                             <?php endforeach; ?>
                         </div>
@@ -447,9 +470,11 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
             </div>
         </div>
         <div id="message-composer-controls" class="w-full flex flex-wrap sm:flex-nowrap items-stretch gap-3 sm:gap-4 <?= $canSendMessages ? '' : 'hidden' ?>">
+            <?php if ($attachmentsEnabled): ?>
             <button type="button" id="attachments-toggle" class="order-2 sm:order-1 w-[calc(50%-0.375rem)] sm:w-14 rounded-3xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 min-h-12" aria-label="Open attachments menu" aria-expanded="false" aria-controls="attachments-drawer">
                 <i class="fa-solid fa-paperclip"></i>
             </button>
+            <?php endif; ?>
             <button type="button" id="emoji-toggle" class="hidden lg:block order-3 sm:order-2 w-14 rounded-3xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-700" aria-label="Open emoji picker" aria-expanded="false" aria-controls="emoji-drawer">
                 <i class="fa-regular fa-face-smile"></i>
             </button>
@@ -469,15 +494,17 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                 </div>
             </div>
         </div>
+        <?php if ($attachmentsEnabled): ?>
         <div id="attachments-drawer" class="hidden absolute left-6 right-6 bottom-[calc(100%+0.75rem)] bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl p-4 z-30">
             <div class="flex items-center justify-between gap-3 mb-3">
                 <div class="text-sm text-zinc-300">Attachments (<?= htmlspecialchars($attachmentAcceptedTypes, ENT_QUOTES, 'UTF-8') ?>, max <?= (int)$attachmentMaxSizeMb ?>MB)</div>
-                <input type="file" id="attachments-file-input" class="hidden" accept="image/png,image/jpeg" multiple>
+                <input type="file" id="attachments-file-input" class="hidden" accept="<?= htmlspecialchars($attachmentFileInputAccept, ENT_QUOTES, 'UTF-8') ?>" multiple>
                 <button type="button" id="attachments-select-button" class="bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 rounded-lg px-3 py-1.5 text-xs">Select files</button>
             </div>
             <div id="attachments-empty" class="text-sm text-zinc-400 border border-dashed border-zinc-700 rounded-xl px-4 py-6 text-center">No attachments yet. Click Select files.</div>
             <div id="attachments-list" class="hidden grid grid-cols-2 md:grid-cols-4 gap-3"></div>
         </div>
+        <?php endif; ?>
     </form>
 </div>
 

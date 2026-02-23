@@ -822,25 +822,30 @@ function renderPendingAttachmentList() {
 
     empty.classList.add('hidden');
     list.classList.remove('hidden');
-    list.innerHTML = safeAttachments.map((attachment) => `
-        <div class="bg-zinc-800/70 border border-zinc-700 rounded-xl p-2">
-            <button
-                type="button"
-                class="js-lightbox-trigger block w-full"
-                data-image-url="${escapeHtml(attachment.url)}"
-                data-image-title="${escapeHtml(attachment.original_name)}"
-            >
-                <img src="${escapeHtml(attachment.url)}" alt="${escapeHtml(attachment.original_name)}" class="w-full h-24 object-cover rounded-lg border border-zinc-700" loading="lazy" decoding="async">
-            </button>
-            <div class="mt-2 text-xs text-zinc-400 truncate" title="${escapeHtml(attachment.original_name)}">${escapeHtml(attachment.original_name)}</div>
-            <div class="mt-1 text-xs text-zinc-500 flex items-center justify-between gap-2">
-                <span>${escapeHtml(formatFileSize(attachment.file_size))}</span>
-                <button type="button" class="text-red-300 hover:text-red-200" data-attachment-delete="${attachment.id}">
-                    <i class="fa-solid fa-trash"></i>
-                </button>
+    list.innerHTML = safeAttachments.map((attachment) => {
+        const category = getAttachmentCategory(attachment.file_extension);
+        const preview = category === 'image'
+            ? `<button type="button" class="js-lightbox-trigger block w-full" data-image-url="${escapeHtml(attachment.url)}" data-image-title="${escapeHtml(attachment.original_name)}">
+                   <img src="${escapeHtml(attachment.url)}" alt="${escapeHtml(attachment.original_name)}" class="w-full h-24 object-cover rounded-lg border border-zinc-700" loading="lazy" decoding="async">
+               </button>`
+            : `<div class="w-full h-24 rounded-lg border border-zinc-700 bg-zinc-800 flex flex-col items-center justify-center gap-1.5">
+                   <i class="fa-solid fa-file text-2xl text-zinc-400"></i>
+                   <span class="text-xs font-mono font-semibold text-zinc-300 uppercase">.${escapeHtml(attachment.file_extension)}</span>
+               </div>`;
+
+        return `
+            <div class="bg-zinc-800/70 border border-zinc-700 rounded-xl p-2">
+                ${preview}
+                <div class="mt-2 text-xs text-zinc-400 truncate" title="${escapeHtml(attachment.original_name)}">${escapeHtml(attachment.original_name)}</div>
+                <div class="mt-1 text-xs text-zinc-500 flex items-center justify-between gap-2">
+                    <span>${escapeHtml(formatFileSize(attachment.file_size))}</span>
+                    <button type="button" class="text-red-300 hover:text-red-200" data-attachment-delete="${attachment.id}">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </div>
             </div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
 }
 
 async function uploadAttachmentFile(file) {
@@ -873,7 +878,7 @@ async function uploadAttachmentFile(file) {
         const label = error === 'attachment_invalid_name'
             ? 'Attachment name must have one dot and a valid extension'
             : error === 'attachment_invalid_type'
-                ? 'Only PNG and JPG images are allowed'
+                ? 'File type not allowed or unsupported'
                 : error === 'attachment_too_large'
                     ? 'Attachment exceeds the maximum file size'
                     : 'Attachment upload failed';

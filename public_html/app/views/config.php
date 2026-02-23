@@ -21,6 +21,9 @@
         } elseif ($flashSuccess === 'more_saved') {
             $toastMessage = 'Settings saved.';
             $toastKind = 'success';
+        } elseif ($flashSuccess === 'attachments_saved') {
+            $toastMessage = 'Attachment settings saved.';
+            $toastKind = 'success';
         }
     ?>
 
@@ -193,6 +196,103 @@
                 <button type="submit" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-medium transition">Save account settings</button>
             </div>
         </form>
+    </section>
+
+    <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-2xl">
+        <h2 class="text-xl font-semibold mb-1">Attachments</h2>
+        <p class="text-sm text-zinc-400 mb-5">Control which file types users can attach and the maximum upload size. The size limit is capped by your server's PHP settings.</p>
+
+        <?php
+            $rawTypes = strtolower((string)($attachments_accepted_file_types ?? 'png,jpg'));
+            $enabledTypes = array_flip(array_map('trim', explode(',', $rawTypes)));
+            $typeCheck = function(string $ext) use ($enabledTypes): string {
+                return isset($enabledTypes[$ext]) ? 'checked' : '';
+            };
+        ?>
+
+        <form method="POST" action="<?= htmlspecialchars(base_url('/config/attachments'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-5" id="attachments-type-form">
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
+
+            <div class="flex items-center justify-end">
+                <button type="button" id="attachments-select-all-btn" class="text-xs text-zinc-400 hover:text-zinc-200 underline underline-offset-2">Select all</button>
+            </div>
+
+            <div>
+                <p class="text-xs uppercase tracking-wide text-zinc-500 mb-2">Images</p>
+                <div class="flex flex-wrap gap-3">
+                    <?php foreach ([['png', 'PNG'], ['jpg', 'JPG'], ['webp', 'WebP']] as [$ext, $label]): ?>
+                    <label class="flex items-center gap-2.5 rounded-xl border border-zinc-700 bg-zinc-800/30 px-4 py-3 cursor-pointer">
+                        <input type="checkbox" name="type_<?= $ext ?>" value="1" <?= $typeCheck($ext) ?> class="w-4 h-4 accent-emerald-500">
+                        <span class="text-zinc-100 text-sm"><?= $label ?></span>
+                    </label>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+
+            <div>
+                <p class="text-xs uppercase tracking-wide text-zinc-500 mb-2">Video</p>
+                <div class="flex flex-wrap gap-3">
+                    <?php foreach ([['mp4', 'MP4'], ['webm', 'WebM']] as [$ext, $label]): ?>
+                    <label class="flex items-center gap-2.5 rounded-xl border border-zinc-700 bg-zinc-800/30 px-4 py-3 cursor-pointer">
+                        <input type="checkbox" name="type_<?= $ext ?>" value="1" <?= $typeCheck($ext) ?> class="w-4 h-4 accent-emerald-500">
+                        <span class="text-zinc-100 text-sm"><?= $label ?></span>
+                    </label>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+
+            <div>
+                <p class="text-xs uppercase tracking-wide text-zinc-500 mb-2">Files</p>
+                <div class="flex flex-wrap gap-3">
+                    <?php foreach ([['pdf', 'PDF'], ['odt', 'ODT'], ['doc', 'DOC'], ['docx', 'DOCX'], ['zip', 'ZIP'], ['7z', '7Z']] as [$ext, $label]): ?>
+                    <label class="flex items-center gap-2.5 rounded-xl border border-zinc-700 bg-zinc-800/30 px-4 py-3 cursor-pointer">
+                        <input type="checkbox" name="type_<?= $ext ?>" value="1" <?= $typeCheck($ext) ?> class="w-4 h-4 accent-emerald-500">
+                        <span class="text-zinc-100 text-sm"><?= $label ?></span>
+                    </label>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+
+            <div>
+                <label for="attachments_maximum_file_size_mb" class="block text-sm text-zinc-400 mb-1">Maximum file size (MB)</label>
+                <input
+                    type="number"
+                    id="attachments_maximum_file_size_mb"
+                    name="attachments_maximum_file_size_mb"
+                    value="<?= (int)($attachments_maximum_file_size_mb ?? 10) ?>"
+                    min="1"
+                    max="512"
+                    class="w-32 bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-zinc-100"
+                >
+                <p class="text-xs text-zinc-500 mt-1">Applies per file. The effective limit may be lower if your PHP <code class="text-zinc-400">upload_max_filesize</code> or <code class="text-zinc-400">post_max_size</code> is smaller.</p>
+            </div>
+
+            <div class="pt-2">
+                <button type="submit" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-medium transition">Save attachment settings</button>
+            </div>
+        </form>
+
+        <script>
+            (function () {
+                const btn = document.getElementById('attachments-select-all-btn');
+                const form = document.getElementById('attachments-type-form');
+                if (!btn || !form) return;
+
+                const getBoxes = () => Array.from(form.querySelectorAll('input[type="checkbox"]'));
+                const allChecked = () => getBoxes().every((cb) => cb.checked);
+
+                const update = () => { btn.textContent = allChecked() ? 'Deselect all' : 'Select all'; };
+                update();
+
+                btn.addEventListener('click', () => {
+                    const check = !allChecked();
+                    getBoxes().forEach((cb) => { cb.checked = check; });
+                    update();
+                });
+
+                form.addEventListener('change', update);
+            })();
+        </script>
     </section>
 
     <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-2xl">

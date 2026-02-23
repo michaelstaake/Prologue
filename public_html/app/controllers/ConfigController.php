@@ -34,6 +34,8 @@ class ConfigController extends Controller {
             'invites_enabled' => (string)(Setting::get('invites_enabled') ?? '1') === '1',
             'invite_codes_per_user' => (int)(Setting::get('invite_codes_per_user') ?? 3),
             'email_verification_required' => (string)(Setting::get('email_verification_required') ?? '1') === '1',
+            'attachments_accepted_file_types' => (string)(Setting::get('attachments_accepted_file_types') ?? 'png,jpg'),
+            'attachments_maximum_file_size_mb' => (int)(Setting::get('attachments_maximum_file_size_mb') ?? 10),
             'error_display' => (string)(Setting::get('error_display') ?? '0') === '1',
             'attachment_logging' => (string)(Setting::get('attachment_logging') ?? '0') === '1',
             'failed_login_attempts_24h' => $bruteForceProtection['failed_login_attempts_24h'],
@@ -72,6 +74,25 @@ class ConfigController extends Controller {
         Setting::set('attachment_logging', isset($_POST['attachment_logging']) ? '1' : '0');
 
         $this->flash('success', 'more_saved');
+        $this->redirect('/config');
+    }
+
+    public function saveAttachmentSettings() {
+        $this->requireAdminUser();
+        Auth::csrfValidate();
+
+        $allTypes = ['png', 'jpg', 'webp', 'mp4', 'webm', 'pdf', 'odt', 'doc', 'docx', 'zip', '7z'];
+        $types = [];
+        foreach ($allTypes as $type) {
+            if (isset($_POST['type_' . $type])) $types[] = $type;
+        }
+        Setting::set('attachments_accepted_file_types', implode(',', $types));
+
+        $maxMb = (int)($_POST['attachments_maximum_file_size_mb'] ?? 10);
+        if ($maxMb < 1) $maxMb = 1;
+        Setting::set('attachments_maximum_file_size_mb', (string)$maxMb);
+
+        $this->flash('success', 'attachments_saved');
         $this->redirect('/config');
     }
 

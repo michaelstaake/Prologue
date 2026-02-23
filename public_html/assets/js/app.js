@@ -194,6 +194,10 @@ function formatFileSize(bytes) {
     return `${(value / 1024).toFixed(1)} KB`;
 }
 
+function getAttachmentCategory(ext) {
+    return ['png', 'jpg', 'jpeg', 'webp'].includes(String(ext).toLowerCase()) ? 'image' : 'file';
+}
+
 function normalizeAttachment(attachment) {
     if (!attachment || typeof attachment !== 'object') return null;
 
@@ -221,24 +225,48 @@ function renderMessageAttachments(attachments) {
     const cards = attachments
         .map(normalizeAttachment)
         .filter(Boolean)
-        .map((attachment) => `
-            <div class="w-44 bg-zinc-800/70 border border-zinc-700 rounded-xl p-2">
-                <button
-                    type="button"
-                    class="js-lightbox-trigger block w-full"
-                    data-image-url="${escapeHtml(attachment.url)}"
-                    data-image-title="${escapeHtml(attachment.original_name)}"
-                >
-                    <img src="${escapeHtml(attachment.url)}" alt="${escapeHtml(attachment.original_name)}" class="w-full h-24 object-cover rounded-lg border border-zinc-700" loading="lazy" decoding="async">
-                </button>
-                <div class="mt-2 text-xs text-zinc-400 flex items-center justify-between gap-2">
-                    <span>${escapeHtml(formatFileSize(attachment.file_size))}</span>
-                    <a href="${escapeHtml(attachment.url)}" download="${escapeHtml(`${attachment.file_name}.${attachment.file_extension}`)}" class="text-zinc-300 hover:text-zinc-100" title="Download">
-                        <i class="fa-solid fa-download"></i>
+        .map((attachment) => {
+            const category = getAttachmentCategory(attachment.file_extension);
+            const downloadAttr = escapeHtml(`${attachment.file_name}.${attachment.file_extension}`);
+
+            if (category === 'image') {
+                return `
+                    <div class="w-44 bg-zinc-800/70 border border-zinc-700 rounded-xl p-2">
+                        <button
+                            type="button"
+                            class="js-lightbox-trigger block w-full"
+                            data-image-url="${escapeHtml(attachment.url)}"
+                            data-image-title="${escapeHtml(attachment.original_name)}"
+                        >
+                            <img src="${escapeHtml(attachment.url)}" alt="${escapeHtml(attachment.original_name)}" class="w-full h-24 object-cover rounded-lg border border-zinc-700" loading="lazy" decoding="async">
+                        </button>
+                        <div class="mt-2 text-xs text-zinc-400 flex items-center justify-between gap-2">
+                            <span>${escapeHtml(formatFileSize(attachment.file_size))}</span>
+                            <a href="${escapeHtml(attachment.url)}" download="${downloadAttr}" class="text-zinc-300 hover:text-zinc-100" title="Download">
+                                <i class="fa-solid fa-download"></i>
+                            </a>
+                        </div>
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="w-44 bg-zinc-800/70 border border-zinc-700 rounded-xl p-2">
+                    <a href="${escapeHtml(attachment.url)}" download="${downloadAttr}" class="block w-full">
+                        <div class="w-full h-24 rounded-lg border border-zinc-700 bg-zinc-800 flex flex-col items-center justify-center gap-1.5">
+                            <i class="fa-solid fa-file text-2xl text-zinc-400"></i>
+                            <span class="text-xs font-mono font-semibold text-zinc-300 uppercase">.${escapeHtml(attachment.file_extension)}</span>
+                        </div>
                     </a>
+                    <div class="mt-2 text-xs text-zinc-400 flex items-center justify-between gap-2">
+                        <span class="truncate" title="${escapeHtml(attachment.original_name)}">${escapeHtml(attachment.original_name)}</span>
+                        <a href="${escapeHtml(attachment.url)}" download="${downloadAttr}" class="text-zinc-300 hover:text-zinc-100 shrink-0" title="Download">
+                            <i class="fa-solid fa-download"></i>
+                        </a>
+                    </div>
                 </div>
-            </div>
-        `);
+            `;
+        });
 
     if (!cards.length) return '';
     return `<div class="mt-3 flex flex-wrap gap-3">${cards.join('')}</div>`;
