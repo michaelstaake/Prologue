@@ -101,7 +101,17 @@
         }
     ?>
     <?php if ($currentUser): ?>
-    <div id="app-layout" class="flex h-screen">
+    <div class="h-screen flex flex-col">
+        <div id="chat-call-status-bar" class="hidden w-full px-6 py-2 border-b border-transparent text-sm font-medium flex items-center gap-3 shrink-0">
+            <span id="chat-call-status-label"></span>
+            <span id="chat-call-status-duration" class="hidden text-xs opacity-80 tabular-nums">00:00</span>
+            <span id="chat-call-show-overlay-hint" class="hidden text-xs opacity-60"><i class="fa-solid fa-up-right-from-square"></i> Show</span>
+            <button id="join-call-btn" onclick="joinCall()" class="hidden bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1 rounded-full text-xs font-medium">Join Call</button>
+            <button id="accept-call-btn" onclick="acceptCall()" class="hidden bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1 rounded-full text-xs font-medium">Accept</button>
+            <button id="decline-call-btn" onclick="declineCall()" class="hidden bg-red-600 hover:bg-red-500 text-white px-3 py-1 rounded-full text-xs font-medium">Decline</button>
+        </div>
+
+    <div id="app-layout" class="flex flex-1 min-h-0">
         <aside id="app-sidebar" class="w-72 sidebar border-r border-zinc-800 flex flex-col">
             <a href="<?= htmlspecialchars(base_url('/'), ENT_QUOTES, 'UTF-8') ?>" class="p-4 border-b border-zinc-700 flex items-center gap-3 hover:bg-zinc-800/40 transition">
                 <i class="fa-solid fa-comments text-2xl prologue-accent"></i>
@@ -181,6 +191,83 @@
         </aside>
     </div>
 
+    <!-- Call overlay -->
+    <div id="call-overlay" class="hidden fixed bg-black/95 z-40 flex flex-col" style="inset:0">
+        <div class="flex items-center justify-between px-5 py-3 border-b border-zinc-800/60 shrink-0">
+            <div class="flex items-center gap-2">
+                <div class="text-sm font-medium text-zinc-400">Call in progress</div>
+                <span id="call-overlay-duration" class="hidden text-xs text-zinc-500 tabular-nums">00:00</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+                <button onclick="setCallOverlayMode('hidden')" id="call-overlay-hidden-btn" class="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 text-xs" title="Hide call window (reopen from Call in progress bar)"><i class="fa-solid fa-chevron-up"></i></button>
+                <button onclick="setCallOverlayMode('half')" id="call-overlay-half-btn" class="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 text-xs" title="Split screen"><i class="fa-solid fa-down-left-and-up-right-to-center"></i></button>
+                <button onclick="setCallOverlayMode('full')" id="call-overlay-full-btn" class="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 text-xs" title="Full size"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></button>
+            </div>
+        </div>
+
+        <div id="call-videos" class="flex-1 flex items-center justify-center gap-6 flex-wrap p-6 overflow-auto min-h-0">
+            <div id="remote-user-tile" class="flex flex-col items-center gap-2">
+                <div id="remote-video-container" class="relative rounded-2xl overflow-hidden bg-zinc-900 border border-zinc-700 flex items-center justify-center" style="width:320px;height:180px">
+                    <video id="remote-video" autoplay playsinline class="hidden absolute inset-0 w-full h-full object-contain"></video>
+                    <div id="remote-video-placeholder" class="absolute inset-0 flex items-center justify-center"><i class="fa fa-user text-5xl text-zinc-700"></i></div>
+                </div>
+                <button id="remote-username-btn" type="button" class="text-sm text-zinc-300 px-1 select-none" disabled style="cursor:default" onclick="spotlightRemoteUser()">Participant</button>
+            </div>
+
+            <div id="local-user-tile" class="flex flex-col items-center gap-2">
+                <div id="local-media-container" class="relative rounded-2xl overflow-hidden bg-zinc-900 border border-zinc-700 flex items-center justify-center" style="width:320px;height:180px">
+                    <div id="local-video-placeholder" class="absolute inset-0 flex items-center justify-center"><i class="fa fa-microphone text-4xl text-zinc-700"></i></div>
+                    <video id="local-video" autoplay playsinline muted class="hidden absolute inset-0 w-full h-full object-contain"></video>
+                    <video id="screen-share-video" autoplay playsinline muted class="hidden absolute inset-0 w-full h-full object-contain"></video>
+                    <button id="pip-toggle-btn" type="button" class="hidden absolute bottom-2 left-2 z-10 text-xs bg-black/70 hover:bg-black/90 text-white rounded-lg px-2 py-1 gap-1 flex items-center" onclick="togglePipMode()" title="Swap picture-in-picture"><i class="fa-solid fa-rotate"></i><span>Swap</span></button>
+                </div>
+                <span class="text-sm text-zinc-300 select-none" id="local-username-label">You</span>
+            </div>
+        </div>
+
+        <div class="shrink-0 flex gap-5 flex-wrap justify-center px-6 pb-6 pt-2">
+            <div class="flex flex-col items-center gap-1">
+                <button onclick="toggleMute()" id="mute-btn" class="bg-zinc-800 hover:bg-zinc-700 w-16 h-16 rounded-2xl text-xl border border-zinc-700" title="Toggle mute"><i class="fa fa-microphone"></i></button>
+                <span class="text-xs text-zinc-400">Mute</span>
+            </div>
+            <div class="flex flex-col items-center gap-1">
+                <button onclick="toggleVideoInCall()" id="toggle-video-btn" class="bg-zinc-800 hover:bg-zinc-700 w-16 h-16 rounded-2xl text-xl border border-zinc-700" title="Toggle camera"><i class="fa fa-video-slash"></i></button>
+                <span class="text-xs text-zinc-400">Camera</span>
+            </div>
+            <div id="screenshare-btn-wrap" class="flex flex-col items-center gap-1 hidden">
+                <button onclick="toggleScreenShare()" id="screenshare-btn" class="bg-zinc-800 hover:bg-zinc-700 w-16 h-16 rounded-2xl text-xl border border-zinc-700" title="Share screen"><i class="fa fa-display"></i></button>
+                <span class="text-xs text-zinc-400">Share</span>
+            </div>
+            <div class="flex flex-col items-center gap-1">
+                <button onclick="endCall()" class="bg-red-600 hover:bg-red-500 w-16 h-16 rounded-2xl text-xl border border-red-700" title="End call"><i class="fa fa-phone-slash"></i></button>
+                <span class="text-xs text-zinc-400">End</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="screenshare-modal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+        <div class="w-full max-w-sm bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl p-6">
+            <h3 class="text-lg font-semibold text-zinc-100 mb-1">Share Your Screen</h3>
+            <p class="text-sm text-zinc-400 mb-5">Choose a quality setting. Your browser will let you pick which screen or window to share.</p>
+            <div class="space-y-3">
+                <button onclick="startScreenShare('720p-10fps')" class="w-full text-left bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-xl px-4 py-3 transition-colors">
+                    <div class="font-medium text-zinc-100 text-sm">720P &middot; 10 FPS</div>
+                    <div class="text-xs text-zinc-400 mt-0.5">Low bandwidth, ideal for slow connections</div>
+                </button>
+                <button onclick="startScreenShare('1080p-30fps')" class="w-full text-left bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-xl px-4 py-3 transition-colors">
+                    <div class="font-medium text-zinc-100 text-sm">1080P &middot; 30 FPS</div>
+                    <div class="text-xs text-zinc-400 mt-0.5">Balanced quality and performance</div>
+                </button>
+                <button onclick="startScreenShare('native-60fps')" class="w-full text-left bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-xl px-4 py-3 transition-colors">
+                    <div class="font-medium text-zinc-100 text-sm">Native Resolution &middot; 60 FPS</div>
+                    <div class="text-xs text-zinc-400 mt-0.5">Highest quality, requires fast connection</div>
+                </button>
+            </div>
+            <button onclick="closeScreenShareModal()" class="mt-4 w-full text-center text-sm text-zinc-400 hover:text-zinc-200 py-2">Cancel</button>
+        </div>
+    </div>
+    </div>
+
     <div id="mobile-overlay-backdrop"></div>
 
     <div class="lg:hidden fixed <?= $mobileFabBottomClass ?> left-5 z-30">
@@ -237,6 +324,8 @@
     window.NOTIFICATION_SOUND_OUTGOING_CALL_RING_ENABLED = <?= $outgoingCallRingSoundEnabled ? 'true' : 'false' ?>;
     window.NOTIFICATION_SIDEBAR_EXPANDED = <?= $notificationSidebarExpanded ? 'true' : 'false' ?>;
     window.USER_TIMEZONE = <?= json_encode($userTimezone) ?>;
+    window.CURRENT_USER_ID = <?= json_encode((int)($currentUser->id ?? 0)) ?>;
+    window.CURRENT_USERNAME = <?= json_encode((string)($currentUser->username ?? '')) ?>;
 </script>
 <script src="<?= htmlspecialchars(base_url('/assets/js/notification.js'), ENT_QUOTES, 'UTF-8') ?>"></script>
 <script src="<?= htmlspecialchars(base_url('/assets/js/chat.js'), ENT_QUOTES, 'UTF-8') ?>"></script>

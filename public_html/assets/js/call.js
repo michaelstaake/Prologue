@@ -4,6 +4,159 @@
 let speakingAudioCtx = null;
 let localSpeakingRaf = null;
 const remoteAnalysers = new Map();
+const CALL_SESSION_STORAGE_KEY = 'prologue.activeCallSession';
+const CALL_OVERLAY_STORAGE_KEY = 'prologue.activeCallOverlayMode';
+
+function normalizeCallOverlayMode(mode) {
+    return mode === 'hidden' || mode === 'half' || mode === 'full' ? mode : 'full';
+}
+
+function persistCallOverlayMode(mode, callId = null) {
+    const safeCallId = Number(callId || currentCallId || globalCallContext?.id || 0);
+    if (safeCallId <= 0) {
+        sessionStorage.removeItem(CALL_OVERLAY_STORAGE_KEY);
+        return;
+    }
+
+    const payload = {
+        call_id: safeCallId,
+        mode: normalizeCallOverlayMode(mode),
+        updated_at: Date.now()
+    };
+
+    sessionStorage.setItem(CALL_OVERLAY_STORAGE_KEY, JSON.stringify(payload));
+}
+
+function clearPersistedCallOverlayMode() {
+    sessionStorage.removeItem(CALL_OVERLAY_STORAGE_KEY);
+}
+
+function readPersistedCallOverlayMode(callId = null) {
+    try {
+        const raw = sessionStorage.getItem(CALL_OVERLAY_STORAGE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        const persistedCallId = Number(parsed?.call_id || 0);
+        if (persistedCallId <= 0) return null;
+
+        const expectedCallId = Number(callId || 0);
+        if (expectedCallId > 0 && persistedCallId !== expectedCallId) return null;
+
+        return normalizeCallOverlayMode(parsed?.mode);
+    } catch {
+        return null;
+    }
+}
+
+function clearStalePersistedCallOverlayMode(activeCallId = null) {
+    try {
+        const raw = sessionStorage.getItem(CALL_OVERLAY_STORAGE_KEY);
+        if (!raw) return;
+
+        const parsed = JSON.parse(raw);
+        const persistedCallId = Number(parsed?.call_id || 0);
+        const safeActiveCallId = Number(activeCallId || 0);
+
+        if (persistedCallId <= 0 || safeActiveCallId <= 0 || persistedCallId !== safeActiveCallId) {
+            clearPersistedCallOverlayMode();
+        }
+    } catch {
+        clearPersistedCallOverlayMode();
+    }
+}
+
+function persistActiveCallSession(call = null) {
+    const safeCall = call || {};
+    const safeCallId = Number(safeCall.call_id || safeCall.id || currentCallId || 0);
+    const safeChatId = Number(safeCall.chat_id || currentChat?.id || globalCallContext?.chat_id || 0);
+    if (safeCallId <= 0 || safeChatId <= 0) {
+        sessionStorage.removeItem(CALL_SESSION_STORAGE_KEY);
+        return;
+    }
+
+    const payload = {
+        call_id: safeCallId,
+        chat_id: safeChatId,
+        chat_type: String(safeCall.chat_type || currentChat?.type || globalCallContext?.chat_type || 'personal'),
+        started_at: String(safeCall.started_at || globalCallContext?.started_at || ''),
+        started_by: Number(safeCall.started_by || globalCallContext?.started_by || 0),
+        participant_count: Math.max(0, Number(safeCall.participant_count || globalCallContext?.participant_count || 0)),
+        current_user_joined: Number(safeCall.current_user_joined || globalCallContext?.current_user_joined || 0) > 0 ? 1 : 0,
+        updated_at: Date.now()
+    };
+
+    sessionStorage.setItem(CALL_SESSION_STORAGE_KEY, JSON.stringify(payload));
+}
+
+function clearActiveCallSession() {
+    sessionStorage.removeItem(CALL_SESSION_STORAGE_KEY);
+    clearPersistedCallOverlayMode();
+    globalCallContext = null;
+}
+
+function readPersistedActiveCallSession() {
+    try {
+        const raw = sessionStorage.getItem(CALL_SESSION_STORAGE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        const callId = Number(parsed?.call_id || 0);
+        const chatId = Number(parsed?.chat_id || 0);
+        if (callId <= 0 || chatId <= 0) return null;
+        return parsed;
+    } catch {
+        return null;
+    }
+}
+
+function setGlobalCallContext(call) {
+    if (!call) {
+        globalCallContext = null;
+        return;
+    }
+
+    globalCallContext = {
+        id: Number(call.id || call.call_id || 0),
+        chat_id: Number(call.chat_id || 0),
+        chat_type: normalizeChatType(call.chat_type || 'personal'),
+        started_at: String(call.started_at || ''),
+        started_by: Number(call.started_by || 0),
+        participant_count: Math.max(0, Number(call.participant_count || 0)),
+        current_user_joined: Number(call.current_user_joined || 0) > 0 ? 1 : 0
+    };
+}
+
+function ensureCurrentChatContext(call) {
+    const safeChatId = Number(call?.chat_id || globalCallContext?.chat_id || 0);
+    if (safeChatId <= 0) return;
+
+    if (!currentChat || Number(currentChat.id || 0) !== safeChatId) {
+        currentChat = {
+            id: safeChatId,
+            type: normalizeChatType(call?.chat_type || globalCallContext?.chat_type || 'personal'),
+            can_start_calls: true,
+            can_send_messages: true,
+            message_restriction_reason: ''
+        };
+    }
+}
+
+function bindGlobalCallBarInteractions() {
+    const callBar = document.getElementById('chat-call-status-bar');
+    if (!callBar || callBar.dataset.bound === '1') return;
+    callBar.dataset.bound = '1';
+
+    callBar.addEventListener('click', (e) => {
+        if (
+            currentCallId &&
+            callOverlayMode === 'hidden' &&
+            !e.target.closest('#accept-call-btn') &&
+            !e.target.closest('#decline-call-btn') &&
+            !e.target.closest('#join-call-btn')
+        ) {
+            setCallOverlayMode('full');
+        }
+    });
+}
 
 function setChatCallEnabled(enabled) {
     const isEnabled = Boolean(enabled);
@@ -33,6 +186,7 @@ function setChatCallStatusBar(state, incomingAlert = false) {
     const joinBtn = document.getElementById('join-call-btn');
     const showHint = document.getElementById('chat-call-show-overlay-hint');
     if (!bar || !label) return;
+    callDurationBarState = state || null;
 
     bar.classList.remove(
         'hidden',
@@ -57,6 +211,7 @@ function setChatCallStatusBar(state, incomingAlert = false) {
         showHint?.classList.add('hidden');
         bar.style.cursor = '';
         bar.title = '';
+        updateCallDurationUI();
         return;
     }
 
@@ -76,23 +231,124 @@ function setChatCallStatusBar(state, incomingAlert = false) {
     if (state === 'ringing') {
         label.textContent = 'Ringing..';
         bar.classList.add('bg-zinc-700/50', 'border-zinc-600', 'text-zinc-200');
+        updateCallDurationUI();
         return;
     }
 
     if (state === 'joinable') {
         label.textContent = 'Call in progress';
         bar.classList.add('bg-emerald-500/20', 'border-emerald-500/50', 'text-emerald-200');
+        updateCallDurationUI();
         return;
     }
 
     if (state === 'muted') {
         label.textContent = 'Call muted';
         bar.classList.add('bg-amber-500/20', 'border-amber-500/50', 'text-amber-200');
+        updateCallDurationUI();
         return;
     }
 
-    label.textContent = 'On call';
+    label.textContent = 'Call in progress';
     bar.classList.add('bg-emerald-500/20', 'border-emerald-500/50', 'text-emerald-200');
+    updateCallDurationUI();
+}
+
+function formatCallDurationLabel(totalSeconds) {
+    const safeTotalSeconds = Math.max(0, Math.floor(Number(totalSeconds || 0)));
+    const hours = Math.floor(safeTotalSeconds / 3600);
+    const minutes = Math.floor((safeTotalSeconds % 3600) / 60);
+    const seconds = safeTotalSeconds % 60;
+
+    if (hours > 0) {
+        return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    }
+
+    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+function parseCallStartedAtMs(startedAt) {
+    if (typeof startedAt === 'number' && Number.isFinite(startedAt) && startedAt > 0) {
+        return startedAt > 1e12 ? Math.floor(startedAt) : Math.floor(startedAt * 1000);
+    }
+
+    const raw = String(startedAt || '').trim();
+    if (!raw) return 0;
+
+    if (/^\d+$/.test(raw)) {
+        const numeric = Number(raw);
+        if (Number.isFinite(numeric) && numeric > 0) {
+            return numeric > 1e12 ? Math.floor(numeric) : Math.floor(numeric * 1000);
+        }
+    }
+
+    const withTimeSeparator = raw.includes('T') ? raw : raw.replace(' ', 'T');
+    const hasTimezone = /(?:Z|[+\-]\d{2}:?\d{2})$/i.test(withTimeSeparator);
+    const normalized = hasTimezone ? withTimeSeparator : `${withTimeSeparator}Z`;
+    const parsed = Date.parse(normalized);
+    return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function updateCallDurationUI() {
+    const overlayDuration = document.getElementById('call-overlay-duration');
+    const barDuration = document.getElementById('chat-call-status-duration');
+    const hasStart = Number(callDurationStartedAtMs || 0) > 0;
+
+    if (!hasStart) {
+        if (overlayDuration) {
+            overlayDuration.textContent = '00:00';
+            overlayDuration.classList.add('hidden');
+        }
+        if (barDuration) {
+            barDuration.textContent = '00:00';
+            barDuration.classList.add('hidden');
+        }
+        return;
+    }
+
+    const elapsedSeconds = Math.max(0, Math.floor((Date.now() - callDurationStartedAtMs) / 1000));
+    const label = formatCallDurationLabel(elapsedSeconds);
+
+    if (overlayDuration) {
+        overlayDuration.textContent = label;
+        overlayDuration.classList.toggle('hidden', Number(currentCallId || 0) <= 0);
+    }
+
+    const showBarDuration = callDurationBarState === 'active' || callDurationBarState === 'muted';
+    if (barDuration) {
+        barDuration.textContent = label;
+        barDuration.classList.toggle('hidden', !showBarDuration);
+    }
+}
+
+function startCallDurationCounter(startedAt = null) {
+    const parsedStartedAtMs = parseCallStartedAtMs(startedAt);
+    if (parsedStartedAtMs > 0) {
+        callDurationStartedAtMs = parsedStartedAtMs;
+    } else if (!callDurationStartedAtMs) {
+        callDurationStartedAtMs = Date.now();
+    }
+
+    if (callDurationTickInterval) {
+        clearInterval(callDurationTickInterval);
+        callDurationTickInterval = null;
+    }
+
+    updateCallDurationUI();
+    callDurationTickInterval = setInterval(() => {
+        updateCallDurationUI();
+    }, 1000);
+}
+
+function stopCallDurationCounter() {
+    if (callDurationTickInterval) {
+        clearInterval(callDurationTickInterval);
+        callDurationTickInterval = null;
+    }
+
+    callDurationStartedAtMs = 0;
+    callDurationBarState = null;
+    updateCallDurationUI();
 }
 
 function getChatCallState(call) {
@@ -164,6 +420,21 @@ function ensureCallRingingAudio() {
     callRingingAudio.preload = 'auto';
     callRingingAudio.loop = true;
     return callRingingAudio;
+}
+
+function shouldSuppressNotificationSoundsDuringCall(call = null) {
+    const safeCurrentCallId = Number(currentCallId || 0);
+    if (Number.isFinite(safeCurrentCallId) && safeCurrentCallId > 0 && localStream) {
+        return true;
+    }
+
+    const candidateCall = call || globalCallContext;
+    if (!candidateCall) {
+        return false;
+    }
+
+    const state = getChatCallState(candidateCall).state;
+    return state === 'active' || state === 'muted';
 }
 
 function startCallRingingAudio(direction) {
@@ -260,6 +531,7 @@ async function cleanupLocalCallSession(options = {}) {
     lastAppliedAnswerSdp = null;
     initialSignalingComplete = false;
     setChatCallStatusBar(null);
+    stopCallDurationCounter();
     stopCallRingingAudio();
     lastIncomingCallAlertId = 0;
 
@@ -283,6 +555,7 @@ async function cleanupLocalCallSession(options = {}) {
     callOverlayMode = 'full';
     const appLayout = document.getElementById('app-layout');
     if (appLayout) { appLayout.style.marginTop = ''; appLayout.style.height = ''; }
+    clearActiveCallSession();
 
     if (restorePresence) {
         await savePresenceStatus(selectedPresenceStatus, { silent: true });
@@ -311,8 +584,140 @@ function syncCallRingingState(callState) {
     }
 }
 
+async function applyActiveCallSnapshot(activeCall, options = {}) {
+    const callState = getChatCallState(activeCall || null);
+    latestChatCallId = Number(callState?.callId || 0);
+    clearStalePersistedCallOverlayMode(latestChatCallId);
+
+    const safeCurrentCallId = Number(currentCallId || 0);
+    const safeActiveCallId = Number(activeCall?.id || 0);
+    const participantCount = Math.max(0, Number(activeCall?.participant_count || 0));
+    const currentUserJoined = Number(activeCall?.current_user_joined || 0) > 0;
+
+    if (safeCurrentCallId > 0 && safeCurrentCallId === safeActiveCallId && participantCount >= 2) {
+        hadCallPeerConnected = true;
+    }
+
+    const callEndedForCurrentUser = safeCurrentCallId > 0 && (!safeActiveCallId || safeActiveCallId !== safeCurrentCallId);
+    if (callEndedForCurrentUser) {
+        await cleanupLocalCallSession({ restorePresence: true });
+        return;
+    }
+
+    const leftAloneAfterConnected = safeCurrentCallId > 0
+        && safeCurrentCallId === safeActiveCallId
+        && currentUserJoined
+        && participantCount <= 1
+        && hadCallPeerConnected;
+
+    if (leftAloneAfterConnected) {
+        await postForm('/api/calls/end', {
+            csrf_token: getCsrfToken(),
+            call_id: String(safeCurrentCallId)
+        }).catch(() => {});
+        await cleanupLocalCallSession({ restorePresence: true });
+        return;
+    }
+
+    if (activeCall) {
+        setGlobalCallContext(activeCall);
+        persistActiveCallSession(activeCall);
+        if (currentUserJoined && safeActiveCallId > 0) {
+            startCallDurationCounter(activeCall?.started_at || globalCallContext?.started_at || null);
+        } else if (safeCurrentCallId <= 0) {
+            stopCallDurationCounter();
+        }
+    } else if (!safeCurrentCallId) {
+        clearActiveCallSession();
+        stopCallDurationCounter();
+    }
+
+    setChatCallStatusBar(callState.state, callState.incomingAlert);
+    syncCallRingingState(callState);
+    if ((callState.state === 'active' || callState.state === 'muted') && typeof stopAllNotificationSounds === 'function') {
+        stopAllNotificationSounds();
+    }
+
+    const shouldRestoreSession = Boolean(options.allowRestore)
+        && !localStream
+        && safeActiveCallId > 0
+        && currentUserJoined;
+    if (shouldRestoreSession) {
+        await restoreCallSession(activeCall);
+    }
+}
+
+async function fetchCurrentActiveCall() {
+    const response = await fetch('/api/calls/current');
+    const payload = await response.json();
+    return payload?.call || null;
+}
+
+async function refreshGlobalCallState(options = {}) {
+    if (chatCallStatusInFlight && !options.force) return;
+
+    chatCallStatusInFlight = true;
+    try {
+        const activeCall = await fetchCurrentActiveCall();
+        if (activeCall) {
+            ensureCurrentChatContext(activeCall);
+        }
+
+        await applyActiveCallSnapshot(activeCall, { allowRestore: true });
+
+        if (!activeCall && !currentCallId) {
+            setChatCallStatusBar(null);
+            stopCallRingingAudio();
+        }
+    } catch {
+        if (!currentCallId) {
+            setChatCallStatusBar(null);
+            stopCallRingingAudio();
+        }
+    } finally {
+        chatCallStatusInFlight = false;
+    }
+}
+
+async function initGlobalCallPersistence() {
+    const persisted = readPersistedActiveCallSession();
+    if (persisted) {
+        setGlobalCallContext(persisted);
+        ensureCurrentChatContext(persisted);
+    }
+
+    await refreshGlobalCallState({ force: true });
+
+    if (globalCallStatusPollInterval) {
+        clearInterval(globalCallStatusPollInterval);
+    }
+    globalCallStatusPollInterval = setInterval(() => {
+        refreshGlobalCallState().catch(() => {});
+    }, 3000);
+}
+
+async function restoreCallSession(activeCall) {
+    const safeCall = activeCall || globalCallContext;
+    const safeChatId = Number(safeCall?.chat_id || 0);
+    if (safeChatId <= 0 || callRestoreInFlight || localStream) return;
+
+    callRestoreInFlight = true;
+    try {
+        ensureCurrentChatContext(safeCall);
+        const restoredOverlayMode = readPersistedCallOverlayMode(Number(safeCall?.id || safeCall?.call_id || 0)) || 'full';
+        await startVoiceCall({ silentStart: true, initialOverlayMode: restoredOverlayMode });
+        setChatCallStatusBar(isMuted ? 'muted' : 'active');
+    } catch {
+    } finally {
+        callRestoreInFlight = false;
+    }
+}
+
 async function refreshChatCallStatusBar(options = {}) {
-    if (!currentChat) return;
+    if (!currentChat) {
+        await refreshGlobalCallState(options);
+        return;
+    }
     if (chatCallStatusInFlight && !options.force) return;
 
     chatCallStatusInFlight = true;
@@ -320,41 +725,12 @@ async function refreshChatCallStatusBar(options = {}) {
         const response = await fetch(`/api/calls/active/${currentChat.id}`);
         const payload = await response.json();
         const activeCall = payload?.call || null;
-        const callState = getChatCallState(payload?.call || null);
-        latestChatCallId = Number(callState?.callId || 0);
-
-        const safeCurrentCallId = Number(currentCallId || 0);
-        const safeActiveCallId = Number(activeCall?.id || 0);
-        const participantCount = Math.max(0, Number(activeCall?.participant_count || 0));
-        const currentUserJoined = Number(activeCall?.current_user_joined || 0) > 0;
-
-        if (safeCurrentCallId > 0 && safeCurrentCallId === safeActiveCallId && participantCount >= 2) {
-            hadCallPeerConnected = true;
+        if (activeCall) {
+            activeCall.chat_id = Number(activeCall?.chat_id || currentChat.id || 0);
+            activeCall.chat_type = normalizeChatType(currentChat?.type || 'personal');
         }
 
-        const callEndedForCurrentUser = safeCurrentCallId > 0 && (!safeActiveCallId || safeActiveCallId !== safeCurrentCallId);
-        if (callEndedForCurrentUser) {
-            await cleanupLocalCallSession({ restorePresence: true });
-            return;
-        }
-
-        const leftAloneAfterConnected = safeCurrentCallId > 0
-            && safeCurrentCallId === safeActiveCallId
-            && currentUserJoined
-            && participantCount <= 1
-            && hadCallPeerConnected;
-
-        if (leftAloneAfterConnected) {
-            await postForm('/api/calls/end', {
-                csrf_token: getCsrfToken(),
-                call_id: String(safeCurrentCallId)
-            }).catch(() => {});
-            await cleanupLocalCallSession({ restorePresence: true });
-            return;
-        }
-
-        setChatCallStatusBar(callState.state, callState.incomingAlert);
-        syncCallRingingState(callState);
+        await applyActiveCallSnapshot(activeCall, { allowRestore: false });
     } catch {
         if (!currentCallId) {
             setChatCallStatusBar(null);
@@ -366,7 +742,7 @@ async function refreshChatCallStatusBar(options = {}) {
 }
 
 
-async function startVoiceCall() {
+async function startVoiceCall(options = {}) {
     if (!currentChat) return;
     if (normalizeChatType(currentChat.type) === 'personal' && currentChat.can_start_calls === false) {
         showToast("You can't call a banned user", 'error');
@@ -384,8 +760,31 @@ async function startVoiceCall() {
     }
 
     currentCallId = start.call_id;
+    startCallDurationCounter(Date.now());
+    if (typeof stopAllNotificationSounds === 'function') {
+        stopAllNotificationSounds();
+    }
     isCallOfferer = !start.joined_existing;
     hadCallPeerConnected = false;
+    const persistedCall = {
+        call_id: Number(start.call_id || 0),
+        chat_id: Number(currentChat?.id || 0),
+        chat_type: normalizeChatType(currentChat?.type || 'personal'),
+        started_at: new Date().toISOString(),
+        started_by: Number(currentUserId || 0),
+        current_user_joined: 1,
+        participant_count: start.joined_existing ? 2 : 1
+    };
+    setGlobalCallContext({
+        id: persistedCall.call_id,
+        chat_id: persistedCall.chat_id,
+        chat_type: persistedCall.chat_type,
+        started_by: persistedCall.started_by,
+        current_user_joined: persistedCall.current_user_joined,
+        participant_count: persistedCall.participant_count
+    });
+    persistActiveCallSession(persistedCall);
+
     if (start.joined_existing) {
         stopCallRingingAudio();
         setChatCallStatusBar(isMuted ? 'muted' : 'active');
@@ -406,7 +805,7 @@ async function startVoiceCall() {
     updateScreenShareButton();
     updateLocalPipLayout();
 
-    setCallOverlayMode('full');
+    setCallOverlayMode(normalizeCallOverlayMode(options.initialOverlayMode || 'full'));
     applySidebarStatus({
         effective_status: 'busy',
         effective_status_label: 'Busy',
@@ -415,7 +814,9 @@ async function startVoiceCall() {
     });
     await startCallSignaling();
     refreshChatCallStatusBar({ force: true });
-    showToast('Call started', 'success');
+    if (!options.silentStart) {
+        showToast('Call started', 'success');
+    }
 }
 
 function toggleMute() {
@@ -534,16 +935,16 @@ function updateScreenShareButton() {
 // ── Call overlay window management ──────────────────────────────────────────
 
 function setCallOverlayMode(mode) {
-    callOverlayMode = mode;
+    callOverlayMode = normalizeCallOverlayMode(mode);
     const overlay = document.getElementById('call-overlay');
     const appLayout = document.getElementById('app-layout');
     if (!overlay) return;
 
-    if (mode === 'hidden') {
+    if (callOverlayMode === 'hidden') {
         overlay.classList.add('hidden');
         overlay.style.cssText = 'inset:0';
         if (appLayout) { appLayout.style.marginTop = ''; appLayout.style.height = ''; }
-    } else if (mode === 'half') {
+    } else if (callOverlayMode === 'half') {
         overlay.classList.remove('hidden');
         overlay.style.cssText = 'top:0;left:0;right:0;bottom:auto;height:50vh';
         if (appLayout) { appLayout.style.marginTop = '50vh'; appLayout.style.height = '50vh'; }
@@ -552,6 +953,8 @@ function setCallOverlayMode(mode) {
         overlay.style.cssText = 'inset:0';
         if (appLayout) { appLayout.style.marginTop = ''; appLayout.style.height = ''; }
     }
+
+    persistCallOverlayMode(callOverlayMode);
 
     updateCallOverlayModeButtons();
     // Refresh status bar so the "Show" hint updates based on new mode
@@ -1291,6 +1694,7 @@ async function acceptCall() {
     stopCallRingingAudio();
     clearAcceptedCallNotifications();
     declinedCallId = 0;
+    ensureCurrentChatContext(globalCallContext);
     await startVoiceCall();
 }
 
@@ -1305,6 +1709,7 @@ async function joinCall() {
     lastIncomingCallAlertId = joinId;
     stopCallRingingAudio();
     clearAcceptedCallNotifications();
+    ensureCurrentChatContext(globalCallContext);
     await startVoiceCall();
 }
 
@@ -1328,6 +1733,7 @@ async function declineCall() {
     document.getElementById('accept-call-btn')?.classList.add('hidden');
     document.getElementById('decline-call-btn')?.classList.add('hidden');
     document.getElementById('join-call-btn')?.classList.remove('hidden');
+    refreshGlobalCallState({ force: true }).catch(() => {});
 }
 
 // ── Speaking detection ────────────────────────────────────────────────────────

@@ -244,6 +244,7 @@ $router->group('/api', function($r) {
     $r->get('/notifications', 'ApiController@getNotifications');
     $r->get('/invites', 'ApiController@getInvites');
     $r->get('/calls/active/{chat_id}', 'ApiController@getActiveCall');
+    $r->get('/calls/current', 'ApiController@getCurrentActiveCall');
     $r->get('/calls/signal/{call_id}', 'ApiController@getCallSignal');
     $r->get('/servers', 'ApiController@getServers');
     $r->get('/channels/{server_id}', 'ApiController@getChannels');

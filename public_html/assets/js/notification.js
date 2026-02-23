@@ -334,7 +334,44 @@ function isNotificationSoundEnabled(bucket) {
     return Boolean(window.NOTIFICATION_SOUND_OTHER_ENABLED);
 }
 
+function shouldSuppressNotificationSoundPlayback() {
+    if (typeof shouldSuppressNotificationSoundsDuringCall !== 'function') {
+        return false;
+    }
+
+    try {
+        return Boolean(shouldSuppressNotificationSoundsDuringCall());
+    } catch {
+        return false;
+    }
+}
+
+function shouldSuppressBrowserNotificationPlayback() {
+    if (typeof shouldSuppressNotificationSoundsDuringCall !== 'function') {
+        return false;
+    }
+
+    try {
+        return Boolean(shouldSuppressNotificationSoundsDuringCall());
+    } catch {
+        return false;
+    }
+}
+
+function stopAllNotificationSounds() {
+    notificationSoundAudioByBucket.forEach((audio) => {
+        if (!audio) return;
+        audio.pause();
+        audio.currentTime = 0;
+    });
+}
+
 function playNotificationSoundBucket(bucket) {
+    if (shouldSuppressNotificationSoundPlayback()) {
+        stopAllNotificationSounds();
+        return;
+    }
+
     const soundFile = NOTIFICATION_SOUND_FILE_BY_BUCKET[bucket] || NOTIFICATION_SOUND_FILE_BY_BUCKET.other;
     if (!soundFile) return;
 
@@ -376,6 +413,11 @@ function bindNotificationSoundPreviewButtons() {
 
     previewButtons.forEach((previewButton) => {
         previewButton.addEventListener('click', () => {
+            if (shouldSuppressNotificationSoundPlayback()) {
+                stopActive();
+                return;
+            }
+
             const bucket = String(previewButton.dataset.notificationSoundPreview || '').trim();
             if (!bucket) return;
 
@@ -692,7 +734,12 @@ async function fetchNotifications() {
                 link: notification.link ? String(notification.link) : null,
                 persistent: true
             });
-            if (window.BROWSER_NOTIFICATIONS_ENABLED && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+            if (
+                window.BROWSER_NOTIFICATIONS_ENABLED
+                && !shouldSuppressBrowserNotificationPlayback()
+                && typeof Notification !== 'undefined'
+                && Notification.permission === 'granted'
+            ) {
                 new Notification(notification.title, { body: notification.message });
             }
         }

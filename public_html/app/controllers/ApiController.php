@@ -406,6 +406,44 @@ class ApiController extends Controller {
         $this->json(['call' => $call ?: null]);
     }
 
+        public function getCurrentActiveCall() {
+                Auth::requireAuth();
+                $userId = (int)Auth::user()->id;
+
+                $call = Database::query(
+                        "SELECT c.id,
+                                        c.chat_id,
+                                        c.started_by,
+                                        c.status,
+                                        c.started_at,
+                                        ch.chat_number,
+                                        ch.type AS chat_type,
+                                        (SELECT COUNT(DISTINCT cp.user_id)
+                                         FROM call_participants cp
+                                         WHERE cp.call_id = c.id
+                                             AND cp.left_at IS NULL) AS participant_count,
+                                        (SELECT COUNT(*)
+                                         FROM call_participants cp_self
+                                         WHERE cp_self.call_id = c.id
+                                             AND cp_self.user_id = ?
+                                             AND cp_self.left_at IS NULL) AS current_user_joined
+                         FROM calls c
+                         JOIN chats ch ON ch.id = c.chat_id
+                         WHERE c.status = 'active'
+                             AND EXISTS (
+                                     SELECT 1
+                                     FROM chat_members cm
+                                     WHERE cm.chat_id = c.chat_id
+                                         AND cm.user_id = ?
+                             )
+                         ORDER BY current_user_joined DESC, c.started_at DESC
+                         LIMIT 1",
+                        [$userId, $userId]
+                )->fetch();
+
+                $this->json(['call' => $call ?: null]);
+        }
+
     public function getCallSignal($params) {
         Auth::requireAuth();
         $this->ensureCallSignalTableExists();

@@ -1,5 +1,5 @@
 let currentChat = null;
-let currentUserId = null;
+let currentUserId = Number(window.CURRENT_USER_ID || 0) || null;
 let localStream = null;
 let screenStream = null;
 let currentCallId = null;
@@ -11,7 +11,7 @@ let localPipMode = 'screen-main'; // 'screen-main' | 'webcam-main'
 let remoteHasVideo = false;
 let remoteIsScreenSharing = false;
 let remoteSpotlighted = false;
-let localUsername = '';
+let localUsername = String(window.CURRENT_USERNAME || '');
 let peerUsername = '';
 let lastTypingPingAt = 0;
 let typingStopTimeoutId = null;
@@ -50,6 +50,12 @@ let callSignalCursor = 0;
 let remoteAudioElements = new Map();
 let activeRemotePeerId = 0;
 let latestChatCallId = 0;
+let globalCallContext = null;
+let callRestoreInFlight = false;
+let globalCallStatusPollInterval = null;
+let callDurationTickInterval = null;
+let callDurationStartedAtMs = 0;
+let callDurationBarState = null;
 let openAdminUserMenuId = 0;
 const REPORT_REASON_MAX_LENGTH = 200;
 const NOTIFICATION_SOUND_FILE_BY_BUCKET = {
@@ -340,6 +346,8 @@ function renderAvatarMarkup(user, sizeClasses = 'w-10 h-10', textSizeClass = 'te
 }
 
 async function init() {
+    bindGlobalCallBarInteractions();
+
     const chatView = document.getElementById('chat-view');
     if (chatView) {
         currentUserId = Number(chatView.dataset.currentUserId || 0);
@@ -360,22 +368,6 @@ async function init() {
         if (localLabel) localLabel.textContent = localUsername || 'You';
         updateRemoteUsernameLabel();
 
-        // Clicking the on-call status bar reopens the overlay when hidden
-        const callBar = document.getElementById('chat-call-status-bar');
-        if (callBar) {
-            callBar.addEventListener('click', (e) => {
-                if (
-                    currentCallId &&
-                    callOverlayMode === 'hidden' &&
-                    !e.target.closest('#accept-call-btn') &&
-                    !e.target.closest('#decline-call-btn') &&
-                    !e.target.closest('#join-call-btn')
-                ) {
-                    setCallOverlayMode('full');
-                }
-            });
-        }
-
         pendingAttachments = Array.isArray(window.PENDING_ATTACHMENTS)
             ? window.PENDING_ATTACHMENTS.map(normalizeAttachment).filter(Boolean)
             : [];
@@ -393,6 +385,10 @@ async function init() {
         setChatCallEnabled(currentChat.can_start_calls !== false);
         refreshChatCallStatusBar({ force: true });
         setInterval(pollMessages, 3000);
+    }
+
+    if (Number(currentUserId || 0) > 0) {
+        initGlobalCallPersistence();
     }
 
     const messageForm = document.getElementById('message-form');
@@ -550,4 +546,17 @@ window.startScreenShare = startScreenShare;
 window.closeScreenShareModal = closeScreenShareModal;
 window.endCall = endCall;
 window.logout = logout;
-window.addEventListener('load', init);
+
+let appInitStarted = false;
+
+function startAppInitOnce() {
+    if (appInitStarted) return;
+    appInitStarted = true;
+    init().catch(() => {});
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', startAppInitOnce, { once: true });
+} else {
+    startAppInitOnce();
+}
