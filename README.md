@@ -2,9 +2,9 @@
 This app is the Prologue, and you and your friends create the story. Enjoy!
 
 ## Roadmap
-- **0.0.1-betaX** (initial release 2026-02-21, check Releases for updates): First somewhat usable versions. Will contain bugs. Please test these builds and report any problems using GitHub Issues.
-- **0.0.1** (2026-03-01): Public beta. For users that need at least some stability or lack the technical knowledge to help report bugs, please wait until this release to try Prologue.
-- **1.0.0** (2026-04-01): Public release version.
+- **0.0.1-betaX** (Pre-release builds) - Early experimental versions - the beta of the beta. These builds will contain bugs and unfinished features. Check the Releases page for the latest versions and help us improve by testing them and reporting issues via GitHub Issues.
+- **0.0.1** (Public beta) - Estimated by March 1st, 2026. The first public beta. If you’re looking for at least some stability, this is the version to start with. As it’s still beta software, you can expect some inconsistencies and imperfections, but reporting them via GitHub Issues will help us resolve any such problems quickly.
+- **1.0.0** (Stable release) Estimated by April 1st, 2026. Our official production ready launch! And no, this isn't an April fools joke - your privacy and ownership over your data is serious stuff.
 
 ## Useful Links
 - [Project Home Page](https://prologue.chat/)
