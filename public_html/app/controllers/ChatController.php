@@ -609,7 +609,9 @@ class ChatController extends Controller {
         Auth::requireAuth();
         Auth::csrfValidate();
 
-        $currentUserId = (int)Auth::user()->id;
+        $authUser = Auth::user();
+        $currentUserId = (int)$authUser->id;
+        $actorUsername = User::normalizeUsername($authUser->username ?? '');
         $memberIds = [$currentUserId => true];
 
         $chatNumber = Chat::generateUniqueChatNumber();
@@ -625,6 +627,13 @@ class ChatController extends Controller {
         }
         Database::query('INSERT INTO chat_members (chat_id, user_id) VALUES ' . implode(', ', $values), $params);
 
+        if ($this->supportsSystemEvents() && $actorUsername !== '') {
+            Database::query(
+                "INSERT INTO chat_system_events (chat_id, event_type, content) VALUES (?, 'group_created', ?)",
+                [$chatId, $actorUsername . ' created the group']
+            );
+        }
+
         $this->json(['success' => true, 'chat_number' => $chatNumber]);
     }
 
@@ -634,7 +643,9 @@ class ChatController extends Controller {
 
         $chatId = (int)($_POST['chat_id'] ?? 0);
         $targetUsername = User::normalizeUsername($_POST['username'] ?? '');
-        $currentUserId = (int)Auth::user()->id;
+        $authUser = Auth::user();
+        $currentUserId = (int)$authUser->id;
+        $actorUsername = User::normalizeUsername($authUser->username ?? '');
 
         if ($chatId <= 0 || $targetUsername === '') {
             $this->json(['error' => 'Invalid payload'], 400);
@@ -677,6 +688,15 @@ class ChatController extends Controller {
         }
 
         Database::query("INSERT IGNORE INTO chat_members (chat_id, user_id) VALUES (?, ?)", [$chatId, $targetUserId]);
+        if (!$existingTargetMember && $this->supportsSystemEvents()) {
+            $targetDisplayUsername = User::normalizeUsername($target->username ?? '');
+            if ($actorUsername !== '' && $targetDisplayUsername !== '') {
+                Database::query(
+                    "INSERT INTO chat_system_events (chat_id, event_type, content) VALUES (?, 'user_added', ?)",
+                    [$chatId, $actorUsername . ' added ' . $targetDisplayUsername . ' to group']
+                );
+            }
+        }
         $this->json(['success' => true]);
     }
 
@@ -686,7 +706,9 @@ class ChatController extends Controller {
 
         $chatId = (int)($_POST['chat_id'] ?? 0);
         $targetUserId = (int)($_POST['user_id'] ?? 0);
-        $currentUserId = (int)Auth::user()->id;
+        $authUser = Auth::user();
+        $currentUserId = (int)$authUser->id;
+        $actorUsername = User::normalizeUsername($authUser->username ?? '');
 
         if ($chatId <= 0 || $targetUserId <= 0) {
             $this->json(['error' => 'Invalid payload'], 400);
@@ -710,7 +732,25 @@ class ChatController extends Controller {
             $this->json(['error' => 'Group creator cannot be removed'], 403);
         }
 
+        $targetUser = Database::query(
+            "SELECT id, username FROM users WHERE id = ? LIMIT 1",
+            [$targetUserId]
+        )->fetch();
+        $targetMember = Database::query(
+            "SELECT id FROM chat_members WHERE chat_id = ? AND user_id = ? LIMIT 1",
+            [$chatId, $targetUserId]
+        )->fetch();
+
         Database::query("DELETE FROM chat_members WHERE chat_id = ? AND user_id = ?", [$chatId, $targetUserId]);
+        if ($targetMember && $this->supportsSystemEvents()) {
+            $targetDisplayUsername = User::normalizeUsername($targetUser->username ?? '');
+            if ($actorUsername !== '' && $targetDisplayUsername !== '') {
+                Database::query(
+                    "INSERT INTO chat_system_events (chat_id, event_type, content) VALUES (?, 'user_removed', ?)",
+                    [$chatId, $actorUsername . ' removed ' . $targetDisplayUsername . ' from group']
+                );
+            }
+        }
         $remaining = (int)Database::query("SELECT COUNT(*) FROM chat_members WHERE chat_id = ?", [$chatId])->fetchColumn();
         if ($remaining <= 0) {
             Database::query("DELETE FROM chats WHERE id = ?", [$chatId]);
