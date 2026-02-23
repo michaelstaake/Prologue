@@ -506,6 +506,7 @@ window.deleteAdminUser = deleteAdminUser;
 window.createGroupChat = createGroupChat;
 window.addGroupMemberByUsername = addGroupMemberByUsername;
 window.removeGroupMember = removeGroupMember;
+window.leaveCurrentGroup = leaveCurrentGroup;
 window.reportTarget = reportTarget;
 window.startVoiceCall = startVoiceCall;
 window.acceptCall = acceptCall;

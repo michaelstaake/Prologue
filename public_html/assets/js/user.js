@@ -896,6 +896,13 @@ function bindChatHeaderMenu() {
             return;
         }
 
+        if (action === 'leave-group') {
+            if (typeof window.leaveCurrentGroup === 'function') {
+                await window.leaveCurrentGroup();
+            }
+            return;
+        }
+
         if (action === 'report-chat' && currentChat) {
             await reportTarget('chat', currentChat.id);
         }

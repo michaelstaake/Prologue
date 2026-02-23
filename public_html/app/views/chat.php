@@ -189,6 +189,7 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                 <?php if ($isGroupChat): ?>
                 <button type="button" data-chat-action="add-user" class="w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-zinc-800">Add User</button>
                 <button type="button" data-chat-action="rename-chat" class="w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-zinc-800">Rename Chat</button>
+                <button type="button" data-chat-action="leave-group" class="w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-zinc-800 text-red-300">Leave Group</button>
                 <?php endif; ?>
                 <?php if ($canReportChat): ?>
                 <button type="button" data-chat-action="report-chat" class="w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-zinc-800 text-red-300">Report Chat</button>

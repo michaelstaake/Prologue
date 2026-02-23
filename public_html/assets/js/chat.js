@@ -1202,6 +1202,30 @@ async function removeGroupMember(userId, username) {
     showToast(result.error || 'Unable to remove member', 'error');
 }
 
+async function leaveCurrentGroup() {
+    if (!currentChat) return;
+    if (normalizeChatType(currentChat.type) !== 'group') {
+        showToast('Only group chats can be left', 'error');
+        return;
+    }
+
+    const shouldLeave = window.confirm('Leave this group?');
+    if (!shouldLeave) return;
+
+    const result = await postForm('/api/chats/group/leave', {
+        csrf_token: getCsrfToken(),
+        chat_id: String(currentChat.id)
+    });
+
+    if (result.success) {
+        const nextLocation = String(result.redirect || '/');
+        window.location.href = nextLocation;
+        return;
+    }
+
+    showToast(result.error || 'Unable to leave group', 'error');
+}
+
 async function renameCurrentChat() {
     if (!currentChat) return;
     if (normalizeChatType(currentChat.type) !== 'group') {

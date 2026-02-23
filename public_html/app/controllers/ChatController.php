@@ -759,6 +759,53 @@ class ChatController extends Controller {
         $this->json(['success' => true]);
     }
 
+    public function leaveGroup() {
+        Auth::requireAuth();
+        Auth::csrfValidate();
+
+        $chatId = (int)($_POST['chat_id'] ?? 0);
+        $authUser = Auth::user();
+        $currentUserId = (int)$authUser->id;
+        $actorUsername = User::normalizeUsername($authUser->username ?? '');
+
+        if ($chatId <= 0) {
+            $this->json(['error' => 'Invalid payload'], 400);
+        }
+
+        $chat = Database::query("SELECT id, type FROM chats WHERE id = ?", [$chatId])->fetch();
+        if (!$chat) {
+            $this->json(['error' => 'Chat not found'], 404);
+        }
+
+        if (!Chat::isGroupType($chat->type ?? null)) {
+            $this->json(['error' => 'Only group chats can be left'], 403);
+        }
+
+        $member = Database::query(
+            "SELECT id FROM chat_members WHERE chat_id = ? AND user_id = ? LIMIT 1",
+            [$chatId, $currentUserId]
+        )->fetch();
+        if (!$member) {
+            $this->json(['error' => 'Access denied'], 403);
+        }
+
+        Database::query("DELETE FROM chat_members WHERE chat_id = ? AND user_id = ?", [$chatId, $currentUserId]);
+
+        $remaining = (int)Database::query("SELECT COUNT(*) FROM chat_members WHERE chat_id = ?", [$chatId])->fetchColumn();
+        if ($remaining > 0 && $this->supportsSystemEvents() && $actorUsername !== '') {
+            Database::query(
+                "INSERT INTO chat_system_events (chat_id, event_type, content) VALUES (?, 'user_left', ?)",
+                [$chatId, $actorUsername . ' left the group']
+            );
+        }
+
+        if ($remaining <= 0) {
+            Database::query("DELETE FROM chats WHERE id = ?", [$chatId]);
+        }
+
+        $this->json(['success' => true, 'redirect' => '/']);
+    }
+
     public function renameChat() {
         Auth::requireAuth();
         Auth::csrfValidate();
