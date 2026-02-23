@@ -1,5 +1,5 @@
 # Prologue
-This app is the Prologue, and you and your friends create the story. Enjoy!
+This app is the Prologue, and you and your friends create the story. Enjoy! Chat, voice call, video call, screenshare, and more. Always free and privacy first. Self-hosted on the web hosting provider or server of your choice.
 
 ## Roadmap
 - **0.0.1-betaX** (Pre-release builds) - Starting February 21, 2026. Early experimental versions - the beta of the beta. These builds will contain bugs and unfinished features. Check the Releases page for the latest versions and help us improve by testing them and reporting issues via GitHub Issues.
