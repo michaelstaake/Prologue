@@ -243,6 +243,17 @@ CREATE TABLE attachments (
     KEY idx_attachments_pending (user_id, status, created_at)
 );
 
+-- Chat system events (e.g. rename announcements)
+CREATE TABLE chat_system_events (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    chat_id INT NOT NULL,
+    event_type VARCHAR(32) NOT NULL,
+    content TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (chat_id) REFERENCES chats(id) ON DELETE CASCADE,
+    KEY idx_chat_system_events_chat (chat_id)
+);
+
 -- Chat typing status
 CREATE TABLE chat_typing_status (
     id INT AUTO_INCREMENT PRIMARY KEY,

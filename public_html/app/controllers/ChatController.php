@@ -137,6 +137,20 @@ class ChatController extends Controller {
         return $supports;
     }
 
+    private function supportsSystemEvents(): bool {
+        static $supports = null;
+        if ($supports !== null) {
+            return $supports;
+        }
+
+        $result = Database::query(
+            "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'chat_system_events'"
+        )->fetchColumn();
+
+        $supports = ((int)$result) > 0;
+        return $supports;
+    }
+
     private function markChatSeenUpToMessageId(int $chatId, int $userId, int $messageId): void {
         if ($messageId <= 0) {
             return;
@@ -267,6 +281,19 @@ class ChatController extends Controller {
         Message::attachQuoteMentionMaps($messages);
         Message::attachReactions($messages, (int)$currentUserId);
         Attachment::attachSubmittedToMessages($messages);
+
+        if ($this->supportsSystemEvents() && Chat::isGroupType($chat->type ?? null)) {
+            $systemEvents = Database::query(
+                "SELECT id, chat_id, event_type, content, created_at, 1 AS is_system_event FROM chat_system_events WHERE chat_id = ?",
+                [(int)$chat->id]
+            )->fetchAll();
+
+            $combined = array_merge($messages, $systemEvents);
+            usort($combined, function ($a, $b) {
+                return strcmp($b->created_at, $a->created_at);
+            });
+            $messages = array_slice($combined, 0, 100);
+        }
 
         $messageRestrictionReason = $this->getPersonalChatMessageRestrictionReason((int)$chat->id, (int)$currentUserId);
         $canSendMessages = $messageRestrictionReason === null;
@@ -500,6 +527,21 @@ class ChatController extends Controller {
         $canSendMessage = $messageRestrictionReason === null;
         $canStartCall = $messageRestrictionReason !== 'banned_user';
 
+        if ($this->supportsSystemEvents()) {
+            $chatRow = Database::query("SELECT type FROM chats WHERE id = ?", [$chatId])->fetch();
+            if ($chatRow && Chat::isGroupType($chatRow->type ?? null)) {
+                $systemEvents = Database::query(
+                    "SELECT id, chat_id, event_type, content, created_at, 1 AS is_system_event FROM chat_system_events WHERE chat_id = ?",
+                    [(int)$chatId]
+                )->fetchAll();
+                $combined = array_merge($messages, $systemEvents);
+                usort($combined, function ($a, $b) {
+                    return strcmp($a->created_at, $b->created_at);
+                });
+                $messages = array_values(array_slice($combined, -200));
+            }
+        }
+
         $this->json([
             'messages' => $messages,
             'first_unseen_message_id' => $firstUnseenMessageId,
@@ -697,7 +739,7 @@ class ChatController extends Controller {
             $this->json(['error' => 'Chat name must be 80 characters or fewer'], 400);
         }
 
-        $chat = Database::query("SELECT id, type, chat_number FROM chats WHERE id = ?", [$chatId])->fetch();
+        $chat = Database::query("SELECT id, type, chat_number, title FROM chats WHERE id = ?", [$chatId])->fetch();
         if (!$chat) {
             $this->json(['error' => 'Chat not found'], 404);
         }
@@ -711,12 +753,30 @@ class ChatController extends Controller {
             $this->json(['error' => 'Access denied'], 403);
         }
 
+        $oldTitle = trim((string)($chat->title ?? ''));
+        if ($oldTitle === '') {
+            $oldTitle = User::formatUserNumber($chat->chat_number);
+        }
+
         if ($title === '') {
             Database::query("UPDATE chats SET title = NULL WHERE id = ?", [$chatId]);
-            $this->json(['success' => true, 'title' => User::formatUserNumber($chat->chat_number), 'reset' => true]);
+            $newTitle = User::formatUserNumber($chat->chat_number);
+            if ($this->supportsSystemEvents()) {
+                Database::query(
+                    "INSERT INTO chat_system_events (chat_id, event_type, content) VALUES (?, 'chat_renamed', ?)",
+                    [$chatId, 'Chat renamed from ' . $oldTitle . ' to ' . $newTitle]
+                );
+            }
+            $this->json(['success' => true, 'title' => $newTitle, 'reset' => true]);
         }
 
         Database::query("UPDATE chats SET title = ? WHERE id = ?", [$title, $chatId]);
+        if ($this->supportsSystemEvents()) {
+            Database::query(
+                "INSERT INTO chat_system_events (chat_id, event_type, content) VALUES (?, 'chat_renamed', ?)",
+                [$chatId, 'Chat renamed from ' . $oldTitle . ' to ' . $title]
+            );
+        }
         $this->json(['success' => true, 'title' => $title, 'reset' => false]);
     }
 

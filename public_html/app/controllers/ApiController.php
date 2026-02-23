@@ -47,6 +47,20 @@ class ApiController extends Controller {
         return $supports;
     }
 
+    private function supportsSystemEvents(): bool {
+        static $supports = null;
+        if ($supports !== null) {
+            return $supports;
+        }
+
+        $result = Database::query(
+            "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'chat_system_events'"
+        )->fetchColumn();
+
+        $supports = ((int)$result) > 0;
+        return $supports;
+    }
+
     public function searchUsers() {
         Auth::requireAuth();
         $currentUserId = Auth::user()->id;
@@ -251,6 +265,22 @@ class ApiController extends Controller {
         Message::attachQuoteMentionMaps($messages);
         Message::attachReactions($messages, (int)$userId);
         Attachment::attachSubmittedToMessages($messages);
+
+        if ($this->supportsSystemEvents()) {
+            $chatRow = Database::query("SELECT type FROM chats WHERE id = ?", [$chatId])->fetch();
+            if ($chatRow && Chat::isGroupType($chatRow->type ?? null)) {
+                $systemEvents = Database::query(
+                    "SELECT id, chat_id, event_type, content, created_at, 1 AS is_system_event FROM chat_system_events WHERE chat_id = ?",
+                    [$chatId]
+                )->fetchAll();
+
+                $combined = array_merge($messages, $systemEvents);
+                usort($combined, function ($a, $b) {
+                    return strcmp($a->created_at, $b->created_at);
+                });
+                $messages = array_values(array_slice($combined, -200));
+            }
+        }
 
         try {
             $typingUsers = Database::query(

@@ -6,7 +6,10 @@ class User extends Model {
 
     public static function isUsernameFormatValid($username) {
         $normalized = self::normalizeUsername($username);
-        return (bool)preg_match('/^[a-z][a-z0-9]{3,31}$/', $normalized);
+        if (!preg_match('/^[a-z][a-z0-9]{3,31}$/', $normalized)) {
+            return false;
+        }
+        return !in_array($normalized, ['prologue'], true);
     }
 
     public static function find($id) {

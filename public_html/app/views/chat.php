@@ -228,14 +228,26 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
     <div id="messages" class="flex-1 p-6 overflow-y-auto">
         <?php
             $previousUserId = null;
+            $previousWasSystemEvent = false;
             $clusterStarts = [];
+            $prevClusterUserId = null;
             foreach ($messages as $index => $messageForCluster) {
-                $clusterStarts[$index] = ($index === 0) || ((int)$messages[$index - 1]->user_id !== (int)$messageForCluster->user_id);
+                if ($messageForCluster->is_system_event ?? false) {
+                    $clusterStarts[$index] = false;
+                    $prevClusterUserId = null;
+                    continue;
+                }
+                $clusterStarts[$index] = ($prevClusterUserId === null) || ($prevClusterUserId !== (int)$messageForCluster->user_id);
+                $prevClusterUserId = (int)$messageForCluster->user_id;
             }
+            unset($prevClusterUserId);
 
             $latestClusterIndexByUser = [];
             for ($index = count($messages) - 1; $index >= 0; $index--) {
-                if (!$clusterStarts[$index]) {
+                if ($messages[$index]->is_system_event ?? false) {
+                    continue;
+                }
+                if (!($clusterStarts[$index] ?? false)) {
                     continue;
                 }
 
@@ -246,9 +258,39 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
             }
         ?>
         <?php foreach ($messages as $index => $message): ?>
+            <?php if ($message->is_system_event ?? false): ?>
+                <?php
+                    $isNewPrologueCluster = !$previousWasSystemEvent;
+                    $sysFullTimestamp = (string)($message->created_at ?? '');
+                    $sysCompactTimestamp = preg_replace('/:(\d{2})(?!.*:\d{2})/', '', $sysFullTimestamp);
+                ?>
+                <div class="flex gap-3 <?= $isNewPrologueCluster ? 'mt-4' : 'mt-1' ?>">
+                    <div class="w-10 shrink-0">
+                        <?php if ($isNewPrologueCluster): ?>
+                            <div class="w-10 h-10 rounded-full border border-zinc-700 flex items-center justify-center font-semibold mt-0.5 bg-emerald-700 text-emerald-100">P</div>
+                        <?php else: ?>
+                            <div class="w-10 h-10"></div>
+                        <?php endif; ?>
+                    </div>
+                    <div class="min-w-0 flex-1">
+                        <?php if ($isNewPrologueCluster): ?>
+                            <div class="flex items-center gap-2 mb-0.5">
+                                <span class="text-sm font-semibold leading-5 prologue-accent">Prologue</span>
+                            </div>
+                        <?php endif; ?>
+                        <div class="text-zinc-200 text-[17px] leading-6"><?= htmlspecialchars($message->content, ENT_QUOTES, 'UTF-8') ?></div>
+                        <div class="relative mt-0.5">
+                            <div class="text-xs flex items-center gap-3">
+                                <span class="text-zinc-500" data-utc="<?= htmlspecialchars($sysFullTimestamp, ENT_QUOTES, 'UTF-8') ?>" title="<?= htmlspecialchars($sysFullTimestamp, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($sysCompactTimestamp, ENT_QUOTES, 'UTF-8') ?></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <?php $previousWasSystemEvent = true; $previousUserId = null; continue; ?>
+            <?php endif; ?>
             <?php
                 $avatarUrl = $message->avatar_url ?? User::avatarUrl($message);
-                $isNewGroup = ($index === 0) || ((int)$previousUserId !== (int)$message->user_id);
+                $isNewGroup = ($previousUserId === null) || ((int)$previousUserId !== (int)$message->user_id);
                 $showStatus = $isNewGroup
                     && $isGroupChat
                     && ((int)$message->user_id !== (int)$currentUserId)
@@ -385,7 +427,7 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                     </div>
                 </div>
             </div>
-            <?php $previousUserId = (int)$message->user_id; ?>
+            <?php $previousUserId = (int)$message->user_id; $previousWasSystemEvent = false; ?>
         <?php endforeach; ?>
     </div>
     <div id="typing-indicator" class="px-6 pb-2 text-sm text-zinc-400 min-h-6 hidden" aria-live="polite"></div>

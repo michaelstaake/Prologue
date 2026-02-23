@@ -1337,6 +1337,10 @@ function buildMessagesSignature(messages) {
     }
 
     return messages.map((msg) => {
+        if (msg?.is_system_event) {
+            return `sys|${Number(msg.id || 0)}|${String(msg.created_at || '')}|${String(msg.content || '')}`;
+        }
+
         const messageId = Number(msg?.id || 0);
         const content = String(msg?.content || '');
         const createdAt = String(msg?.created_at || '');
@@ -1626,13 +1630,22 @@ function renderMessages(messages, options = {}) {
     const distanceFromBottom = Math.max(0, previousScrollHeight - (previousScrollTop + previousViewportHeight));
     const wasNearBottom = distanceFromBottom <= MESSAGE_SCROLL_BOTTOM_THRESHOLD_PX;
 
-    const clusterStarts = messages.map((msg, index) => {
-        if (index === 0) return true;
-        return Number(messages[index - 1]?.user_id) !== Number(msg?.user_id);
+    const clusterStarts = [];
+    let prevClusterUserId = null;
+    messages.forEach((msg) => {
+        if (msg.is_system_event) {
+            clusterStarts.push(false);
+            prevClusterUserId = null;
+            return;
+        }
+        const userId = Number(msg.user_id);
+        clusterStarts.push(prevClusterUserId === null || prevClusterUserId !== userId);
+        prevClusterUserId = userId;
     });
 
     const latestClusterIndexByUser = new Map();
     for (let index = messages.length - 1; index >= 0; index -= 1) {
+        if (messages[index]?.is_system_event) continue;
         if (!clusterStarts[index]) continue;
 
         const clusterUserId = Number(messages[index]?.user_id);
@@ -1642,11 +1655,37 @@ function renderMessages(messages, options = {}) {
     }
 
     let previousUserId = null;
+    let previousWasSystemEvent = false;
     const chunks = [];
 
     messages.forEach((msg, index) => {
+        if (msg.is_system_event) {
+            const isNewPrologueCluster = !previousWasSystemEvent;
+            const sysFullTimestamp = String(msg.created_at || '');
+            const sysCompactTimestamp = formatCompactMessageTimestamp(sysFullTimestamp);
+            chunks.push(`
+                <div class="flex gap-3 ${isNewPrologueCluster ? 'mt-4' : 'mt-1'}">
+                    <div class="w-10 shrink-0">
+                        ${isNewPrologueCluster ? '<div class="w-10 h-10 rounded-full border border-zinc-700 flex items-center justify-center font-semibold mt-0.5 bg-emerald-700 text-emerald-100">P</div>' : '<div class="w-10 h-10"></div>'}
+                    </div>
+                    <div class="min-w-0 flex-1">
+                        ${isNewPrologueCluster ? '<div class="flex items-center gap-2 mb-0.5"><span class="text-sm font-semibold leading-5 prologue-accent">Prologue</span></div>' : ''}
+                        <div class="text-zinc-200 text-[17px] leading-6">${escapeHtml(msg.content)}</div>
+                        <div class="relative mt-0.5">
+                            <div class="text-xs flex items-center gap-3">
+                                <span class="text-zinc-500" data-utc="${escapeHtml(sysFullTimestamp)}" title="${escapeHtml(sysFullTimestamp)}">${escapeHtml(sysCompactTimestamp)}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `);
+            previousWasSystemEvent = true;
+            previousUserId = null;
+            return;
+        }
+
         const messageUserId = Number(msg.user_id);
-        const isNewGroup = index === 0 || messageUserId !== previousUserId;
+        const isNewGroup = previousUserId === null || messageUserId !== previousUserId;
         const showStatus = isNewGroup
             && normalizeChatType(currentChat?.type) === 'group'
             && messageUserId !== Number(currentUserId)
@@ -1684,6 +1723,7 @@ function renderMessages(messages, options = {}) {
         `);
 
         previousUserId = messageUserId;
+        previousWasSystemEvent = false;
     });
 
     box.innerHTML = chunks.join('');
