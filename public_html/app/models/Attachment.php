@@ -163,7 +163,6 @@ class Attachment extends Model {
         // Detect MIME type via finfo (reads file magic bytes, not extension)
         $fi = function_exists('finfo_open') ? finfo_open(FILEINFO_MIME_TYPE) : false;
         $mime = $fi ? strtolower((string)finfo_file($fi, $tmpPath)) : '';
-        if ($fi) finfo_close($fi);
 
         if ($mime === '') {
             $logFailure('attachment_upload_failed', 'finfo_unavailable');
