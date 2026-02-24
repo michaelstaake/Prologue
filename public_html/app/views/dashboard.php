@@ -14,7 +14,6 @@
                         </div>
                         <div class="min-w-0">
                             <div class="font-medium truncate"><?= htmlspecialchars((string)$lastGroupChat->chat_title, ENT_QUOTES, 'UTF-8') ?></div>
-                            <div class="text-xs text-zinc-400"><?= htmlspecialchars((string)$lastGroupChat->chat_number_formatted, ENT_QUOTES, 'UTF-8') ?></div>
                             <p class="text-xs text-zinc-400 mt-1">Your most recently active group</p>
                         </div>
                     </div>
