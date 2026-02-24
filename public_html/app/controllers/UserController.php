@@ -17,6 +17,14 @@ class UserController extends Controller {
 
         User::attachEffectiveStatus($profile);
 
+                $friendCount = (int)Database::query(
+                        "SELECT COUNT(*)
+                         FROM friends
+                         WHERE status = 'accepted'
+                             AND (user_id = ? OR friend_id = ?)",
+                        [$profile->id, $profile->id]
+                )->fetchColumn();
+
         $friendshipStatus = null;
         $friendshipDirection = null;
         $personalChatNumber = null;
@@ -46,7 +54,8 @@ class UserController extends Controller {
             'friendshipStatus' => $friendshipStatus,
             'friendshipDirection' => $friendshipDirection,
             'personalChatNumber' => $personalChatNumber,
-            'isFavorite' => $isFavorite
+            'isFavorite' => $isFavorite,
+            'friendCount' => $friendCount
         ]);
     }
 }

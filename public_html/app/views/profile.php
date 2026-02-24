@@ -1,5 +1,5 @@
 <div class="p-8">
-    <div class="w-full bg-zinc-900 rounded-3xl p-8 border border-zinc-700">
+    <div class="w-full">
         <?php $profileAvatar = User::avatarUrl($profile); ?>
         <div class="mb-5">
             <?php if ($profileAvatar): ?>
@@ -12,9 +12,42 @@
         </div>
         <h1 class="text-3xl font-bold mb-2"><?= htmlspecialchars($profile->username, ENT_QUOTES, 'UTF-8') ?></h1>
         <p class="text-xl text-zinc-400 mb-6"><?= htmlspecialchars(User::formatUserNumber($profile->user_number), ENT_QUOTES, 'UTF-8') ?></p>
-        <p class="text-sm mb-6 <?= htmlspecialchars($profile->effective_status_text_class ?? 'text-zinc-500', ENT_QUOTES, 'UTF-8') ?>">
-            <?= htmlspecialchars($profile->effective_status_label ?? 'Offline', ENT_QUOTES, 'UTF-8') ?>
-        </p>
+
+        <?php
+            $lastActiveRaw = trim((string)($profile->last_active_at ?? ''));
+            $lastActiveTs = $lastActiveRaw !== '' ? strtotime($lastActiveRaw) : false;
+            $lastActiveLabel = $lastActiveTs !== false ? date('Y-m-d H:i', $lastActiveTs) : 'Never';
+
+            $joinedAtRaw = trim((string)($profile->created_at ?? ''));
+            $joinedAtTs = $joinedAtRaw !== '' ? strtotime($joinedAtRaw) : false;
+            $joinedAtLabel = $joinedAtTs !== false ? date('M j, Y', $joinedAtTs) : 'Unknown';
+        ?>
+        <div class="mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div class="rounded-xl border border-zinc-700 bg-zinc-800/60 p-3">
+                <div class="text-xs uppercase tracking-wide text-zinc-500">Status</div>
+                <div class="mt-1 text-sm <?= htmlspecialchars($profile->effective_status_text_class ?? 'text-zinc-500', ENT_QUOTES, 'UTF-8') ?>">
+                    <?= htmlspecialchars($profile->effective_status_label ?? 'Offline', ENT_QUOTES, 'UTF-8') ?>
+                </div>
+            </div>
+            <div class="rounded-xl border border-zinc-700 bg-zinc-800/60 p-3">
+                <div class="text-xs uppercase tracking-wide text-zinc-500">Last Active</div>
+                <div class="mt-1 text-sm text-zinc-200">
+                    <?php if ($lastActiveRaw !== ''): ?>
+                        <span data-utc="<?= htmlspecialchars($lastActiveRaw, ENT_QUOTES, 'UTF-8') ?>" title="<?= htmlspecialchars($lastActiveRaw, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($lastActiveLabel, ENT_QUOTES, 'UTF-8') ?></span>
+                    <?php else: ?>
+                        Never
+                    <?php endif; ?>
+                </div>
+            </div>
+            <div class="rounded-xl border border-zinc-700 bg-zinc-800/60 p-3">
+                <div class="text-xs uppercase tracking-wide text-zinc-500">Friends</div>
+                <div class="mt-1 text-sm text-zinc-200"><?= (int)($friendCount ?? 0) ?></div>
+            </div>
+            <div class="rounded-xl border border-zinc-700 bg-zinc-800/60 p-3">
+                <div class="text-xs uppercase tracking-wide text-zinc-500">Joined</div>
+                <div class="mt-1 text-sm text-zinc-200"><?= htmlspecialchars($joinedAtLabel, ENT_QUOTES, 'UTF-8') ?></div>
+            </div>
+        </div>
 
         <?php
             $profileActionBaseClass = 'inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-zinc-900';
@@ -29,14 +62,14 @@
             <div class="text-xs uppercase tracking-wide text-zinc-500 mb-3">Actions</div>
             <div class="flex flex-wrap gap-2">
             <?php if (($friendshipStatus ?? null) === 'accepted'): ?>
-            <button type="button" onclick="openUnfriendModal(<?= (int)$profile->id ?>)" class="<?= htmlspecialchars($profileActionDangerClass, ENT_QUOTES, 'UTF-8') ?>"><i class="fa fa-user-minus text-xs"></i> Unfriend</button>
-            <button type="button" onclick="toggleFavoriteUser(<?= (int)$profile->id ?>, <?= !empty($isFavorite ?? false) ? '0' : '1' ?>)" class="<?= htmlspecialchars(!empty($isFavorite ?? false) ? $profileActionWarnClass : $profileActionNeutralClass, ENT_QUOTES, 'UTF-8') ?>">
-                <i class="fa <?= !empty($isFavorite ?? false) ? 'fa-star-half-stroke' : 'fa-star' ?> text-xs"></i>
-                <?= !empty($isFavorite ?? false) ? 'Remove Favorite' : 'Add to Favorites' ?>
-            </button>
             <?php if (!empty($personalChatNumber ?? null)): ?>
             <a href="<?= htmlspecialchars(base_url('/c/' . $personalChatNumber), ENT_QUOTES, 'UTF-8') ?>" class="<?= htmlspecialchars($profileActionSuccessClass, ENT_QUOTES, 'UTF-8') ?>"><i class="fa fa-comment-dots text-xs"></i> Personal Chat</a>
             <?php endif; ?>
+            <button type="button" onclick="toggleFavoriteUser(<?= (int)$profile->id ?>, <?= !empty($isFavorite ?? false) ? '0' : '1' ?>)" class="<?= htmlspecialchars(!empty($isFavorite ?? false) ? $profileActionNeutralClass : $profileActionWarnClass, ENT_QUOTES, 'UTF-8') ?>">
+                <i class="fa <?= !empty($isFavorite ?? false) ? 'fa-star-half-stroke' : 'fa-star' ?> text-xs"></i>
+                <?= !empty($isFavorite ?? false) ? 'Remove Favorite' : 'Add to Favorites' ?>
+            </button>
+            <button type="button" onclick="openUnfriendModal(<?= (int)$profile->id ?>)" class="<?= htmlspecialchars($profileActionDangerClass, ENT_QUOTES, 'UTF-8') ?>"><i class="fa fa-user-minus text-xs"></i> Unfriend</button>
             <?php elseif (($friendshipStatus ?? null) === 'pending' && ($friendshipDirection ?? null) === 'incoming'): ?>
             <button onclick="acceptFriendRequest(<?= (int)$profile->id ?>)" class="<?= htmlspecialchars($profileActionSuccessClass, ENT_QUOTES, 'UTF-8') ?>"><i class="fa fa-check text-xs"></i> Accept Request</button>
             <?php elseif (($friendshipStatus ?? null) === 'pending' && ($friendshipDirection ?? null) === 'outgoing'): ?>
