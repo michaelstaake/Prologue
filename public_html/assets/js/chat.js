@@ -1189,6 +1189,12 @@ async function removeGroupMember(userId, username) {
         return;
     }
 
+    const ownerUserId = Number(currentChat.owner_user_id || 0);
+    if (ownerUserId > 0 && Number(userId) === ownerUserId) {
+        showToast('Group owner cannot be removed', 'error');
+        return;
+    }
+
     const result = await postForm('/api/chats/group/remove-member', {
         csrf_token: getCsrfToken(),
         chat_id: String(currentChat.id),
@@ -1214,13 +1220,57 @@ async function leaveCurrentGroup() {
         return;
     }
 
-    const shouldLeave = window.confirm('Leave this group?');
-    if (!shouldLeave) return;
+    if (typeof window.openLeaveGroupModal === 'function') {
+        window.openLeaveGroupModal();
+    }
+}
 
-    const result = await postForm('/api/chats/group/leave', {
+function getEligibleNewOwners() {
+    const memberNodes = Array.from(document.querySelectorAll('[data-group-member-user-id]'));
+    return memberNodes
+        .map((node) => {
+            const userId = Number(node.getAttribute('data-group-member-user-id') || 0);
+            const username = String(node.getAttribute('data-group-member-username') || '').trim();
+            if (!Number.isFinite(userId) || userId <= 0 || !username) {
+                return null;
+            }
+            return { userId, username };
+        })
+        .filter(Boolean);
+}
+
+async function submitLeaveGroup(newOwnerUserId = 0) {
+    if (!currentChat) return;
+    if (normalizeChatType(currentChat.type) !== 'group') {
+        showToast('Only group chats can be left', 'error');
+        return;
+    }
+
+    const currentOwnerId = Number(currentChat.owner_user_id || 0);
+    const isCurrentUserOwner = currentOwnerId > 0 && currentOwnerId === Number(currentUserId || 0);
+    const payload = {
         csrf_token: getCsrfToken(),
         chat_id: String(currentChat.id)
-    });
+    };
+
+    if (isCurrentUserOwner) {
+        const ownerOptions = getEligibleNewOwners();
+
+        if (ownerOptions.length === 0) {
+            showToast('You cannot leave a group you own with no other members. Delete the group instead.', 'error');
+            return;
+        }
+
+        const ownerId = Number(newOwnerUserId || 0);
+        if (!ownerOptions.some((option) => option.userId === ownerId)) {
+            showToast('Choose a current group member to transfer ownership before leaving.', 'error');
+            return;
+        }
+
+        payload.new_owner_user_id = String(ownerId);
+    }
+
+    const result = await postForm('/api/chats/group/leave', payload);
 
     if (result.success) {
         const nextLocation = String(result.redirect || '/');
@@ -1229,6 +1279,176 @@ async function leaveCurrentGroup() {
     }
 
     showToast(result.error || 'Unable to leave group', 'error');
+}
+
+async function deleteCurrentGroup() {
+    if (!currentChat) return;
+    if (normalizeChatType(currentChat.type) !== 'group') {
+        showToast('Only group chats can be deleted', 'error');
+        return;
+    }
+
+    if (typeof window.openDeleteGroupModal === 'function') {
+        window.openDeleteGroupModal();
+    }
+}
+
+async function submitDeleteGroup() {
+    if (!currentChat) return;
+    if (normalizeChatType(currentChat.type) !== 'group') {
+        showToast('Only group chats can be deleted', 'error');
+        return;
+    }
+
+    const result = await postForm('/api/chats/group/delete', {
+        csrf_token: getCsrfToken(),
+        chat_id: String(currentChat.id)
+    });
+
+    if (result.success) {
+        window.location.href = String(result.redirect || '/');
+        return;
+    }
+
+    showToast(result.error || 'Unable to delete group', 'error');
+}
+
+function bindLeaveGroupModal() {
+    const modal = document.getElementById('leave-group-modal');
+    const form = document.getElementById('leave-group-form');
+    const cancel = document.getElementById('leave-group-cancel');
+    const submit = document.getElementById('leave-group-submit');
+    const ownerTransferBox = document.getElementById('leave-group-owner-transfer');
+    const ownerSelect = document.getElementById('leave-group-new-owner');
+    const description = document.getElementById('leave-group-modal-description');
+
+    if (!modal || !form || !cancel || !submit || !ownerTransferBox || !ownerSelect || !description) return;
+
+    const isOwner = () => {
+        const ownerId = Number(currentChat?.owner_user_id || 0);
+        const me = Number(currentUserId || 0);
+        return ownerId > 0 && ownerId === me;
+    };
+
+    const setOpenState = (isOpen) => {
+        modal.classList.toggle('hidden', !isOpen);
+
+        if (!isOpen) {
+            submit.disabled = false;
+            submit.textContent = 'Leave Group';
+            return;
+        }
+
+        const ownerFlow = isOwner();
+        ownerTransferBox.classList.toggle('hidden', !ownerFlow);
+
+        if (ownerFlow) {
+            const options = getEligibleNewOwners();
+            ownerSelect.innerHTML = '<option value="">Select member</option>'
+                + options.map((option) => `<option value="${option.userId}">${escapeHtml(option.username)}</option>`).join('');
+
+            description.textContent = options.length > 0
+                ? 'Choose a new owner, then leave the group.'
+                : 'You cannot leave this group because there are no other members to transfer ownership to.';
+            submit.disabled = options.length === 0;
+            submit.textContent = options.length > 0 ? 'Transfer & Leave' : 'Leave Group';
+            return;
+        }
+
+        ownerSelect.innerHTML = '<option value="">Select member</option>';
+        description.textContent = 'Are you sure you want to leave this group?';
+    };
+
+    const closeModal = () => {
+        setOpenState(false);
+    };
+
+    cancel.addEventListener('click', (event) => {
+        event.preventDefault();
+        closeModal();
+    });
+
+    modal.addEventListener('click', (event) => {
+        if (event.target !== modal) return;
+        closeModal();
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return;
+        if (modal.classList.contains('hidden')) return;
+        closeModal();
+    });
+
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (submit.disabled) return;
+
+        submit.disabled = true;
+        submit.textContent = 'Leaving...';
+
+        try {
+            const selectedOwnerUserId = Number(ownerSelect.value || 0);
+            await submitLeaveGroup(selectedOwnerUserId);
+        } finally {
+            submit.disabled = false;
+            submit.textContent = 'Leave Group';
+        }
+    });
+
+    window.openLeaveGroupModal = () => setOpenState(true);
+}
+
+function bindDeleteGroupModal() {
+    const modal = document.getElementById('delete-group-modal');
+    const form = document.getElementById('delete-group-form');
+    const cancel = document.getElementById('delete-group-cancel');
+    const submit = document.getElementById('delete-group-submit');
+    if (!modal || !form || !cancel || !submit) return;
+
+    const setOpenState = (isOpen) => {
+        modal.classList.toggle('hidden', !isOpen);
+        if (!isOpen) {
+            submit.disabled = false;
+            submit.textContent = 'Delete Group';
+        }
+    };
+
+    const closeModal = () => {
+        setOpenState(false);
+    };
+
+    cancel.addEventListener('click', (event) => {
+        event.preventDefault();
+        closeModal();
+    });
+
+    modal.addEventListener('click', (event) => {
+        if (event.target !== modal) return;
+        closeModal();
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return;
+        if (modal.classList.contains('hidden')) return;
+        closeModal();
+    });
+
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (submit.disabled) return;
+
+        submit.disabled = true;
+        submit.textContent = 'Deleting...';
+
+        try {
+            await submitDeleteGroup();
+        } finally {
+            submit.disabled = false;
+            submit.textContent = 'Delete Group';
+        }
+    });
+
+    window.openDeleteGroupModal = () => setOpenState(true);
 }
 
 async function renameCurrentChat() {

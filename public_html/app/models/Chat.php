@@ -1,5 +1,33 @@
 <?php
 class Chat extends Model {
+	public static function supportsSoftDelete(): bool {
+		static $supports = null;
+		if ($supports !== null) {
+			return $supports;
+		}
+
+		$result = self::query(
+			"SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'chats' AND COLUMN_NAME = 'deleted_at'"
+		)->fetchColumn();
+
+		$supports = ((int)$result) > 0;
+		return $supports;
+	}
+
+	public static function supportsDeletedBy(): bool {
+		static $supports = null;
+		if ($supports !== null) {
+			return $supports;
+		}
+
+		$result = self::query(
+			"SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'chats' AND COLUMN_NAME = 'deleted_by'"
+		)->fetchColumn();
+
+		$supports = ((int)$result) > 0;
+		return $supports;
+	}
+
 	public static function normalizeType($type) {
 		$normalized = strtolower(trim((string)$type));
 		if ($normalized === 'dm') {
@@ -53,5 +81,13 @@ class Chat extends Model {
 		}
 
 		return self::createPersonalChat($createdById, $userAId, $userBId);
+	}
+
+	public static function isSoftDeleted($chat): bool {
+		if (!$chat || !self::supportsSoftDelete()) {
+			return false;
+		}
+
+		return !empty($chat->deleted_at);
 	}
 }

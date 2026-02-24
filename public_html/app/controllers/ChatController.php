@@ -151,6 +151,14 @@ class ChatController extends Controller {
         return $supports;
     }
 
+    private function supportsChatSoftDelete(): bool {
+        return Chat::supportsSoftDelete();
+    }
+
+    private function chatIsSoftDeleted($chat): bool {
+        return Chat::isSoftDeleted($chat);
+    }
+
     private function markChatSeenUpToMessageId(int $chatId, int $userId, int $messageId): void {
         if ($messageId <= 0) {
             return;
@@ -178,6 +186,11 @@ class ChatController extends Controller {
 
         $chat = Database::query("SELECT * FROM chats WHERE chat_number = ?", [str_replace('-', '', $chatNumber)])->fetch();
         if (!$chat) {
+            $this->flash('error', 'invalid_chat');
+            $this->redirect('/');
+        }
+
+        if ($this->chatIsSoftDeleted($chat)) {
             $this->flash('error', 'invalid_chat');
             $this->redirect('/');
         }
@@ -213,8 +226,8 @@ class ChatController extends Controller {
                     AND af.status = 'accepted'
                   )
              WHERE cm.chat_id = ?
-             ORDER BY u.username ASC",
-            [$currentUserId, $currentUserId, $currentUserId, $chat->id]
+                         ORDER BY CASE WHEN u.id = ? THEN 0 ELSE 1 END ASC, u.username ASC",
+                        [$currentUserId, $currentUserId, $currentUserId, $chat->id, (int)$chat->created_by]
         )->fetchAll();
         foreach ($members as $m) {
             $m->formatted_user_number = User::formatUserNumber($m->user_number);
@@ -343,8 +356,15 @@ class ChatController extends Controller {
             $this->json(['error' => 'Access denied'], 403);
         }
 
-        $chat = Database::query("SELECT chat_number FROM chats WHERE id = ?", [$chatId])->fetch();
+        $chatSelect = $this->supportsChatSoftDelete()
+            ? "SELECT chat_number, deleted_at FROM chats WHERE id = ?"
+            : "SELECT chat_number FROM chats WHERE id = ?";
+        $chat = Database::query($chatSelect, [$chatId])->fetch();
         if (!$chat) {
+            $this->json(['error' => 'Chat not found'], 404);
+        }
+
+        if ($this->chatIsSoftDeleted($chat)) {
             $this->json(['error' => 'Chat not found'], 404);
         }
 
@@ -425,6 +445,13 @@ class ChatController extends Controller {
             $this->json(['error' => 'Access denied'], 403);
         }
 
+        if ($this->supportsChatSoftDelete()) {
+            $chat = Database::query("SELECT id, deleted_at FROM chats WHERE id = ?", [$chatId])->fetch();
+            if (!$chat || $this->chatIsSoftDeleted($chat)) {
+                $this->json(['error' => 'Chat not found'], 404);
+            }
+        }
+
         $messageRestrictionReason = $this->getPersonalChatMessageRestrictionReason($chatId, $userId);
         if ($messageRestrictionReason === 'banned_user') {
             $this->json(['error' => "You can't send messages to a banned user"], 403);
@@ -474,6 +501,13 @@ class ChatController extends Controller {
         $member = Database::query("SELECT * FROM chat_members WHERE chat_id = ? AND user_id = ?", [$chatId, $userId])->fetch();
         if (!$member) {
             $this->json(['error' => 'Access denied'], 403);
+        }
+
+        if ($this->supportsChatSoftDelete()) {
+            $chat = Database::query("SELECT id, deleted_at FROM chats WHERE id = ?", [$chatId])->fetch();
+            if (!$chat || $this->chatIsSoftDeleted($chat)) {
+                $this->json(['error' => 'Chat not found'], 404);
+            }
         }
 
         $lastSeenMessageId = $supportsLastSeen ? (int)($member->last_seen_message_id ?? 0) : 0;
@@ -582,6 +616,13 @@ class ChatController extends Controller {
             $this->json(['error' => 'Message not found'], 404);
         }
 
+        if ($this->supportsChatSoftDelete()) {
+            $chat = Database::query("SELECT id, deleted_at FROM chats WHERE id = ?", [(int)$message->chat_id])->fetch();
+            if (!$chat || $this->chatIsSoftDeleted($chat)) {
+                $this->json(['error' => 'Message not found'], 404);
+            }
+        }
+
         $existing = Database::query(
             "SELECT reaction_code FROM message_reactions WHERE message_id = ? AND user_id = ? LIMIT 1",
             [$messageId, $userId]
@@ -655,8 +696,15 @@ class ChatController extends Controller {
             $this->json(['error' => 'Invalid payload'], 400);
         }
 
-        $chat = Database::query("SELECT id, type, created_by FROM chats WHERE id = ?", [$chatId])->fetch();
+        $chatSelect = $this->supportsChatSoftDelete()
+            ? "SELECT id, type, created_by, deleted_at FROM chats WHERE id = ?"
+            : "SELECT id, type, created_by FROM chats WHERE id = ?";
+        $chat = Database::query($chatSelect, [$chatId])->fetch();
         if (!$chat) {
+            $this->json(['error' => 'Chat not found'], 404);
+        }
+
+        if ($this->chatIsSoftDeleted($chat)) {
             $this->json(['error' => 'Chat not found'], 404);
         }
 
@@ -692,6 +740,12 @@ class ChatController extends Controller {
         }
 
         Database::query("INSERT IGNORE INTO chat_members (chat_id, user_id) VALUES (?, ?)", [$chatId, $targetUserId]);
+        if (!$existingTargetMember && $this->supportsLastSeenMessageId()) {
+            $latestMessageId = $this->getLatestMessageId($chatId);
+            if ($latestMessageId > 0) {
+                $this->markChatSeenUpToMessageId($chatId, $targetUserId, $latestMessageId);
+            }
+        }
         if (!$existingTargetMember && $this->supportsSystemEvents()) {
             $targetDisplayUsername = User::normalizeUsername($target->username ?? '');
             if ($actorUsername !== '' && $targetDisplayUsername !== '') {
@@ -718,8 +772,15 @@ class ChatController extends Controller {
             $this->json(['error' => 'Invalid payload'], 400);
         }
 
-        $chat = Database::query("SELECT id, type, chat_number, created_by FROM chats WHERE id = ?", [$chatId])->fetch();
+        $chatSelect = $this->supportsChatSoftDelete()
+            ? "SELECT id, type, chat_number, created_by, deleted_at FROM chats WHERE id = ?"
+            : "SELECT id, type, chat_number, created_by FROM chats WHERE id = ?";
+        $chat = Database::query($chatSelect, [$chatId])->fetch();
         if (!$chat) {
+            $this->json(['error' => 'Chat not found'], 404);
+        }
+
+        if ($this->chatIsSoftDeleted($chat)) {
             $this->json(['error' => 'Chat not found'], 404);
         }
 
@@ -732,8 +793,9 @@ class ChatController extends Controller {
             $this->json(['error' => 'Access denied'], 403);
         }
 
-        if ((int)$chat->created_by === $targetUserId) {
-            $this->json(['error' => 'Group creator cannot be removed'], 403);
+        $ownerUserId = (int)($chat->created_by ?? 0);
+        if ($ownerUserId > 0 && $ownerUserId === $targetUserId) {
+            $this->json(['error' => 'Group owner cannot be removed'], 403);
         }
 
         $targetUser = Database::query(
@@ -744,6 +806,10 @@ class ChatController extends Controller {
             "SELECT id FROM chat_members WHERE chat_id = ? AND user_id = ? LIMIT 1",
             [$chatId, $targetUserId]
         )->fetch();
+
+        if (!$targetMember) {
+            $this->json(['error' => 'User is not in this group'], 404);
+        }
 
         Database::query("DELETE FROM chat_members WHERE chat_id = ? AND user_id = ?", [$chatId, $targetUserId]);
         if ($targetMember && $this->supportsSystemEvents()) {
@@ -768,6 +834,7 @@ class ChatController extends Controller {
         Auth::csrfValidate();
 
         $chatId = (int)($_POST['chat_id'] ?? 0);
+        $newOwnerUserId = (int)($_POST['new_owner_user_id'] ?? 0);
         $authUser = Auth::user();
         $currentUserId = (int)$authUser->id;
         $actorUsername = User::normalizeUsername($authUser->username ?? '');
@@ -776,8 +843,15 @@ class ChatController extends Controller {
             $this->json(['error' => 'Invalid payload'], 400);
         }
 
-        $chat = Database::query("SELECT id, type FROM chats WHERE id = ?", [$chatId])->fetch();
+        $chatSelect = $this->supportsChatSoftDelete()
+            ? "SELECT id, type, created_by, deleted_at FROM chats WHERE id = ?"
+            : "SELECT id, type, created_by FROM chats WHERE id = ?";
+        $chat = Database::query($chatSelect, [$chatId])->fetch();
         if (!$chat) {
+            $this->json(['error' => 'Chat not found'], 404);
+        }
+
+        if ($this->chatIsSoftDeleted($chat)) {
             $this->json(['error' => 'Chat not found'], 404);
         }
 
@@ -791,6 +865,44 @@ class ChatController extends Controller {
         )->fetch();
         if (!$member) {
             $this->json(['error' => 'Access denied'], 403);
+        }
+
+        if ((int)($chat->created_by ?? 0) === $currentUserId) {
+            $eligibleNewOwners = Database::query(
+                "SELECT cm.user_id, u.username
+                 FROM chat_members cm
+                 JOIN users u ON u.id = cm.user_id
+                 WHERE cm.chat_id = ? AND cm.user_id != ?
+                 ORDER BY u.username ASC",
+                [$chatId, $currentUserId]
+            )->fetchAll();
+
+            if (count($eligibleNewOwners) === 0) {
+                $this->json(['error' => 'You cannot leave a group you own with no other members. Delete the group instead.'], 403);
+            }
+
+            $newOwnerIsEligible = false;
+            foreach ($eligibleNewOwners as $eligibleNewOwner) {
+                if ((int)($eligibleNewOwner->user_id ?? 0) === $newOwnerUserId) {
+                    $newOwnerIsEligible = true;
+                    break;
+                }
+            }
+
+            if (!$newOwnerIsEligible) {
+                $this->json(['error' => 'Choose a current group member to transfer ownership before leaving.'], 400);
+            }
+
+            Database::query("UPDATE chats SET created_by = ? WHERE id = ?", [$newOwnerUserId, $chatId]);
+            if ($this->supportsSystemEvents() && $actorUsername !== '') {
+                $newOwnerUsername = (string)Database::query("SELECT username FROM users WHERE id = ?", [$newOwnerUserId])->fetchColumn();
+                if ($newOwnerUsername !== '') {
+                    Database::query(
+                        "INSERT INTO chat_system_events (chat_id, event_type, content) VALUES (?, 'ownership_transferred', ?)",
+                        [$chatId, $actorUsername . ' transferred group ownership to ' . User::normalizeUsername($newOwnerUsername)]
+                    );
+                }
+            }
         }
 
         Database::query("DELETE FROM chat_members WHERE chat_id = ? AND user_id = ?", [$chatId, $currentUserId]);
@@ -830,13 +942,24 @@ class ChatController extends Controller {
             $this->json(['error' => 'Chat name must be 80 characters or fewer'], 400);
         }
 
-        $chat = Database::query("SELECT id, type, chat_number, title FROM chats WHERE id = ?", [$chatId])->fetch();
+        $chatSelect = $this->supportsChatSoftDelete()
+            ? "SELECT id, type, chat_number, title, created_by, deleted_at FROM chats WHERE id = ?"
+            : "SELECT id, type, chat_number, title, created_by FROM chats WHERE id = ?";
+        $chat = Database::query($chatSelect, [$chatId])->fetch();
         if (!$chat) {
+            $this->json(['error' => 'Chat not found'], 404);
+        }
+
+        if ($this->chatIsSoftDeleted($chat)) {
             $this->json(['error' => 'Chat not found'], 404);
         }
 
         if (!Chat::isGroupType($chat->type ?? null)) {
             $this->json(['error' => 'Only group chats can be renamed'], 403);
+        }
+
+        if ((int)($chat->created_by ?? 0) !== $currentUserId) {
+            $this->json(['error' => 'Only the group owner can rename this chat'], 403);
         }
 
         $member = Database::query("SELECT id FROM chat_members WHERE chat_id = ? AND user_id = ?", [$chatId, $currentUserId])->fetch();
@@ -869,6 +992,64 @@ class ChatController extends Controller {
             );
         }
         $this->json(['success' => true, 'title' => $title, 'reset' => false]);
+    }
+
+    public function deleteGroup() {
+        Auth::requireAuth();
+        Auth::csrfValidate();
+
+        if (!$this->supportsChatSoftDelete()) {
+            $this->json(['error' => 'Group delete requires database update for chat trash support'], 400);
+        }
+
+        $chatId = (int)($_POST['chat_id'] ?? 0);
+        $currentUserId = (int)Auth::user()->id;
+
+        if ($chatId <= 0) {
+            $this->json(['error' => 'Invalid payload'], 400);
+        }
+
+        $chat = Database::query(
+            "SELECT id, type, created_by, deleted_at FROM chats WHERE id = ?",
+            [$chatId]
+        )->fetch();
+        if (!$chat) {
+            $this->json(['error' => 'Chat not found'], 404);
+        }
+
+        if ($this->chatIsSoftDeleted($chat)) {
+            $this->json(['error' => 'Chat already deleted'], 400);
+        }
+
+        if (!Chat::isGroupType($chat->type ?? null)) {
+            $this->json(['error' => 'Only group chats can be deleted'], 403);
+        }
+
+        if ((int)($chat->created_by ?? 0) !== $currentUserId) {
+            $this->json(['error' => 'Only the group owner can delete this group'], 403);
+        }
+
+        $member = Database::query(
+            "SELECT id FROM chat_members WHERE chat_id = ? AND user_id = ? LIMIT 1",
+            [$chatId, $currentUserId]
+        )->fetch();
+        if (!$member) {
+            $this->json(['error' => 'Access denied'], 403);
+        }
+
+        if (Chat::supportsDeletedBy()) {
+            Database::query(
+                "UPDATE chats SET deleted_at = NOW(), deleted_by = ? WHERE id = ? AND deleted_at IS NULL",
+                [$currentUserId, $chatId]
+            );
+        } else {
+            Database::query(
+                "UPDATE chats SET deleted_at = NOW() WHERE id = ? AND deleted_at IS NULL",
+                [$chatId]
+            );
+        }
+
+        $this->json(['success' => true, 'redirect' => '/']);
     }
 
     private function parseAttachmentIds($raw): array {

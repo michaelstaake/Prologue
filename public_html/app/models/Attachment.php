@@ -394,6 +394,36 @@ class Attachment extends Model {
         Database::query("DELETE FROM attachments WHERE user_id = ? AND status = 'pending'", [$userId]);
     }
 
+    public static function deleteFilesForChatId(int $chatId): void {
+        if ($chatId <= 0) {
+            return;
+        }
+
+        try {
+            $rows = Database::query(
+                "SELECT a.file_name, a.file_extension, u.user_number
+                 FROM attachments a
+                 JOIN users u ON u.id = a.user_id
+                 WHERE a.chat_id = ?",
+                [$chatId]
+            )->fetchAll();
+        } catch (Throwable $e) {
+            return;
+        }
+
+        foreach ($rows as $row) {
+            $userNumber = preg_replace('/\D+/', '', (string)($row->user_number ?? ''));
+            if (!preg_match('/^\d{16}$/', $userNumber)) {
+                continue;
+            }
+
+            $path = self::directoryForUserNumber($userNumber) . '/' . $row->file_name . '.' . $row->file_extension;
+            if (is_file($path)) {
+                @unlink($path);
+            }
+        }
+    }
+
     private static function normalizeOriginalName(string $name): ?string {
         $name = trim($name);
         if ($name === '') {

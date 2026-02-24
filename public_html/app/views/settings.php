@@ -150,6 +150,13 @@
                     <i class="fa-solid fa-sliders"></i>
                     <span>Config</span>
                 </a>
+                <a
+                    href="<?= htmlspecialchars(base_url('/trash'), ENT_QUOTES, 'UTF-8') ?>"
+                    class="inline-flex items-center gap-2 bg-zinc-700 hover:bg-zinc-600 px-6 py-2 rounded-xl"
+                >
+                    <i class="fa-regular fa-trash-can"></i>
+                    <span>Trash</span>
+                </a>
             </div>
         </section>
     <?php endif; ?>

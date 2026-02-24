@@ -359,6 +359,7 @@ async function init() {
             id: Number(chatView.dataset.chatId),
             chat_number: chatView.dataset.chatNumber,
             type: normalizeChatType(chatView.dataset.chatType),
+            owner_user_id: Number(chatView.dataset.chatOwnerId || 0),
             personal_user_id: Number(chatView.dataset.personalUserId || 0),
             can_send_messages: String(chatView.dataset.canSendMessages || '1') === '1',
             message_restriction_reason: String(chatView.dataset.messageRestrictionReason || ''),
@@ -383,6 +384,8 @@ async function init() {
         bindAttachmentLightbox();
         bindAddUserModal();
         bindRenameChatModal();
+        bindLeaveGroupModal();
+        bindDeleteGroupModal();
         bindChatHeaderMenu();
         bindMessageQuotesAndReactions();
         setChatComposerEnabled(currentChat.can_send_messages !== false, currentChat.message_restriction_reason || '');
@@ -469,6 +472,7 @@ async function init() {
     bindAdminUsersPage();
     bindReportModal();
     bindPageToast();
+    bindTrashDeleteModal();
     bindStatusMenu();
     bindNotificationSettingsToggles();
     bindNotificationSoundPreviewButtons();
@@ -490,6 +494,74 @@ async function init() {
     setInterval(loadSidebarChats, 5000);
 
     bindSidebarToggle();
+}
+
+function bindTrashDeleteModal() {
+    const modal = document.getElementById('trash-delete-modal');
+    const form = document.getElementById('trash-delete-form');
+    const cancel = document.getElementById('trash-delete-cancel');
+    const submit = document.getElementById('trash-delete-submit');
+    const chatIdInput = document.getElementById('trash-delete-chat-id');
+    const description = document.getElementById('trash-delete-modal-description');
+    const triggerButtons = Array.from(document.querySelectorAll('.js-trash-delete-open'));
+
+    if (!modal || !form || !cancel || !submit || !chatIdInput || !description || triggerButtons.length === 0) return;
+
+    const defaultDescription = 'Are you sure you want to permanently delete this chat and all associated data?';
+
+    const setOpenState = (isOpen) => {
+        modal.classList.toggle('hidden', !isOpen);
+
+        if (!isOpen) {
+            submit.disabled = false;
+            submit.textContent = 'Delete Permanently';
+            return;
+        }
+
+        submit.disabled = false;
+        submit.textContent = 'Delete Permanently';
+    };
+
+    const closeModal = () => {
+        setOpenState(false);
+    };
+
+    triggerButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+            const chatId = String(button.getAttribute('data-chat-id') || '').trim();
+            const chatTitle = String(button.getAttribute('data-chat-title') || '').trim();
+
+            if (!chatId) return;
+
+            chatIdInput.value = chatId;
+            description.textContent = chatTitle
+                ? `Are you sure you want to permanently delete “${chatTitle}” and all associated data?`
+                : defaultDescription;
+
+            setOpenState(true);
+        });
+    });
+
+    cancel.addEventListener('click', (event) => {
+        event.preventDefault();
+        closeModal();
+    });
+
+    modal.addEventListener('click', (event) => {
+        if (event.target !== modal) return;
+        closeModal();
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return;
+        if (modal.classList.contains('hidden')) return;
+        closeModal();
+    });
+
+    form.addEventListener('submit', () => {
+        submit.disabled = true;
+        submit.textContent = 'Deleting...';
+    });
 }
 
 function bindSidebarToggle() {
@@ -539,6 +611,7 @@ window.createGroupChat = createGroupChat;
 window.addGroupMemberByUsername = addGroupMemberByUsername;
 window.removeGroupMember = removeGroupMember;
 window.leaveCurrentGroup = leaveCurrentGroup;
+window.deleteCurrentGroup = deleteCurrentGroup;
 window.reportTarget = reportTarget;
 window.startVoiceCall = startVoiceCall;
 window.acceptCall = acceptCall;

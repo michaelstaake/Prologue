@@ -903,6 +903,13 @@ function bindChatHeaderMenu() {
             return;
         }
 
+        if (action === 'delete-group') {
+            if (typeof window.deleteCurrentGroup === 'function') {
+                await window.deleteCurrentGroup();
+            }
+            return;
+        }
+
         if (action === 'report-chat' && currentChat) {
             await reportTarget('chat', currentChat.id);
         }

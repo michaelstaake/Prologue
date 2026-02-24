@@ -195,6 +195,7 @@ $router->post('/api/chats/group/create', 'ChatController@createGroup');
 $router->post('/api/chats/group/add-member', 'ChatController@addGroupMember');
 $router->post('/api/chats/group/remove-member', 'ChatController@removeGroupMember');
 $router->post('/api/chats/group/leave', 'ChatController@leaveGroup');
+$router->post('/api/chats/group/delete', 'ChatController@deleteGroup');
 $router->post('/api/chats/rename', 'ChatController@renameChat');
 $router->post('/api/status', 'ApiController@updateStatus');
 
@@ -214,6 +215,11 @@ $router->post('/api/notifications/read', 'NotificationController@markRead');
 $router->get('/reports', 'ReportController@index');
 $router->post('/reports/mark-handled', 'ReportController@markHandled');
 $router->post('/api/report', 'ReportController@submit');
+
+// Trash (admin only)
+$router->get('/trash', 'TrashController@index');
+$router->get('/trash/{chat_number}', 'TrashController@show');
+$router->post('/trash/delete', 'TrashController@delete');
 
 // Config (admin only)
 $router->get('/config', 'ConfigController@index');

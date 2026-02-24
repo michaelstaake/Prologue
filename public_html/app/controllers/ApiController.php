@@ -1,5 +1,13 @@
 <?php
 class ApiController extends Controller {
+    private function supportsChatSoftDelete(): bool {
+        return Chat::supportsSoftDelete();
+    }
+
+    private function chatIsSoftDeleted($chat): bool {
+        return Chat::isSoftDeleted($chat);
+    }
+
     private function ensureCallSignalTableExists(): void {
         Database::query(
             "CREATE TABLE IF NOT EXISTS call_signals (
@@ -157,7 +165,14 @@ class ApiController extends Controller {
                           LIMIT 1) AS other_last_active_at
                   FROM chats c
                   JOIN chat_members cm ON cm.chat_id = c.id
-                  WHERE cm.user_id = ?
+                  WHERE cm.user_id = ?";
+
+        if ($this->supportsChatSoftDelete()) {
+            $query .= "
+                    AND c.deleted_at IS NULL";
+        }
+
+        $query .= "
                   ORDER BY COALESCE(last_message_at, c.created_at) DESC";
 
         $chats = Database::query(
@@ -222,6 +237,13 @@ class ApiController extends Controller {
         $allowed = Database::query("SELECT id FROM chat_members WHERE chat_id = ? AND user_id = ?", [$chatId, $userId])->fetch();
         if (!$allowed) {
             $this->json(['error' => 'Access denied'], 403);
+        }
+
+        if ($this->supportsChatSoftDelete()) {
+            $chat = Database::query("SELECT id, deleted_at FROM chats WHERE id = ?", [$chatId])->fetch();
+            if (!$chat || $this->chatIsSoftDeleted($chat)) {
+                $this->json(['error' => 'Chat not found'], 404);
+            }
         }
 
         try {

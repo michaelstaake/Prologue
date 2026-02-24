@@ -173,8 +173,12 @@ CREATE TABLE chats (
     type ENUM('personal','group') DEFAULT 'personal',
     title VARCHAR(80) NULL,
     created_by INT NOT NULL,
+    deleted_at TIMESTAMP NULL,
+    deleted_by INT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (created_by) REFERENCES users(id)
+    FOREIGN KEY (created_by) REFERENCES users(id),
+    FOREIGN KEY (deleted_by) REFERENCES users(id) ON DELETE SET NULL,
+    KEY idx_chats_deleted_at (deleted_at)
 );
 
 -- Chat members

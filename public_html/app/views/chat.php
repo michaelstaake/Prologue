@@ -74,6 +74,7 @@ $messageDisabledNoticeText = $messageRestrictionReason === 'banned_user'
     ? "You can't send messages to a banned user."
     : 'Messaging is disabled in this private chat until you add each other as friends again.';
 $canReportChat = ((int)$chat->created_by !== (int)$currentUserId);
+$isGroupOwner = $isGroupChat && ((int)$chat->created_by === (int)$currentUserId);
 $hasChatActions = $isGroupChat || $canReportChat;
 $personalChatUserId = 0;
 $personalChatUserNumber = '';
@@ -168,7 +169,7 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
 };
 ?>
 
-    <div class="flex-1 flex flex-col h-full" id="chat-view" data-chat-id="<?= (int)$chat->id ?>" data-chat-number="<?= htmlspecialchars($chat->chat_number, ENT_QUOTES, 'UTF-8') ?>" data-chat-type="<?= htmlspecialchars($chat->type ?? 'personal', ENT_QUOTES, 'UTF-8') ?>" data-current-user-id="<?= (int)$currentUserId ?>" data-first-unseen-message-id="<?= (int)($firstUnseenMessageId ?? 0) ?>" data-personal-user-id="<?= (int)$personalChatUserId ?>" data-can-send-messages="<?= $canSendMessages ? '1' : '0' ?>" data-message-restriction-reason="<?= htmlspecialchars($messageRestrictionReason, ENT_QUOTES, 'UTF-8') ?>" data-can-start-calls="<?= $canStartCalls ? '1' : '0' ?>" data-current-username="<?= htmlspecialchars($currentUserUsername, ENT_QUOTES, 'UTF-8') ?>" data-peer-username="<?= htmlspecialchars($personalChatPeerUsername, ENT_QUOTES, 'UTF-8') ?>">
+    <div class="flex-1 flex flex-col h-full" id="chat-view" data-chat-id="<?= (int)$chat->id ?>" data-chat-number="<?= htmlspecialchars($chat->chat_number, ENT_QUOTES, 'UTF-8') ?>" data-chat-type="<?= htmlspecialchars($chat->type ?? 'personal', ENT_QUOTES, 'UTF-8') ?>" data-chat-owner-id="<?= (int)$chat->created_by ?>" data-current-user-id="<?= (int)$currentUserId ?>" data-first-unseen-message-id="<?= (int)($firstUnseenMessageId ?? 0) ?>" data-personal-user-id="<?= (int)$personalChatUserId ?>" data-can-send-messages="<?= $canSendMessages ? '1' : '0' ?>" data-message-restriction-reason="<?= htmlspecialchars($messageRestrictionReason, ENT_QUOTES, 'UTF-8') ?>" data-can-start-calls="<?= $canStartCalls ? '1' : '0' ?>" data-current-username="<?= htmlspecialchars($currentUserUsername, ENT_QUOTES, 'UTF-8') ?>" data-peer-username="<?= htmlspecialchars($personalChatPeerUsername, ENT_QUOTES, 'UTF-8') ?>">
     <div class="h-16 border-b border-zinc-800 flex items-center px-6 justify-between">
         <div class="flex items-center gap-4 relative">
             <div class="flex items-center gap-2">
@@ -190,8 +191,13 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
             <div id="chat-header-menu" class="hidden absolute top-full left-0 mt-2 min-w-44 bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl p-1 z-30">
                 <?php if ($isGroupChat): ?>
                 <button type="button" data-chat-action="add-user" class="w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-zinc-800">Add User</button>
+                <?php if ($isGroupOwner): ?>
                 <button type="button" data-chat-action="rename-chat" class="w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-zinc-800">Rename Chat</button>
+                <?php endif; ?>
                 <button type="button" data-chat-action="leave-group" class="w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-zinc-800 text-red-300">Leave Group</button>
+                <?php if ($isGroupOwner): ?>
+                <button type="button" data-chat-action="delete-group" class="w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-zinc-800 text-red-300">Delete Group</button>
+                <?php endif; ?>
                 <?php endif; ?>
                 <?php if ($canReportChat): ?>
                 <button type="button" data-chat-action="report-chat" class="w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-zinc-800 text-red-300">Report Chat</button>
@@ -210,8 +216,11 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
             <?php foreach (($members ?? []) as $member): ?>
                 <?php if ((int)$member->id === (int)$currentUserId) { continue; } ?>
                 <?php $friendLabel = ((int)($member->is_friend ?? 0) === 1) ? 'Friend' : 'Not Friend'; ?>
-                <span class="inline-flex items-center gap-2 bg-zinc-800 border border-zinc-700 rounded-full px-3 py-1" data-group-member-user-id="<?= (int)$member->id ?>">
+                <span class="inline-flex items-center gap-2 bg-zinc-800 border border-zinc-700 rounded-full px-3 py-1" data-group-member-user-id="<?= (int)$member->id ?>" data-group-member-username="<?= htmlspecialchars((string)$member->username, ENT_QUOTES, 'UTF-8') ?>">
                     <a href="<?= htmlspecialchars(base_url('/u/' . User::formatUserNumber($member->user_number)), ENT_QUOTES, 'UTF-8') ?>" class="hover:underline underline-offset-2" title="<?= htmlspecialchars($friendLabel, ENT_QUOTES, 'UTF-8') ?>" aria-label="<?= htmlspecialchars($friendLabel, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($member->username, ENT_QUOTES, 'UTF-8') ?></a>
+                    <?php if ((int)$member->id === (int)$chat->created_by): ?>
+                    <i class="fa-solid fa-crown prologue-accent" title="Group owner" aria-label="Group owner"></i>
+                    <?php endif; ?>
                     <span class="inline-block w-1.5 h-1.5 rounded-full <?= htmlspecialchars($member->effective_status_dot_class ?? 'bg-zinc-500', ENT_QUOTES, 'UTF-8') ?>" title="<?= htmlspecialchars($member->effective_status_label ?? 'Offline', ENT_QUOTES, 'UTF-8') ?>"></span>
                     <?php if ((int)$member->id !== (int)$chat->created_by): ?>
                     <button onclick='removeGroupMember(<?= (int)$member->id ?>, <?= json_encode((string)$member->username, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>)' class="text-red-300 hover:text-red-200">×</button>
@@ -535,6 +544,45 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                 <div class="flex items-center justify-end gap-3">
                     <button type="button" id="rename-chat-cancel" class="px-4 py-2 rounded-xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-zinc-200">Cancel</button>
                     <button type="submit" id="rename-chat-submit" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div id="leave-group-modal" class="hidden fixed inset-0 bg-black/70 z-50 p-4 md:p-6" aria-hidden="true">
+    <div class="h-full w-full flex items-center justify-center">
+        <div class="w-full max-w-md bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl p-6" role="dialog" aria-modal="true" aria-labelledby="leave-group-modal-title">
+            <h2 id="leave-group-modal-title" class="text-lg font-semibold text-zinc-100">Leave group</h2>
+            <p class="mt-2 text-sm text-zinc-400" id="leave-group-modal-description">Are you sure you want to leave this group?</p>
+
+            <form id="leave-group-form" class="mt-4 space-y-4">
+                <div id="leave-group-owner-transfer" class="hidden">
+                    <label for="leave-group-new-owner" class="block text-sm text-zinc-300 mb-1">Select new owner</label>
+                    <select id="leave-group-new-owner" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-zinc-100">
+                        <option value="">Select member</option>
+                    </select>
+                    <p class="mt-2 text-xs text-zinc-500">You must transfer ownership before leaving because you created this group.</p>
+                </div>
+
+                <div class="flex items-center justify-end gap-3">
+                    <button type="button" id="leave-group-cancel" class="px-4 py-2 rounded-xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-zinc-200">Cancel</button>
+                    <button type="submit" id="leave-group-submit" class="px-4 py-2 rounded-xl bg-red-700 hover:bg-red-600 text-white">Leave Group</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div id="delete-group-modal" class="hidden fixed inset-0 bg-black/70 z-50 p-4 md:p-6" aria-hidden="true">
+    <div class="h-full w-full flex items-center justify-center">
+        <div class="w-full max-w-md bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl p-6" role="dialog" aria-modal="true" aria-labelledby="delete-group-modal-title">
+            <h2 id="delete-group-modal-title" class="text-lg font-semibold text-zinc-100">Delete group</h2>
+            <p class="mt-2 text-sm text-zinc-400">Are you sure you wish to delete this group chat?</p>
+            <form id="delete-group-form" class="mt-4">
+                <div class="flex items-center justify-end gap-3">
+                    <button type="button" id="delete-group-cancel" class="px-4 py-2 rounded-xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-zinc-200">Cancel</button>
+                    <button type="submit" id="delete-group-submit" class="px-4 py-2 rounded-xl bg-red-700 hover:bg-red-600 text-white">Delete Group</button>
                 </div>
             </form>
         </div>
