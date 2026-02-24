@@ -185,7 +185,7 @@
             <button type="submit" class="bg-zinc-700 hover:bg-zinc-600 border border-zinc-700 px-5 py-2.5 rounded-xl">Search</button>
         </form>
 
-        <p id="user-search-help" class="text-sm text-zinc-400 mb-4">Enter a partial or full username or user number and press Enter/Return to search or click the Search button.</p>
+        <p id="user-search-help" class="text-sm text-zinc-400 mb-4">Enter a partial or full username or user number and press Enter/Return or click the Search button.</p>
 
         <div id="user-search-results" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
     </section>
