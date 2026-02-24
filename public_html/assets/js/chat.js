@@ -1034,8 +1034,8 @@ async function loadSidebarChats() {
     const data = await res.json();
     const chats = data.chats || [];
 
-    const privateChats = chats.filter((chat) => normalizeChatType(chat.type) === 'personal').slice(0, 5);
-    const groupChats = chats.filter((chat) => normalizeChatType(chat.type) === 'group').slice(0, 5);
+    const privateChats = chats.filter((chat) => normalizeChatType(chat.type) === 'personal');
+    const groupChats = chats.filter((chat) => normalizeChatType(chat.type) === 'group');
 
     const renderSidebarChatItems = (items) => items.map(chat => {
         const type = normalizeChatType(chat.type);

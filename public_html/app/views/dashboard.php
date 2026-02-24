@@ -1,5 +1,39 @@
 <div class="p-8 overflow-auto">
-    <h1 class="text-3xl font-bold mb-6">Friends</h1>
+    <div class="mb-6">
+        <h1 class="text-3xl font-bold">Dashboard</h1>
+    </div>
+
+    <section class="max-w-4xl mb-6">
+        <h2 class="text-xl font-semibold text-zinc-300 mb-3">Groups</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <?php if (!empty($lastGroupChat)): ?>
+                <a href="<?= htmlspecialchars(base_url('/c/' . User::formatUserNumber((string)$lastGroupChat->chat_number)), ENT_QUOTES, 'UTF-8') ?>" class="block bg-zinc-800 rounded-xl p-3 hover:bg-zinc-700 transition">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <div class="w-9 h-9 rounded-full border border-zinc-700 flex items-center justify-center bg-zinc-900 text-zinc-300">
+                            <i class="fa fa-user-group text-sm"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <div class="font-medium truncate"><?= htmlspecialchars((string)$lastGroupChat->chat_title, ENT_QUOTES, 'UTF-8') ?></div>
+                            <div class="text-xs text-zinc-400"><?= htmlspecialchars((string)$lastGroupChat->chat_number_formatted, ENT_QUOTES, 'UTF-8') ?></div>
+                            <p class="text-xs text-zinc-400 mt-1">Your most recently active group</p>
+                        </div>
+                    </div>
+                </a>
+            <?php endif; ?>
+
+            <button type="button" onclick="createGroupChat()" class="w-full bg-zinc-800 hover:bg-zinc-700 rounded-xl p-3 flex items-center gap-3 transition">
+                <div class="w-9 h-9 rounded-full border border-zinc-700 flex items-center justify-center bg-zinc-900 text-zinc-300">
+                    <i class="fa fa-user-group text-sm"></i>
+                </div>
+                <div class="min-w-0 text-left">
+                    <span class="font-medium block">New Group</span>
+                    <p class="text-xs text-zinc-400 mt-1">Make something awesome</p>
+                </div>
+            </button>
+        </div>
+    </section>
+
+    <h2 class="text-xl font-semibold text-zinc-300 mb-4">Friends</h2>
 
     <?php
         $toastMessage = '';

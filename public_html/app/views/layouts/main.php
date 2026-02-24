@@ -117,17 +117,16 @@
                 <i class="fa-solid fa-comments text-2xl prologue-accent"></i>
                 <span class="text-2xl font-bold">Prologue</span>
             </a>
-            <div class="flex-1 overflow-auto p-4 space-y-4">
+            <div class="flex-1 min-h-0 p-4 flex flex-col gap-4">
 
-                <div>
+                <div class="min-h-0 flex flex-col max-h-1/2">
                     <div class="px-3 pb-2 text-xs uppercase tracking-wide text-zinc-500">Private Chats</div>
-                    <div id="private-chat-list" class="space-y-1"></div>
+                    <div id="private-chat-list" class="space-y-1 overflow-y-auto min-h-0"></div>
                 </div>
 
-                <div>
+                <div class="flex-1 min-h-0 flex flex-col">
                     <div class="px-3 pb-2 text-xs uppercase tracking-wide text-zinc-500">Group Chats</div>
-                    <div id="group-chat-list" class="space-y-1"></div>
-                    <button type="button" onclick="createGroupChat()" class="w-full text-left mt-2 py-2 px-3 hover:bg-zinc-800 rounded-xl"><i class="fa fa-user-group"></i> New Group</button>
+                    <div id="group-chat-list" class="space-y-1 overflow-y-auto min-h-0"></div>
                 </div>
             </div>
             <div class="p-4 border-t border-zinc-700 text-sm text-zinc-400">

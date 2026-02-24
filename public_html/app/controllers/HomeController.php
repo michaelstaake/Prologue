@@ -77,9 +77,33 @@ class HomeController extends Controller {
             }));
         }
 
+        $lastGroupChatQuery = "SELECT c.id,
+                                      c.chat_number,
+                                      c.title,
+                                      c.created_at,
+                                      (SELECT m.created_at FROM messages m WHERE m.chat_id = c.id ORDER BY m.created_at DESC LIMIT 1) AS last_message_at
+                               FROM chats c
+                               JOIN chat_members cm ON cm.chat_id = c.id
+                               WHERE cm.user_id = ?
+                                 AND c.type = 'group'";
+        if (Chat::supportsSoftDelete()) {
+            $lastGroupChatQuery .= " AND c.deleted_at IS NULL";
+        }
+        $lastGroupChatQuery .= "
+                               ORDER BY COALESCE(last_message_at, c.created_at) DESC
+                               LIMIT 1";
+
+        $lastGroupChat = Database::query($lastGroupChatQuery, [$userId])->fetch();
+        if ($lastGroupChat) {
+            $lastGroupChat->chat_number_formatted = User::formatUserNumber((string)$lastGroupChat->chat_number);
+            $customTitle = trim((string)($lastGroupChat->title ?? ''));
+            $lastGroupChat->chat_title = $customTitle !== '' ? $customTitle : $lastGroupChat->chat_number_formatted;
+        }
+
         $this->view('dashboard', [
             'friends' => $friends,
             'visibleFriends' => $visibleFriends,
+            'lastGroupChat' => $lastGroupChat,
             'pendingIncoming' => $pendingIncoming,
             'pendingOutgoing' => $pendingOutgoing,
             'incomingRequestCount' => $incomingRequestCount,
