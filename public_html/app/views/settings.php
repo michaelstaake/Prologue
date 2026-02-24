@@ -123,7 +123,7 @@
     <?php endif; ?>
 
     <?php if (strtolower((string)($user->role ?? '')) === 'admin'): ?>
-        <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-2xl">
+        <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-4xl">
             <h2 class="text-xl font-semibold mb-4">Admin</h2>
             <div class="flex flex-wrap items-center gap-3">
                 <a
@@ -144,6 +144,13 @@
                     <span>Users</span>
                 </a>
                 <a
+                    href="<?= htmlspecialchars(base_url('/tree'), ENT_QUOTES, 'UTF-8') ?>"
+                    class="inline-flex items-center gap-2 bg-zinc-700 hover:bg-zinc-600 px-6 py-2 rounded-xl"
+                >
+                    <i class="fa-solid fa-diagram-project"></i>
+                    <span>Tree</span>
+                </a>
+                <a
                     href="<?= htmlspecialchars(base_url('/config'), ENT_QUOTES, 'UTF-8') ?>"
                     class="inline-flex items-center gap-2 bg-zinc-700 hover:bg-zinc-600 px-6 py-2 rounded-xl"
                 >
@@ -161,7 +168,7 @@
         </section>
     <?php endif; ?>
 
-    <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-2xl">
+    <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-4xl">
         <h2 class="text-xl font-semibold mb-4">Account</h2>
         <?php
             $pendingEmailValue = !empty($pendingEmailChange) ? (string)$pendingEmailChange->new_email : (string)$user->email;
@@ -200,7 +207,7 @@
         </div>
     </section>
 
-    <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-2xl">
+    <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-4xl">
         <h2 class="text-xl font-semibold mb-4">Profile</h2>
         <div class="space-y-4">
             <div>
@@ -221,7 +228,7 @@
         </div>
     </section>
 
-    <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-2xl">
+    <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-4xl">
         <h2 class="text-xl font-semibold mb-4">Avatar</h2>
         <div class="border border-zinc-700 rounded-xl p-4 bg-zinc-800/40">
             <p class="text-sm text-zinc-400 mb-4">JPG or PNG. Images are resized to 256 &times; 256. Maximum 2048 &times; 2048 pixels.</p>
@@ -278,7 +285,7 @@
         </div>
     </section>
 
-    <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-2xl">
+    <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-4xl">
         <h2 class="text-xl font-semibold mb-4">Notifications</h2>
         <p class="text-sm text-zinc-400 mb-5">Changes save automatically.</p>
         <div class="space-y-4" id="notification-settings-toggles">
@@ -343,7 +350,7 @@
         <p id="notification-settings-status" class="mt-3 text-xs text-zinc-500" aria-live="polite"></p>
     </section>
 
-    <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-2xl">
+    <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-4xl">
         <h2 class="text-xl font-semibold mb-4">Time Zone</h2>
         <form method="POST" action="<?= htmlspecialchars(base_url('/settings/timezone'), ENT_QUOTES, 'UTF-8') ?>">
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
@@ -377,7 +384,7 @@
     </section>
 
     <?php if (!empty($invitesEnabled)): ?>
-        <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-2xl">
+        <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-4xl">
             <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
                 <h2 class="text-xl font-semibold">Invites</h2>
                 <form method="POST" action="<?= htmlspecialchars(base_url('/settings/invites/generate'), ENT_QUOTES, 'UTF-8') ?>">
@@ -438,7 +445,7 @@
         </section>
     <?php endif; ?>
 
-    <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-2xl">
+    <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-4xl">
         <h2 class="text-xl font-semibold mb-4">Sessions</h2>
         <div class="space-y-2 text-sm">
             <?php if (empty($sessions)): ?>
@@ -475,7 +482,7 @@
         </div>
     </section>
 
-    <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-2xl">
+    <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-4xl">
         <h2 class="text-xl font-semibold mb-4">Prologue <?= htmlspecialchars((string)APP_VERSION, ENT_QUOTES, 'UTF-8') ?></h2>
         <div class="space-y-3 text-sm">
             <a href="<?= htmlspecialchars(base_url('/info'), ENT_QUOTES, 'UTF-8') ?>" class="inline-flex items-center gap-2 text-emerald-400 hover:text-emerald-300 underline decoration-emerald-500">

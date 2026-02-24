@@ -167,6 +167,7 @@ $router->get('/users', 'AdminUserController@index');
 $router->post('/users/change-group', 'AdminUserController@changeGroup');
 $router->post('/users/ban', 'AdminUserController@ban');
 $router->post('/users/delete', 'AdminUserController@delete');
+$router->get('/tree', 'TreeController@index');
 
 // Friends
 $router->post('/friends/request', 'FriendController@sendRequest');
