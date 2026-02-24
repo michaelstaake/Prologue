@@ -199,50 +199,62 @@
                 <span id="call-overlay-duration" class="hidden text-xs text-zinc-500 tabular-nums">00:00</span>
             </div>
             <div class="flex items-center gap-1.5">
+                <button onclick="toggleCallParticipantsPanel()" id="call-participants-toggle-btn" class="hidden h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 text-xs px-2.5" title="Show participants panel" aria-label="Toggle participants panel" aria-expanded="false"><i class="fa-solid fa-users"></i></button>
                 <button onclick="setCallOverlayMode('hidden')" id="call-overlay-hidden-btn" class="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 text-xs" title="Hide call window (reopen from Call in progress bar)"><i class="fa-solid fa-chevron-up"></i></button>
                 <button onclick="setCallOverlayMode('half')" id="call-overlay-half-btn" class="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 text-xs" title="Split screen"><i class="fa-solid fa-down-left-and-up-right-to-center"></i></button>
                 <button onclick="setCallOverlayMode('full')" id="call-overlay-full-btn" class="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 text-xs" title="Full size"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></button>
             </div>
         </div>
 
-        <div id="call-videos" class="flex-1 flex items-center justify-center gap-6 flex-wrap p-6 overflow-auto min-h-0">
-            <div id="remote-user-tile" class="flex flex-col items-center gap-2">
-                <div id="remote-video-container" class="relative rounded-2xl overflow-hidden bg-zinc-900 border border-zinc-700 flex items-center justify-center" style="width:320px;height:180px">
-                    <video id="remote-video" autoplay playsinline class="hidden absolute inset-0 w-full h-full object-contain"></video>
-                    <div id="remote-video-placeholder" class="absolute inset-0 flex items-center justify-center"><i class="fa fa-user text-5xl text-zinc-700"></i></div>
+        <div id="call-stage" class="flex-1 min-h-0 flex flex-col md:flex-row-reverse gap-3 p-3 md:p-5 overflow-hidden">
+            <div class="flex-1 min-h-0 flex flex-col">
+                <div id="call-videos" class="flex-1 min-h-0 flex items-center justify-center gap-6 flex-wrap overflow-auto">
+                    <div id="remote-user-tile" class="flex flex-col items-center gap-2">
+                        <div id="remote-video-container" class="relative rounded-2xl overflow-hidden bg-zinc-900 border border-zinc-700 flex items-center justify-center" style="width:320px;height:180px">
+                            <video id="remote-camera-video" autoplay playsinline class="hidden absolute inset-0 w-full h-full object-contain"></video>
+                            <video id="remote-screen-video" autoplay playsinline class="hidden absolute inset-0 w-full h-full object-contain"></video>
+                            <div id="remote-video-placeholder" class="absolute inset-0 flex items-center justify-center"><i class="fa fa-user text-5xl text-zinc-700"></i></div>
+                        </div>
+                        <button id="remote-username-btn" type="button" class="text-sm text-zinc-300 px-1 select-none" disabled style="cursor:default">Participant</button>
+                    </div>
+
+                    <div id="local-user-tile" class="flex flex-col items-center gap-2">
+                        <div id="local-media-container" class="relative rounded-2xl overflow-hidden bg-zinc-900 border border-zinc-700 flex items-center justify-center" style="width:320px;height:180px">
+                            <div id="local-video-placeholder" class="absolute inset-0 flex items-center justify-center"><i class="fa fa-microphone text-4xl text-zinc-700"></i></div>
+                            <video id="local-video" autoplay playsinline muted class="hidden absolute inset-0 w-full h-full object-contain"></video>
+                            <video id="screen-share-video" autoplay playsinline muted class="hidden absolute inset-0 w-full h-full object-contain"></video>
+                            <button id="pip-toggle-btn" type="button" class="hidden absolute bottom-2 left-2 z-10 text-xs bg-black/70 hover:bg-black/90 text-white rounded-lg px-2 py-1 gap-1 flex items-center" onclick="togglePipMode()" title="Swap picture-in-picture"><i class="fa-solid fa-rotate"></i><span>Swap</span></button>
+                        </div>
+                        <span class="text-sm text-zinc-300 select-none" id="local-username-label">You</span>
+                    </div>
                 </div>
-                <button id="remote-username-btn" type="button" class="text-sm text-zinc-300 px-1 select-none" disabled style="cursor:default" onclick="spotlightRemoteUser()">Participant</button>
+
+                <div class="shrink-0 flex gap-5 flex-wrap justify-center px-6 pb-6 pt-2">
+                    <div class="flex flex-col items-center gap-1">
+                        <button onclick="toggleMute()" id="mute-btn" class="bg-zinc-800 hover:bg-zinc-700 w-16 h-16 rounded-2xl text-xl border border-zinc-700" title="Toggle mute"><i class="fa fa-microphone"></i></button>
+                        <span class="text-xs text-zinc-400">Mute</span>
+                    </div>
+                    <div class="flex flex-col items-center gap-1">
+                        <button onclick="toggleVideoInCall()" id="toggle-video-btn" class="bg-zinc-800 hover:bg-zinc-700 w-16 h-16 rounded-2xl text-xl border border-zinc-700" title="Toggle camera"><i class="fa fa-video-slash"></i></button>
+                        <span class="text-xs text-zinc-400">Camera</span>
+                    </div>
+                    <div id="screenshare-btn-wrap" class="flex flex-col items-center gap-1 hidden">
+                        <button onclick="toggleScreenShare()" id="screenshare-btn" class="bg-zinc-800 hover:bg-zinc-700 w-16 h-16 rounded-2xl text-xl border border-zinc-700" title="Share screen"><i class="fa fa-display"></i></button>
+                        <span class="text-xs text-zinc-400">Share</span>
+                    </div>
+                    <div class="flex flex-col items-center gap-1">
+                        <button onclick="endCall()" class="bg-red-600 hover:bg-red-500 w-16 h-16 rounded-2xl text-xl border border-red-700" title="End call"><i class="fa fa-phone-slash"></i></button>
+                        <span class="text-xs text-zinc-400">End</span>
+                    </div>
+                </div>
             </div>
 
-            <div id="local-user-tile" class="flex flex-col items-center gap-2">
-                <div id="local-media-container" class="relative rounded-2xl overflow-hidden bg-zinc-900 border border-zinc-700 flex items-center justify-center" style="width:320px;height:180px">
-                    <div id="local-video-placeholder" class="absolute inset-0 flex items-center justify-center"><i class="fa fa-microphone text-4xl text-zinc-700"></i></div>
-                    <video id="local-video" autoplay playsinline muted class="hidden absolute inset-0 w-full h-full object-contain"></video>
-                    <video id="screen-share-video" autoplay playsinline muted class="hidden absolute inset-0 w-full h-full object-contain"></video>
-                    <button id="pip-toggle-btn" type="button" class="hidden absolute bottom-2 left-2 z-10 text-xs bg-black/70 hover:bg-black/90 text-white rounded-lg px-2 py-1 gap-1 flex items-center" onclick="togglePipMode()" title="Swap picture-in-picture"><i class="fa-solid fa-rotate"></i><span>Swap</span></button>
-                </div>
-                <span class="text-sm text-zinc-300 select-none" id="local-username-label">You</span>
-            </div>
+            <aside id="call-participants-panel" class="hidden shrink-0 w-full md:w-56 md:min-w-56 bg-zinc-900/80 border border-zinc-700 rounded-2xl p-2.5 min-h-0 overflow-hidden flex flex-col" aria-hidden="true">
+                <div class="text-xs uppercase tracking-wide text-zinc-400 px-1 pb-2">Participants</div>
+                    <div id="call-participants-list" class="flex-1 flex gap-2 md:flex-col flex-row overflow-x-auto md:overflow-y-auto min-h-0"></div>
+            </aside>
         </div>
 
-        <div class="shrink-0 flex gap-5 flex-wrap justify-center px-6 pb-6 pt-2">
-            <div class="flex flex-col items-center gap-1">
-                <button onclick="toggleMute()" id="mute-btn" class="bg-zinc-800 hover:bg-zinc-700 w-16 h-16 rounded-2xl text-xl border border-zinc-700" title="Toggle mute"><i class="fa fa-microphone"></i></button>
-                <span class="text-xs text-zinc-400">Mute</span>
-            </div>
-            <div class="flex flex-col items-center gap-1">
-                <button onclick="toggleVideoInCall()" id="toggle-video-btn" class="bg-zinc-800 hover:bg-zinc-700 w-16 h-16 rounded-2xl text-xl border border-zinc-700" title="Toggle camera"><i class="fa fa-video-slash"></i></button>
-                <span class="text-xs text-zinc-400">Camera</span>
-            </div>
-            <div id="screenshare-btn-wrap" class="flex flex-col items-center gap-1 hidden">
-                <button onclick="toggleScreenShare()" id="screenshare-btn" class="bg-zinc-800 hover:bg-zinc-700 w-16 h-16 rounded-2xl text-xl border border-zinc-700" title="Share screen"><i class="fa fa-display"></i></button>
-                <span class="text-xs text-zinc-400">Share</span>
-            </div>
-            <div class="flex flex-col items-center gap-1">
-                <button onclick="endCall()" class="bg-red-600 hover:bg-red-500 w-16 h-16 rounded-2xl text-xl border border-red-700" title="End call"><i class="fa fa-phone-slash"></i></button>
-                <span class="text-xs text-zinc-400">End</span>
-            </div>
-        </div>
     </div>
 
     <div id="screenshare-modal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
