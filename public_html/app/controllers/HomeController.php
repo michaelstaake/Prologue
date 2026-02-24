@@ -11,7 +11,7 @@ class HomeController extends Controller {
         Auth::requireAuth();
         $userId = Auth::user()->id;
         $selectedTab = strtolower(trim((string)($_GET['tab'] ?? 'all')));
-        if (!in_array($selectedTab, ['favorites', 'online', 'all', 'requests'], true)) {
+        if (!in_array($selectedTab, ['favorites', 'online', 'all', 'requests', 'search'], true)) {
             $selectedTab = 'all';
         }
 

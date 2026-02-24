@@ -77,6 +77,13 @@ class ApiController extends Controller {
             $this->json(['users' => []]);
         }
 
+        if (!preg_match('/^[A-Za-z0-9-]+$/', $q)) {
+            $this->json([
+                'error' => 'Use only letters, numbers, and dashes.',
+                'users' => []
+            ], 422);
+        }
+
         $search = '%' . str_replace('-', '', $q) . '%';
         $results = Database::query("SELECT id, username, user_number, avatar_filename, presence_status, last_active_at FROM users WHERE id != ? AND (username LIKE ? OR user_number LIKE ?) LIMIT 10", [$currentUserId, '%' . $q . '%', $search])->fetchAll();
 

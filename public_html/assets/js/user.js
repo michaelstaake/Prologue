@@ -154,6 +154,14 @@ async function searchUsers(event) {
 
     const query = input.value.trim();
     if (!query) return;
+    const isValidSearch = /^[A-Za-z0-9-]+$/.test(query);
+    if (!isValidSearch) {
+        input.setCustomValidity('Use only letters, numbers, and dashes.');
+        input.reportValidity();
+        showToast('Use only letters, numbers, and dashes.', 'error');
+        return;
+    }
+    input.setCustomValidity('');
 
     const res = await fetch(`/api/users/search?q=${encodeURIComponent(query)}`);
     const data = await res.json();
