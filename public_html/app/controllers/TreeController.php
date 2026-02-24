@@ -20,8 +20,10 @@ class TreeController extends Controller {
                 ic.used_at,
                 inviter.username AS inviter_username,
                 inviter.user_number AS inviter_user_number,
+                inviter.created_at AS inviter_created_at,
                 invitee.username AS invitee_username,
-                invitee.user_number AS invitee_user_number
+                invitee.user_number AS invitee_user_number,
+                invitee.created_at AS invitee_created_at
              FROM invite_codes ic
              JOIN users inviter ON inviter.id = ic.creator_id
              JOIN users invitee ON invitee.id = ic.used_by
@@ -42,6 +44,7 @@ class TreeController extends Controller {
                     'id' => $inviterId,
                     'username' => (string)$row->inviter_username,
                     'user_number' => (string)$row->inviter_user_number,
+                    'created_at' => (string)$row->inviter_created_at,
                 ];
             }
 
@@ -50,6 +53,7 @@ class TreeController extends Controller {
                     'id' => $inviteeId,
                     'username' => (string)$row->invitee_username,
                     'user_number' => (string)$row->invitee_user_number,
+                    'created_at' => (string)$row->invitee_created_at,
                 ];
             }
 
@@ -118,6 +122,7 @@ class TreeController extends Controller {
                     'id' => $userId,
                     'username' => 'Unknown',
                     'user_number' => '0000000000000000',
+                    'created_at' => '',
                 ],
                 'invitees' => [],
             ];
