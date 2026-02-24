@@ -168,6 +168,68 @@
         </section>
     <?php endif; ?>
 
+    <?php if (!empty($invitesEnabled)): ?>
+        <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-4xl">
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <h2 class="text-xl font-semibold">Invites</h2>
+                <form method="POST" action="<?= htmlspecialchars(base_url('/settings/invites/generate'), ENT_QUOTES, 'UTF-8') ?>">
+                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
+                    <button
+                        type="submit"
+                        class="bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded-lg disabled:bg-zinc-700 disabled:text-zinc-400 disabled:cursor-not-allowed"
+                        <?= $inviteCount >= $inviteLimit ? 'disabled' : '' ?>
+                    >
+                        Generate invite code
+                    </button>
+                </form>
+            </div>
+            <p class="text-sm text-zinc-400 mb-4">Generated: <?= (int)$inviteCount ?> / <?= (int)$inviteLimit ?></p>
+            <div class="space-y-2 text-sm">
+                <?php if (empty($invites)): ?>
+                    <p class="text-zinc-400">No invite codes available.</p>
+                <?php else: ?>
+                    <?php foreach ($invites as $invite): ?>
+                        <div class="flex items-center justify-between gap-3 bg-zinc-800 rounded-lg px-3 py-2">
+                            <div class="flex items-center gap-2">
+                                <span class="font-mono"><?= htmlspecialchars($invite->code, ENT_QUOTES, 'UTF-8') ?></span>
+                                <button
+                                    type="button"
+                                    class="text-zinc-400 hover:text-zinc-200"
+                                    title="Copy to clipboard"
+                                    aria-label="Copy to clipboard"
+                                    data-copy-invite
+                                    data-copy-value="<?= htmlspecialchars($invite->code, ENT_QUOTES, 'UTF-8') ?>"
+                                >
+                                    <i class="fa-regular fa-copy"></i>
+                                </button>
+                                <?php if (!$invite->used_by): ?>
+                                    <form method="POST" action="<?= htmlspecialchars(base_url('/settings/invites/delete'), ENT_QUOTES, 'UTF-8') ?>" onsubmit="return confirm('Delete this invite code?');">
+                                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
+                                        <input type="hidden" name="invite_code" value="<?= htmlspecialchars($invite->code, ENT_QUOTES, 'UTF-8') ?>">
+                                        <button
+                                            type="submit"
+                                            class="text-zinc-500 hover:text-red-300"
+                                            title="Delete invite code"
+                                            aria-label="Delete invite code"
+                                        >
+                                            <i class="fa-regular fa-trash-can"></i>
+                                        </button>
+                                    </form>
+                                <?php endif; ?>
+                            </div>
+                            <div class="text-right">
+                                <span class="block <?= $invite->used_by ? 'text-zinc-400' : 'text-emerald-400' ?>"><?= $invite->used_by ? 'Used' : 'Available' ?></span>
+                                <?php if (!empty($invite->used_by_username)): ?>
+                                    <span class="block text-xs text-zinc-500">by <?= htmlspecialchars($invite->used_by_username, ENT_QUOTES, 'UTF-8') ?></span>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+        </section>
+    <?php endif; ?>
+
     <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-4xl">
         <h2 class="text-xl font-semibold mb-4">Account</h2>
         <?php
@@ -382,68 +444,6 @@
             <button type="submit" class="mt-6 bg-emerald-600 hover:bg-emerald-500 px-8 py-3 rounded-xl">Save time zone</button>
         </form>
     </section>
-
-    <?php if (!empty($invitesEnabled)): ?>
-        <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-4xl">
-            <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-                <h2 class="text-xl font-semibold">Invites</h2>
-                <form method="POST" action="<?= htmlspecialchars(base_url('/settings/invites/generate'), ENT_QUOTES, 'UTF-8') ?>">
-                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
-                    <button
-                        type="submit"
-                        class="bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded-lg disabled:bg-zinc-700 disabled:text-zinc-400 disabled:cursor-not-allowed"
-                        <?= $inviteCount >= $inviteLimit ? 'disabled' : '' ?>
-                    >
-                        Generate invite code
-                    </button>
-                </form>
-            </div>
-            <p class="text-sm text-zinc-400 mb-4">Generated: <?= (int)$inviteCount ?> / <?= (int)$inviteLimit ?></p>
-            <div class="space-y-2 text-sm">
-                <?php if (empty($invites)): ?>
-                    <p class="text-zinc-400">No invite codes available.</p>
-                <?php else: ?>
-                    <?php foreach ($invites as $invite): ?>
-                        <div class="flex items-center justify-between gap-3 bg-zinc-800 rounded-lg px-3 py-2">
-                            <div class="flex items-center gap-2">
-                                <span class="font-mono"><?= htmlspecialchars($invite->code, ENT_QUOTES, 'UTF-8') ?></span>
-                                <button
-                                    type="button"
-                                    class="text-zinc-400 hover:text-zinc-200"
-                                    title="Copy to clipboard"
-                                    aria-label="Copy to clipboard"
-                                    data-copy-invite
-                                    data-copy-value="<?= htmlspecialchars($invite->code, ENT_QUOTES, 'UTF-8') ?>"
-                                >
-                                    <i class="fa-regular fa-copy"></i>
-                                </button>
-                                <?php if (!$invite->used_by): ?>
-                                    <form method="POST" action="<?= htmlspecialchars(base_url('/settings/invites/delete'), ENT_QUOTES, 'UTF-8') ?>" onsubmit="return confirm('Delete this invite code?');">
-                                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
-                                        <input type="hidden" name="invite_code" value="<?= htmlspecialchars($invite->code, ENT_QUOTES, 'UTF-8') ?>">
-                                        <button
-                                            type="submit"
-                                            class="text-zinc-500 hover:text-red-300"
-                                            title="Delete invite code"
-                                            aria-label="Delete invite code"
-                                        >
-                                            <i class="fa-regular fa-trash-can"></i>
-                                        </button>
-                                    </form>
-                                <?php endif; ?>
-                            </div>
-                            <div class="text-right">
-                                <span class="block <?= $invite->used_by ? 'text-zinc-400' : 'text-emerald-400' ?>"><?= $invite->used_by ? 'Used' : 'Available' ?></span>
-                                <?php if (!empty($invite->used_by_username)): ?>
-                                    <span class="block text-xs text-zinc-500">by <?= htmlspecialchars($invite->used_by_username, ENT_QUOTES, 'UTF-8') ?></span>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                    <?php endforeach; ?>
-                <?php endif; ?>
-            </div>
-        </section>
-    <?php endif; ?>
 
     <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-4xl">
         <h2 class="text-xl font-semibold mb-4">Sessions</h2>

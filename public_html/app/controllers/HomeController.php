@@ -100,6 +100,8 @@ class HomeController extends Controller {
             $lastGroupChat->chat_title = $customTitle !== '' ? $customTitle : $lastGroupChat->chat_number_formatted;
         }
 
+        $invitesEnabled = (string)(Setting::get('invites_enabled') ?? '1') === '1';
+
         $this->view('dashboard', [
             'friends' => $friends,
             'visibleFriends' => $visibleFriends,
@@ -109,6 +111,7 @@ class HomeController extends Controller {
             'incomingRequestCount' => $incomingRequestCount,
             'selectedTab' => $selectedTab,
             'selectedRequestsTab' => $selectedRequestsTab,
+            'invitesEnabled' => $invitesEnabled,
             'csrf' => $this->csrfToken()
         ]);
     }
