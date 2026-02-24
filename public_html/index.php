@@ -181,6 +181,9 @@ $router->get('/a/{user_number}/{filename}', 'AttachmentController@serve');
 // Avatars
 $router->get('/avatars/{filename}', 'AvatarController@serve');
 
+// Emojis
+$router->get('/emojis/{filename}', 'EmojiController@serve');
+
 // Chat
 $router->get('/c/{chat_number}', 'ChatController@show');
 $router->post('/api/messages', 'ChatController@sendMessage'); // also used by web

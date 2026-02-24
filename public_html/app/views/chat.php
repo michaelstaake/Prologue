@@ -1,5 +1,5 @@
 <?php
-$emojiDir = dirname(__DIR__, 2) . '/assets/emojis';
+$emojiDir = (defined('STORAGE_FILESYSTEM_ROOT') ? rtrim((string)STORAGE_FILESYSTEM_ROOT, '/') : dirname(__DIR__, 3) . '/storage') . '/emojis';
 $emojiFiles = glob($emojiDir . '/*.svg') ?: [];
 $emojiFileNames = array_map(static fn($path) => basename($path), $emojiFiles);
 sort($emojiFileNames, SORT_STRING);
@@ -398,7 +398,7 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                                     <?php $emojiChar = $unicodeCharForCode($reactionCode); ?>
                                     <button type="button" class="w-10 h-10 rounded-full hover:bg-zinc-800 flex items-center justify-center js-reaction-option" data-reaction-message-id="<?= (int)$message->id ?>" data-reaction-code="<?= htmlspecialchars($reactionCode, ENT_QUOTES, 'UTF-8') ?>" title="<?= htmlspecialchars($reactionCodeToLabel[$reactionCode] ?? 'Reaction', ENT_QUOTES, 'UTF-8') ?>">
                                         <?php if ($emojiFilename !== ''): ?>
-                                            <img src="<?= htmlspecialchars(base_url('/assets/emojis/' . $emojiFilename), ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($emojiChar !== '' ? $emojiChar : ($reactionCodeToLabel[$reactionCode] ?? 'Reaction'), ENT_QUOTES, 'UTF-8') ?>" class="w-7 h-7" loading="lazy" decoding="async">
+                                            <img src="<?= htmlspecialchars(base_url('/emojis/' . $emojiFilename), ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($emojiChar !== '' ? $emojiChar : ($reactionCodeToLabel[$reactionCode] ?? 'Reaction'), ENT_QUOTES, 'UTF-8') ?>" class="w-7 h-7" loading="lazy" decoding="async">
                                         <?php else: ?>
                                             <span><?= htmlspecialchars($emojiChar !== '' ? $emojiChar : ($reactionCodeToLabel[$reactionCode] ?? 'Reaction'), ENT_QUOTES, 'UTF-8') ?></span>
                                         <?php endif; ?>
@@ -429,7 +429,7 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                                         <?php if ($reactionCount > 0): ?>
                                             <button type="button" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[12px] js-reaction-badge <?= $reactedByCurrentUser ? 'bg-zinc-700 border-zinc-500 text-zinc-100' : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700' ?>" data-reaction-message-id="<?= (int)$message->id ?>" data-reaction-code="<?= htmlspecialchars($reactionCode, ENT_QUOTES, 'UTF-8') ?>" title="<?= htmlspecialchars($reactionTitle, ENT_QUOTES, 'UTF-8') ?>">
                                                 <?php if ($emojiFilename !== ''): ?>
-                                                    <img src="<?= htmlspecialchars(base_url('/assets/emojis/' . $emojiFilename), ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($emojiChar !== '' ? $emojiChar : $reactionTitlePrefix, ENT_QUOTES, 'UTF-8') ?>" class="w-6 h-6" loading="lazy" decoding="async">
+                                                    <img src="<?= htmlspecialchars(base_url('/emojis/' . $emojiFilename), ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($emojiChar !== '' ? $emojiChar : $reactionTitlePrefix, ENT_QUOTES, 'UTF-8') ?>" class="w-6 h-6" loading="lazy" decoding="async">
                                                 <?php else: ?>
                                                     <span><?= htmlspecialchars($emojiChar !== '' ? $emojiChar : $reactionTitlePrefix, ENT_QUOTES, 'UTF-8') ?></span>
                                                 <?php endif; ?>

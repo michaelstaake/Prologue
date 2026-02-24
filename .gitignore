@@ -3,5 +3,7 @@
 public_html/app/config/config.php
 storage/*
 !storage/.gitkeep
+!storage/emojis/
+!storage/emojis/**
 .DS_Store
 **/.DS_Store

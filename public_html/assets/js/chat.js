@@ -124,7 +124,7 @@ function initializeOpenMojiCatalog() {
             keyLower: key.toLowerCase(),
             fileName,
             character,
-            url: `/assets/emojis/${fileName}`,
+            url: `/emojis/${fileName}`,
             keywords,
             annotation,
             searchText: [key.toLowerCase(), character, annotation, ...keywords].join(' ')
