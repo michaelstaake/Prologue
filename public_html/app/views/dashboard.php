@@ -96,7 +96,6 @@
                                     <?php endif; ?>
                                     <div class="min-w-0">
                                         <div class="font-medium truncate"><?= htmlspecialchars($request->username, ENT_QUOTES, 'UTF-8') ?></div>
-                                        <div class="text-xs text-zinc-400"><?= htmlspecialchars(User::formatUserNumber($request->user_number), ENT_QUOTES, 'UTF-8') ?></div>
                                         <div class="text-xs <?= htmlspecialchars($request->effective_status_text_class ?? 'text-zinc-500', ENT_QUOTES, 'UTF-8') ?> mt-0.5">
                                             <?= htmlspecialchars($request->effective_status_label ?? 'Offline', ENT_QUOTES, 'UTF-8') ?>
                                         </div>
@@ -128,7 +127,6 @@
                                     <?php endif; ?>
                                     <div class="min-w-0">
                                         <div class="font-medium truncate"><?= htmlspecialchars($request->username, ENT_QUOTES, 'UTF-8') ?></div>
-                                        <div class="text-xs text-zinc-400"><?= htmlspecialchars(User::formatUserNumber($request->user_number), ENT_QUOTES, 'UTF-8') ?></div>
                                         <div class="text-xs <?= htmlspecialchars($request->effective_status_text_class ?? 'text-zinc-500', ENT_QUOTES, 'UTF-8') ?> mt-0.5">
                                             <?= htmlspecialchars($request->effective_status_label ?? 'Offline', ENT_QUOTES, 'UTF-8') ?>
                                         </div>
@@ -165,7 +163,6 @@
                                             <i class="fa-solid fa-star text-amber-400 text-[10px]" title="Favorite"></i>
                                         <?php endif; ?>
                                     </div>
-                                    <div class="text-xs text-zinc-400"><?= htmlspecialchars(User::formatUserNumber($friend->user_number), ENT_QUOTES, 'UTF-8') ?></div>
                                     <div class="text-xs <?= htmlspecialchars($friend->effective_status_text_class ?? 'text-zinc-500', ENT_QUOTES, 'UTF-8') ?> mt-0.5">
                                         <?= htmlspecialchars($friend->effective_status_label ?? 'Offline', ENT_QUOTES, 'UTF-8') ?>
                                     </div>
