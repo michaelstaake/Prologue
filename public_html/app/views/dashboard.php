@@ -189,7 +189,7 @@
 
     <?php if (($invitesEnabled ?? false) === true): ?>
         <?php $inviteProfileUrl = base_url('/u/' . User::formatUserNumber((string)Auth::user()->user_number)); ?>
-        <section class="max-w-3xl mt-8">
+        <section class="max-w-4xl mt-8">
             <h2 class="text-xl font-semibold text-zinc-300 mb-4">Invites</h2>
             <div class="">
                 <p class="text-zinc-400 text-sm mb-4">Share this Prologue server with your friends, family, or team! The administrator of this server has chosen to require invite codes for new users to register. To generate an invite code for someone you care about, go to the Invites section of the Settings page. Then, refer them to <a href="<?= htmlspecialchars(base_url('/register'), ENT_QUOTES, 'UTF-8') ?>" class="text-emerald-400 hover:text-emerald-300 underline underline-offset-2 break-all"><?= htmlspecialchars(base_url('/register'), ENT_QUOTES, 'UTF-8') ?></a> for them to create their account. If they have trouble receiving the account verification email, remind them to check their spam folder. Once they've created their account, they can use the Search function to add you as a friend, or you can send them a <a href="<?= htmlspecialchars($inviteProfileUrl, ENT_QUOTES, 'UTF-8') ?>" class="text-emerald-400 hover:text-emerald-300 underline underline-offset-2 break-all">link to your profile</a>.</p>
