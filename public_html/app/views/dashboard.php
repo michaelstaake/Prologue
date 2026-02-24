@@ -64,7 +64,6 @@
         <a href="<?= htmlspecialchars(base_url('/?tab=all'), ENT_QUOTES, 'UTF-8') ?>" class="px-5 py-2.5 rounded-xl border transition <?= htmlspecialchars($tabClass($tab === 'all'), ENT_QUOTES, 'UTF-8') ?>">All</a>
         <a href="<?= htmlspecialchars(base_url('/?tab=favorites'), ENT_QUOTES, 'UTF-8') ?>" class="px-5 py-2.5 rounded-xl border transition <?= htmlspecialchars($tabClass($tab === 'favorites'), ENT_QUOTES, 'UTF-8') ?>">Favorites</a>
         <a href="<?= htmlspecialchars(base_url('/?tab=online'), ENT_QUOTES, 'UTF-8') ?>" class="px-5 py-2.5 rounded-xl border transition <?= htmlspecialchars($tabClass($tab === 'online'), ENT_QUOTES, 'UTF-8') ?>">Online</a>
-        <a href="<?= htmlspecialchars(base_url('/?tab=search'), ENT_QUOTES, 'UTF-8') ?>" class="px-5 py-2.5 rounded-xl border transition <?= htmlspecialchars($tabClass($tab === 'search'), ENT_QUOTES, 'UTF-8') ?>">Search</a>
         <a href="<?= htmlspecialchars(base_url('/?tab=requests'), ENT_QUOTES, 'UTF-8') ?>" class="px-5 py-2.5 rounded-xl border transition <?= htmlspecialchars($tabClass($tab === 'requests'), ENT_QUOTES, 'UTF-8') ?>">
             <span class="inline-flex items-center gap-2">
                 <span>Requests</span>
@@ -142,15 +141,6 @@
                 <?php endif; ?>
             </div>
         </section>
-    <?php elseif ($tab === 'search'): ?>
-        <section class="max-w-3xl">
-            <form id="user-search-form" class="flex items-center gap-3 w-full mb-4">
-                <input type="text" id="user-search-input" placeholder="Search users" class="bg-zinc-900 border border-zinc-700 rounded-xl px-5 py-2.5 w-full" pattern="[A-Za-z0-9-]+" title="Use only letters, numbers, and dashes." required>
-                <button type="submit" class="bg-zinc-700 hover:bg-zinc-600 border border-zinc-700 px-5 py-2.5 rounded-xl">Search</button>
-            </form>
-
-            <div id="user-search-results" class="space-y-2"></div>
-        </section>
     <?php else: ?>
         <section class="max-w-4xl">
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -187,4 +177,16 @@
             </div>
         </section>
     <?php endif; ?>
+
+    <section class="max-w-4xl mt-8">
+        <h2 class="text-xl font-semibold text-zinc-300 mb-4">Search</h2>
+        <form id="user-search-form" class="flex items-center gap-3 w-full mb-4">
+            <input type="text" id="user-search-input" placeholder="Search users" class="bg-zinc-900 border border-zinc-700 rounded-xl px-5 py-2.5 w-full" pattern="[A-Za-z0-9-]+" title="Use only letters, numbers, and dashes." required>
+            <button type="submit" class="bg-zinc-700 hover:bg-zinc-600 border border-zinc-700 px-5 py-2.5 rounded-xl">Search</button>
+        </form>
+
+        <p id="user-search-help" class="text-sm text-zinc-400 mb-4">Enter a partial or full username or user number and press Enter/Return to search or click the Search button.</p>
+
+        <div id="user-search-results" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+    </section>
 </div>

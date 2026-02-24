@@ -150,6 +150,7 @@ async function searchUsers(event) {
     event.preventDefault();
     const input = document.getElementById('user-search-input');
     const results = document.getElementById('user-search-results');
+    const help = document.getElementById('user-search-help');
     if (!input || !results) return;
 
     const query = input.value.trim();
@@ -162,24 +163,27 @@ async function searchUsers(event) {
         return;
     }
     input.setCustomValidity('');
+    if (help) {
+        help.classList.add('hidden');
+    }
 
     const res = await fetch(`/api/users/search?q=${encodeURIComponent(query)}`);
     const data = await res.json();
     const users = data.users || [];
 
     results.innerHTML = users.map(user => `
-        <div class="bg-zinc-800 rounded-xl p-3 flex items-center justify-between">
-            <div class="flex items-center gap-3">
+        <div class="bg-zinc-800 rounded-xl p-3">
+            <div class="flex items-center gap-3 min-w-0">
                 ${renderAvatarMarkup(user, 'w-10 h-10', 'text-sm')}
-                <div>
-                    <div class="font-medium">${escapeHtml(user.username)}</div>
+                <div class="min-w-0">
+                    <div class="font-medium truncate">${escapeHtml(user.username)}</div>
                     <div class="text-xs text-zinc-400">${escapeHtml(user.formatted_user_number || formatNumber(user.user_number))}</div>
                     <div class="text-xs ${escapeHtml(user.effective_status_text_class || 'text-zinc-500')} mt-0.5">${escapeHtml(user.effective_status_label || 'Offline')}</div>
                 </div>
             </div>
-            <button class="bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded-lg text-sm" onclick="sendFriendRequestByValue('${escapeHtml(formatNumber(user.user_number))}')">Add Friend</button>
+            <button class="mt-3 w-full bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded-lg text-sm" onclick="sendFriendRequestByValue('${escapeHtml(formatNumber(user.user_number))}')">Add Friend</button>
         </div>
-    `).join('') || '<p class="text-zinc-400 text-sm">No users found.</p>';
+    `).join('') || '<p class="text-zinc-400 text-sm sm:col-span-2">No users found.</p>';
 }
 
 function getAdminUserListNodes() {
