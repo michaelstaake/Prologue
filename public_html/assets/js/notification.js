@@ -1,5 +1,42 @@
 // Extracted from app.js for feature-focused organization.
 
+const PENDING_PAGE_TOAST_STORAGE_KEY = 'pending_page_toast';
+
+function queuePendingPageToast(message, kind = 'info') {
+    const payload = {
+        message: String(message || '').trim(),
+        kind: String(kind || 'info').trim() || 'info'
+    };
+
+    if (!payload.message) return;
+
+    try {
+        sessionStorage.setItem(PENDING_PAGE_TOAST_STORAGE_KEY, JSON.stringify(payload));
+    } catch {
+        // Best effort only.
+    }
+}
+
+function consumePendingPageToast() {
+    try {
+        const raw = sessionStorage.getItem(PENDING_PAGE_TOAST_STORAGE_KEY);
+        if (!raw) return null;
+
+        sessionStorage.removeItem(PENDING_PAGE_TOAST_STORAGE_KEY);
+
+        const parsed = JSON.parse(raw);
+        const message = String(parsed?.message || '').trim();
+        if (!message) return null;
+
+        return {
+            message,
+            kind: String(parsed?.kind || 'info').trim() || 'info'
+        };
+    } catch {
+        return null;
+    }
+}
+
 function normalizeNotificationIds(ids) {
     if (!Array.isArray(ids)) return [];
 
@@ -124,6 +161,20 @@ function dismissVisibleNotificationToasts() {
     idsToDismiss.forEach((toastId) => clearActiveToastPopup(toastId));
 }
 
+function renderTextWithOpenMojiMarkup(value) {
+    const text = String(value ?? '');
+
+    if (typeof renderPlainTextWithEmoji === 'function') {
+        try {
+            return renderPlainTextWithEmoji(text);
+        } catch {
+            // Fallback below.
+        }
+    }
+
+    return escapeHtml(text).replace(/\n/g, '<br>');
+}
+
 function showToast(message, kind = 'info', metadata = null) {
     const host = document.getElementById('toast-host');
     if (!host) return;
@@ -173,7 +224,7 @@ function showToast(message, kind = 'info', metadata = null) {
     const el = document.createElement('div');
     const color = kind === 'error' ? 'border-red-700 text-red-200 bg-red-950/80' : kind === 'success' ? 'border-emerald-700 text-emerald-100 bg-emerald-950/80' : 'border-zinc-700 text-zinc-100 bg-zinc-900/95';
     el.className = `border ${color} px-4 py-3 rounded-xl shadow-xl`;
-    el.textContent = message;
+    el.innerHTML = renderTextWithOpenMojiMarkup(message);
     host.appendChild(el);
 
     const timeoutId = setTimeout(() => {
@@ -753,13 +804,18 @@ async function fetchNotifications() {
 
 function bindPageToast() {
     const toastData = document.getElementById('page-toast');
+    const queuedToast = consumePendingPageToast();
+    if (queuedToast) {
+        showToast(queuedToast.message, queuedToast.kind, { temporary: true });
+    }
+
     if (!toastData) return;
 
     const message = (toastData.dataset.toastMessage || '').trim();
     const kind = (toastData.dataset.toastKind || 'info').trim();
     if (!message) return;
 
-    showToast(message, kind);
+    showToast(message, kind, { temporary: true });
 }
 
 function formatToastTime(timestamp) {
@@ -826,7 +882,7 @@ function renderToastHistory() {
             : '';
         return `
             <div class="relative px-4 py-3 border-b border-zinc-800 ${isClickable ? 'hover:bg-zinc-800 cursor-pointer' : ''}" data-toast-id="${toast.id}" ${isClickable ? `data-toast-link="${escapeHtml(action.href)}"` : ''}>
-                <div class="text-sm ${color}">${escapeHtml(toast.message)}</div>
+                <div class="text-sm ${color}">${renderTextWithOpenMojiMarkup(toast.message)}</div>
                 <div class="text-xs text-zinc-500 mt-1">${escapeHtml(formatToastTime(toast.createdAt))}</div>
                 ${expiryBorder}
             </div>

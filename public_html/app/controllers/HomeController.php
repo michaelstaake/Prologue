@@ -122,10 +122,20 @@ class HomeController extends Controller {
     public function posts() {
         Auth::requireAuth();
         $userId = (int)Auth::user()->id;
-        $friendPosts = Post::getFriendsFeed($userId, 100);
+        $selectedPostScope = strtolower(trim((string)($_GET['scope'] ?? 'friends')));
+        if (!in_array($selectedPostScope, ['friends', 'server'], true)) {
+            $selectedPostScope = 'friends';
+        }
+
+        if ($selectedPostScope === 'server') {
+            $posts = Post::getServerFeed($userId, 100);
+        } else {
+            $posts = Post::getFriendsFeed($userId, 100);
+        }
 
         $this->view('posts', [
-            'friendPosts' => $friendPosts,
+            'posts' => $posts,
+            'selectedPostScope' => $selectedPostScope,
             'csrf' => $this->csrfToken()
         ]);
     }

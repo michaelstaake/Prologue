@@ -220,4 +220,25 @@ class Post extends Model {
 
         return $posts;
     }
+
+    public static function getServerFeed(int $userId, int $limit = 30): array {
+        if ($userId <= 0) {
+            return [];
+        }
+
+        $safeLimit = max(1, min(100, $limit));
+        $rows = Database::query(
+            "SELECT p.id, p.user_id, p.content, p.created_at,
+                    u.username, u.user_number, u.avatar_filename
+             FROM posts p
+             JOIN users u ON u.id = p.user_id
+             ORDER BY p.created_at DESC, p.id DESC
+             LIMIT $safeLimit"
+        )->fetchAll();
+
+        $posts = is_array($rows) ? $rows : [];
+        self::attachReactions($posts, $userId);
+
+        return $posts;
+    }
 }

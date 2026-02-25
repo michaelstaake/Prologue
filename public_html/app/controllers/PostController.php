@@ -68,6 +68,27 @@ class PostController extends Controller {
             );
         }
 
+        if ($action === 'set' && $postOwnerId > 0 && $postOwnerId !== $userId) {
+            $actorUsername = User::normalizeUsername(Auth::user()->username ?? '') ?: 'Someone';
+            $reactionDisplayByCode = [
+                '1F44D' => '👍 Like',
+                '1F44E' => '👎 Dislike',
+                '2665' => '♥ Love',
+                '1F923' => '🤣 Laugh',
+                '1F622' => '😢 Cry',
+                '1F436' => '🐶 Pup',
+                '1F4A9' => '💩 Poop'
+            ];
+            $reactionDisplay = $reactionDisplayByCode[$reactionCode] ?? $reactionCode;
+            Notification::create(
+                $postOwnerId,
+                'report',
+                'Post Reaction',
+                $actorUsername . ' reacted with ' . $reactionDisplay . ' to your post',
+                '/posts'
+            );
+        }
+
         $this->json(['success' => true, 'action' => $action]);
     }
 }

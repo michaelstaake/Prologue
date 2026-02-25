@@ -148,6 +148,31 @@ async function toggleFavoriteUser(userId, favorite) {
 
 let openProfilePostReactionPickerId = 0;
 
+function hydrateProfilePostReactionEmojiMarkup(root = document) {
+    if (!root || typeof renderReactionEmojiMarkup !== 'function') {
+        return;
+    }
+
+    const options = Array.from(root.querySelectorAll('.js-profile-post-reaction-option'));
+    options.forEach((option) => {
+        const reactionCode = String(option.getAttribute('data-reaction-code') || '');
+        const markup = renderReactionEmojiMarkup(reactionCode, 'w-7 h-7');
+        if (!markup) return;
+        option.innerHTML = markup;
+    });
+
+    const badges = Array.from(root.querySelectorAll('.js-profile-post-reaction-badge'));
+    badges.forEach((badge) => {
+        const reactionCode = String(badge.getAttribute('data-reaction-code') || '');
+        const markup = renderReactionEmojiMarkup(reactionCode, 'w-6 h-6');
+        if (!markup) return;
+
+        const existingCount = badge.querySelector('span:last-child');
+        const countText = String(existingCount?.textContent || '').trim();
+        badge.innerHTML = `${markup}<span>${escapeHtml(countText || '0')}</span>`;
+    });
+}
+
 function closeAllProfilePostReactionPickers(resetState = true) {
     document.querySelectorAll('.js-profile-post-reaction-picker').forEach((picker) => {
         picker.classList.add('hidden');
@@ -231,8 +256,11 @@ async function createProfilePost(content) {
         return false;
     }
 
-    showToast('Post published', 'success');
-    await new Promise(resolve => setTimeout(resolve, 700));
+    if (typeof queuePendingPageToast === 'function') {
+        queuePendingPageToast('Post published', 'success');
+    } else {
+        showToast('Post published', 'success');
+    }
     window.location.reload();
     return true;
 }
@@ -321,6 +349,8 @@ function bindNewPostModal() {
 function bindProfilePosts() {
     const root = document.getElementById('profile-posts-root');
     if (!root) return;
+
+    hydrateProfilePostReactionEmojiMarkup(root);
 
     const canReactToPosts = String(root.getAttribute('data-can-react-posts') || '0') === '1';
 

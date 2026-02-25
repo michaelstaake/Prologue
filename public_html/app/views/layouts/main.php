@@ -99,6 +99,66 @@
                 )->fetchColumn();
             }
         }
+
+        $openMojiDir = (defined('STORAGE_FILESYSTEM_ROOT') ? rtrim((string)STORAGE_FILESYSTEM_ROOT, '/') : dirname(__DIR__, 4) . '/storage') . '/emojis';
+        $openMojiFiles = glob($openMojiDir . '/*.svg') ?: [];
+        $openMojiFileNames = array_map(static fn($path) => basename($path), $openMojiFiles);
+        sort($openMojiFileNames, SORT_STRING);
+
+        $openMojiMetadata = [];
+        $openMojiFileKeys = [];
+        foreach ($openMojiFileNames as $openMojiFileName) {
+            $openMojiFileKeys[strtoupper((string)preg_replace('/\.svg$/i', '', $openMojiFileName))] = true;
+        }
+
+        $openMojiCsvPath = $openMojiDir . '/openmoji.csv';
+        if (is_readable($openMojiCsvPath)) {
+            $openMojiHandle = fopen($openMojiCsvPath, 'rb');
+            if ($openMojiHandle !== false) {
+                $header = fgetcsv($openMojiHandle, 0, ',', '"', '\\');
+                if (is_array($header)) {
+                    $headerIndex = array_flip($header);
+                    $hexIdx = $headerIndex['hexcode'] ?? null;
+                    $annotationIdx = $headerIndex['annotation'] ?? null;
+                    $tagsIdx = $headerIndex['tags'] ?? null;
+                    $openmojiTagsIdx = $headerIndex['openmoji_tags'] ?? null;
+                    $groupIdx = $headerIndex['group'] ?? null;
+                    $subgroupsIdx = $headerIndex['subgroups'] ?? null;
+
+                    while (($row = fgetcsv($openMojiHandle, 0, ',', '"', '\\')) !== false) {
+                        if ($hexIdx === null || !isset($row[$hexIdx])) {
+                            continue;
+                        }
+
+                        $hex = strtoupper(trim((string)$row[$hexIdx]));
+                        if ($hex === '') {
+                            continue;
+                        }
+
+                        $hexWithoutFe0f = preg_replace('/(?:-)?FE0F/i', '', $hex);
+                        $hasSvg = isset($openMojiFileKeys[$hex]) || isset($openMojiFileKeys[$hexWithoutFe0f]);
+                        if (!$hasSvg) {
+                            continue;
+                        }
+
+                        $meta = [
+                            'annotation' => ($annotationIdx !== null && isset($row[$annotationIdx])) ? trim((string)$row[$annotationIdx]) : '',
+                            'tags' => ($tagsIdx !== null && isset($row[$tagsIdx])) ? trim((string)$row[$tagsIdx]) : '',
+                            'openmoji_tags' => ($openmojiTagsIdx !== null && isset($row[$openmojiTagsIdx])) ? trim((string)$row[$openmojiTagsIdx]) : '',
+                            'group' => ($groupIdx !== null && isset($row[$groupIdx])) ? trim((string)$row[$groupIdx]) : '',
+                            'subgroups' => ($subgroupsIdx !== null && isset($row[$subgroupsIdx])) ? trim((string)$row[$subgroupsIdx]) : '',
+                        ];
+
+                        $openMojiMetadata[$hex] = $meta;
+                        if ($hexWithoutFe0f !== '' && !isset($openMojiMetadata[$hexWithoutFe0f])) {
+                            $openMojiMetadata[$hexWithoutFe0f] = $meta;
+                        }
+                    }
+                }
+
+                fclose($openMojiHandle);
+            }
+        }
     ?>
     <?php if ($currentUser): ?>
     <div class="h-screen flex flex-col">
@@ -360,6 +420,8 @@
     window.USER_TIMEZONE = <?= json_encode($userTimezone) ?>;
     window.CURRENT_USER_ID = <?= json_encode((int)($currentUser->id ?? 0)) ?>;
     window.CURRENT_USERNAME = <?= json_encode((string)($currentUser->username ?? '')) ?>;
+    window.OPENMOJI_FILES = <?= json_encode($openMojiFileNames, JSON_UNESCAPED_SLASHES) ?>;
+    window.OPENMOJI_METADATA = <?= json_encode($openMojiMetadata, JSON_UNESCAPED_SLASHES) ?>;
 </script>
 <script src="<?= htmlspecialchars(base_url('/assets/js/notification.js'), ENT_QUOTES, 'UTF-8') ?>"></script>
 <script src="<?= htmlspecialchars(base_url('/assets/js/chat.js'), ENT_QUOTES, 'UTF-8') ?>"></script>

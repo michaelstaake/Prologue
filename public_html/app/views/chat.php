@@ -4,59 +4,9 @@ $emojiFiles = glob($emojiDir . '/*.svg') ?: [];
 $emojiFileNames = array_map(static fn($path) => basename($path), $emojiFiles);
 sort($emojiFileNames, SORT_STRING);
 
-$emojiMetadata = [];
 $emojiFileKeys = [];
 foreach ($emojiFileNames as $emojiFileName) {
     $emojiFileKeys[strtoupper((string)preg_replace('/\.svg$/i', '', $emojiFileName))] = true;
-}
-
-$openMojiCsvPath = $emojiDir . '/openmoji.csv';
-if (is_readable($openMojiCsvPath)) {
-    $handle = fopen($openMojiCsvPath, 'rb');
-    if ($handle !== false) {
-        $header = fgetcsv($handle, 0, ',', '"', '\\');
-        if (is_array($header)) {
-            $headerIndex = array_flip($header);
-            $hexIdx = $headerIndex['hexcode'] ?? null;
-            $annotationIdx = $headerIndex['annotation'] ?? null;
-            $tagsIdx = $headerIndex['tags'] ?? null;
-            $openmojiTagsIdx = $headerIndex['openmoji_tags'] ?? null;
-            $groupIdx = $headerIndex['group'] ?? null;
-            $subgroupsIdx = $headerIndex['subgroups'] ?? null;
-
-            while (($row = fgetcsv($handle, 0, ',', '"', '\\')) !== false) {
-                if ($hexIdx === null || !isset($row[$hexIdx])) {
-                    continue;
-                }
-
-                $hex = strtoupper(trim((string)$row[$hexIdx]));
-                if ($hex === '') {
-                    continue;
-                }
-
-                $hexWithoutFe0f = preg_replace('/(?:-)?FE0F/i', '', $hex);
-                $hasSvg = isset($emojiFileKeys[$hex]) || isset($emojiFileKeys[$hexWithoutFe0f]);
-                if (!$hasSvg) {
-                    continue;
-                }
-
-                $meta = [
-                    'annotation' => ($annotationIdx !== null && isset($row[$annotationIdx])) ? trim((string)$row[$annotationIdx]) : '',
-                    'tags' => ($tagsIdx !== null && isset($row[$tagsIdx])) ? trim((string)$row[$tagsIdx]) : '',
-                    'openmoji_tags' => ($openmojiTagsIdx !== null && isset($row[$openmojiTagsIdx])) ? trim((string)$row[$openmojiTagsIdx]) : '',
-                    'group' => ($groupIdx !== null && isset($row[$groupIdx])) ? trim((string)$row[$groupIdx]) : '',
-                    'subgroups' => ($subgroupsIdx !== null && isset($row[$subgroupsIdx])) ? trim((string)$row[$subgroupsIdx]) : '',
-                ];
-
-                $emojiMetadata[$hex] = $meta;
-                if ($hexWithoutFe0f !== '' && !isset($emojiMetadata[$hexWithoutFe0f])) {
-                    $emojiMetadata[$hexWithoutFe0f] = $meta;
-                }
-            }
-        }
-
-        fclose($handle);
-    }
 }
 
 $attachmentAcceptedTypes = strtolower((string)(Setting::get('attachments_accepted_file_types') ?? 'png,jpg'));
@@ -510,8 +460,6 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
 </div>
 
 <script>
-    window.OPENMOJI_FILES = <?= json_encode($emojiFileNames, JSON_UNESCAPED_SLASHES) ?>;
-    window.OPENMOJI_METADATA = <?= json_encode($emojiMetadata, JSON_UNESCAPED_SLASHES) ?>;
     window.PENDING_ATTACHMENTS = <?= json_encode($pendingAttachments ?? [], JSON_UNESCAPED_SLASHES) ?>;
 </script>
 

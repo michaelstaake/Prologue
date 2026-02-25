@@ -100,19 +100,38 @@ $renderPostReactionPicker = static function (int $postId, int $postOwnerId) use 
 ?>
 
 <div class="p-8 overflow-auto" id="profile-posts-root" data-can-react-posts="1">
+    <?php
+        $selectedPostScope = ($selectedPostScope ?? 'friends') === 'server' ? 'server' : 'friends';
+        $posts = $posts ?? ($friendPosts ?? []);
+        $friendsScopeUrl = base_url('/posts?scope=friends');
+        $serverScopeUrl = base_url('/posts?scope=server');
+    ?>
     <div class="mb-6 flex items-center gap-4">
         <a href="<?= htmlspecialchars(base_url('/'), ENT_QUOTES, 'UTF-8') ?>" class="text-zinc-400 hover:text-zinc-200 transition">
             <i class="fa fa-arrow-left"></i>
         </a>
         <h1 class="text-3xl font-bold">Posts</h1>
+        <div class="ml-2 inline-flex items-center rounded-lg border border-zinc-700 p-1 text-xs">
+            <a
+                href="<?= htmlspecialchars($friendsScopeUrl, ENT_QUOTES, 'UTF-8') ?>"
+                class="px-2.5 py-1 rounded-md transition <?= $selectedPostScope === 'friends' ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200' ?>"
+            >
+                Friends
+            </a>
+            <a
+                href="<?= htmlspecialchars($serverScopeUrl, ENT_QUOTES, 'UTF-8') ?>"
+                class="px-2.5 py-1 rounded-md transition <?= $selectedPostScope === 'server' ? 'bg-zinc-700 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200' ?>"
+            >
+                Server
+            </a>
+        </div>
         <button type="button" onclick="openNewPostModal()" class="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm transition">
             <i class="fa fa-plus text-xs"></i> New Post
         </button>
     </div>
 
-    <?php $posts = $friendPosts ?? []; ?>
     <?php if (empty($posts)): ?>
-        <p class="text-zinc-400 text-sm">No posts from friends yet.</p>
+        <p class="text-zinc-400 text-sm"><?= $selectedPostScope === 'server' ? 'No posts on this server yet.' : 'No posts from friends yet.' ?></p>
     <?php else: ?>
         <div class="space-y-4" id="friends-post-list">
             <?php foreach ($posts as $post): ?>
