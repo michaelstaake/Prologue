@@ -50,7 +50,12 @@ class UserController extends Controller {
             }
         }
 
-        $posts = Post::getByUserId((int)$profile->id, (int)$currentUserId);
+        $postsPerPage = 10;
+        $currentPage = max(1, (int)($_GET['page'] ?? 1));
+        $totalPosts = Post::countByUserId((int)$profile->id);
+        $totalPages = max(1, (int)ceil($totalPosts / $postsPerPage));
+        $currentPage = min($currentPage, $totalPages);
+        $posts = Post::getByUserId((int)$profile->id, (int)$currentUserId, $postsPerPage, ($currentPage - 1) * $postsPerPage);
 
         $this->view('profile', [
             'profile' => $profile,
@@ -61,6 +66,9 @@ class UserController extends Controller {
             'isFavorite' => $isFavorite,
             'friendCount' => $friendCount,
             'posts' => $posts,
+            'currentPage' => $currentPage,
+            'totalPages' => $totalPages,
+            'totalPosts' => $totalPosts,
             'canReactToPosts' => $canReactToPosts
         ]);
     }

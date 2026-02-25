@@ -75,14 +75,27 @@ class ApiController extends Controller {
         $q = trim($_GET['q'] ?? '');
 
         if ($q === '' || mb_strlen($q) < 2) {
-            $this->json(['posts' => []]);
+            $this->json(['posts' => [], 'total' => 0, 'total_pages' => 0, 'page' => 1]);
         }
 
         if (mb_strlen($q) > 200) {
             $q = mb_substr($q, 0, 200);
         }
 
+        $perPage = 10;
+        $page = max(1, (int)($_GET['page'] ?? 1));
         $search = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $q) . '%';
+
+        $total = (int)Database::query(
+            "SELECT COUNT(*)
+             FROM posts p
+             WHERE p.content LIKE ?",
+            [$search]
+        )->fetchColumn();
+
+        $totalPages = max(1, (int)ceil($total / $perPage));
+        $page = min($page, $totalPages);
+        $offset = ($page - 1) * $perPage;
 
         $results = Database::query(
             "SELECT p.id AS post_id,
@@ -99,7 +112,7 @@ class ApiController extends Controller {
                  AND ((f.user_id = ? AND f.friend_id = u.id) OR (f.friend_id = ? AND f.user_id = u.id))
              WHERE p.content LIKE ?
              ORDER BY p.created_at DESC
-             LIMIT 30",
+             LIMIT $perPage OFFSET $offset",
             [$userId, $userId, $search]
         )->fetchAll();
 
@@ -112,7 +125,7 @@ class ApiController extends Controller {
             $r->is_friend = (bool)$r->is_friend;
         }
 
-        $this->json(['posts' => $results]);
+        $this->json(['posts' => $results, 'total' => $total, 'total_pages' => $totalPages, 'page' => $page]);
     }
 
     public function searchMessages() {
@@ -121,15 +134,32 @@ class ApiController extends Controller {
         $q = trim($_GET['q'] ?? '');
 
         if ($q === '' || mb_strlen($q) < 2) {
-            $this->json(['messages' => []]);
+            $this->json(['messages' => [], 'total' => 0, 'total_pages' => 0, 'page' => 1]);
         }
 
         if (mb_strlen($q) > 200) {
             $q = mb_substr($q, 0, 200);
         }
 
+        $perPage = 10;
+        $page = max(1, (int)($_GET['page'] ?? 1));
         $supportsChatTitle = $this->supportsChatTitle();
         $search = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $q) . '%';
+
+        $countQuery = "SELECT COUNT(*)
+              FROM messages m
+              JOIN chats c ON c.id = m.chat_id
+              JOIN chat_members cm ON cm.chat_id = c.id AND cm.user_id = ?
+              WHERE m.content LIKE ?";
+
+        if ($this->supportsChatSoftDelete()) {
+            $countQuery .= " AND c.deleted_at IS NULL";
+        }
+
+        $total = (int)Database::query($countQuery, [$userId, $search])->fetchColumn();
+        $totalPages = max(1, (int)ceil($total / $perPage));
+        $page = min($page, $totalPages);
+        $offset = ($page - 1) * $perPage;
 
         $query = "SELECT
                     m.id AS message_id,
@@ -158,7 +188,7 @@ class ApiController extends Controller {
             $query .= " AND c.deleted_at IS NULL";
         }
 
-        $query .= " ORDER BY m.created_at DESC LIMIT 30";
+        $query .= " ORDER BY m.created_at DESC LIMIT $perPage OFFSET $offset";
 
         $results = Database::query($query, [$userId, $userId, $search])->fetchAll();
 
@@ -181,7 +211,7 @@ class ApiController extends Controller {
             ]);
         }
 
-        $this->json(['messages' => $results]);
+        $this->json(['messages' => $results, 'total' => $total, 'total_pages' => $totalPages, 'page' => $page]);
     }
 
     public function searchUsers() {

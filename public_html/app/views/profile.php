@@ -192,7 +192,7 @@ $renderPostReactionPicker = static function (int $postId) use ($postReactionCode
     <div class="flex items-center justify-between gap-3 mb-4">
         <h2 class="text-xl font-semibold text-zinc-100">Posts</h2>
         <div class="flex items-center gap-3">
-            <span class="text-xs text-zinc-500 uppercase tracking-wide"><?= count($posts ?? []) ?> total</span>
+            <span class="text-xs text-zinc-500 uppercase tracking-wide"><?= (int)($totalPosts ?? count($posts ?? [])) ?> total</span>
             <?php if ((int)$profile->id === (int)$currentUserId): ?>
                 <button type="button" onclick="openNewPostModal()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm transition">
                     <i class="fa fa-plus text-xs"></i> New Post
@@ -247,6 +247,27 @@ $renderPostReactionPicker = static function (int $postId) use ($postReactionCode
             <p class="text-sm text-zinc-400">No posts yet.</p>
         <?php endif; ?>
     </div>
+
+    <?php
+        $currentPage = (int)($currentPage ?? 1);
+        $totalPages = (int)($totalPages ?? 1);
+        $profilePageBaseUrl = base_url('/u/' . htmlspecialchars(User::formatUserNumber($profile->user_number), ENT_QUOTES, 'UTF-8'));
+    ?>
+    <?php if ($totalPages > 1): ?>
+        <div class="flex items-center justify-between mt-6 pt-4 border-t border-zinc-700">
+            <?php if ($currentPage > 1): ?>
+                <a href="<?= $profilePageBaseUrl ?>?page=<?= $currentPage - 1 ?>" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-300 hover:bg-zinc-700 text-sm transition"><i class="fa fa-arrow-left text-xs"></i> Previous</a>
+            <?php else: ?>
+                <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800/40 border border-zinc-700/40 text-zinc-600 text-sm cursor-default"><i class="fa fa-arrow-left text-xs"></i> Previous</span>
+            <?php endif; ?>
+            <span class="text-zinc-400 text-sm">Page <?= $currentPage ?> of <?= $totalPages ?></span>
+            <?php if ($currentPage < $totalPages): ?>
+                <a href="<?= $profilePageBaseUrl ?>?page=<?= $currentPage + 1 ?>" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-300 hover:bg-zinc-700 text-sm transition">Next <i class="fa fa-arrow-right text-xs"></i></a>
+            <?php else: ?>
+                <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800/40 border border-zinc-700/40 text-zinc-600 text-sm cursor-default">Next <i class="fa fa-arrow-right text-xs"></i></span>
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
 </div>
 
 </div>

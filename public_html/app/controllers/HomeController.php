@@ -127,15 +127,27 @@ class HomeController extends Controller {
             $selectedPostScope = 'friends';
         }
 
+        $postsPerPage = 10;
+        $currentPage = max(1, (int)($_GET['page'] ?? 1));
+
         if ($selectedPostScope === 'server') {
-            $posts = Post::getServerFeed($userId, 100);
+            $totalPosts = Post::countServerFeed();
+            $totalPages = max(1, (int)ceil($totalPosts / $postsPerPage));
+            $currentPage = min($currentPage, $totalPages);
+            $posts = Post::getServerFeed($userId, $postsPerPage, ($currentPage - 1) * $postsPerPage);
         } else {
-            $posts = Post::getFriendsFeed($userId, 100);
+            $totalPosts = Post::countFriendsFeed($userId);
+            $totalPages = max(1, (int)ceil($totalPosts / $postsPerPage));
+            $currentPage = min($currentPage, $totalPages);
+            $posts = Post::getFriendsFeed($userId, $postsPerPage, ($currentPage - 1) * $postsPerPage);
         }
 
         $this->view('posts', [
             'posts' => $posts,
             'selectedPostScope' => $selectedPostScope,
+            'currentPage' => $currentPage,
+            'totalPages' => $totalPages,
+            'totalPosts' => $totalPosts,
             'csrf' => $this->csrfToken()
         ]);
     }

@@ -1399,27 +1399,14 @@ function highlightSearchTerm(text, query) {
     );
 }
 
-async function searchPosts(event) {
-    event.preventDefault();
-    const input = document.getElementById('post-search-input');
+async function searchPostsPage(query, page) {
     const results = document.getElementById('post-search-results');
-    const help = document.getElementById('post-search-help');
-    if (!input || !results) return;
-
-    const query = input.value.trim();
-    if (query.length < 2) {
-        showToast('Please enter at least 2 characters', 'error');
-        return;
-    }
-
-    if (help) {
-        help.classList.add('hidden');
-    }
+    if (!results) return;
 
     results.innerHTML = '<p class="text-zinc-400 text-sm">Searching...</p>';
 
     try {
-        const res = await fetch(`/api/posts/search?q=${encodeURIComponent(query)}`);
+        const res = await fetch(`/api/posts/search?q=${encodeURIComponent(query)}&page=${page}`);
         if (!res.ok) {
             const data = await res.json().catch(() => ({}));
             showToast(data.error || 'Search failed', 'error');
@@ -1429,13 +1416,16 @@ async function searchPosts(event) {
 
         const data = await res.json();
         const posts = data.posts || [];
+        const totalPages = Number(data.total_pages || 1);
+        const currentPage = Number(data.page || 1);
+        const total = Number(data.total || 0);
 
         if (posts.length === 0) {
             results.innerHTML = '<p class="text-zinc-400 text-sm">No posts found.</p>';
             return;
         }
 
-        results.innerHTML = posts.map(post => {
+        const postItems = posts.map(post => {
             const authorUsername = escapeHtml(String(post.author_username || ''));
             const authorNumFormatted = escapeHtml(String(post.author_user_number_formatted || ''));
             const postId = Number(post.post_id || 0);
@@ -1463,18 +1453,45 @@ async function searchPosts(event) {
                 </a>
             `;
         }).join('');
+
+        let paginationHtml = '';
+        if (totalPages > 1) {
+            const prevDisabled = currentPage <= 1;
+            const nextDisabled = currentPage >= totalPages;
+            const activeClass = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-300 hover:bg-zinc-700 text-sm transition js-post-search-page';
+            const disabledClass = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800/40 border border-zinc-700/40 text-zinc-600 text-sm cursor-default';
+            paginationHtml = `
+                <div class="flex items-center justify-between mt-4 pt-4 border-t border-zinc-700">
+                    <button type="button" class="${prevDisabled ? disabledClass : activeClass}" data-page="${currentPage - 1}" ${prevDisabled ? 'disabled' : ''}>
+                        <i class="fa fa-arrow-left text-xs"></i> Previous
+                    </button>
+                    <span class="text-zinc-400 text-sm">Page ${currentPage} of ${totalPages}</span>
+                    <button type="button" class="${nextDisabled ? disabledClass : activeClass}" data-page="${currentPage + 1}" ${nextDisabled ? 'disabled' : ''}>
+                        Next <i class="fa fa-arrow-right text-xs"></i>
+                    </button>
+                </div>
+            `;
+        }
+
+        results.innerHTML = `<div class="space-y-2">${postItems}</div>${paginationHtml}`;
+
+        results.querySelectorAll('.js-post-search-page').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const targetPage = Number(btn.dataset.page || 1);
+                searchPostsPage(query, targetPage);
+            });
+        });
     } catch {
         showToast('Search failed', 'error');
         results.innerHTML = '';
     }
 }
 
-async function searchMessages(event) {
+async function searchPosts(event) {
     event.preventDefault();
-    const input = document.getElementById('message-search-input');
-    const results = document.getElementById('message-search-results');
-    const help = document.getElementById('message-search-help');
-    if (!input || !results) return;
+    const input = document.getElementById('post-search-input');
+    const help = document.getElementById('post-search-help');
+    if (!input) return;
 
     const query = input.value.trim();
     if (query.length < 2) {
@@ -1486,10 +1503,17 @@ async function searchMessages(event) {
         help.classList.add('hidden');
     }
 
+    await searchPostsPage(query, 1);
+}
+
+async function searchMessagesPage(query, page) {
+    const results = document.getElementById('message-search-results');
+    if (!results) return;
+
     results.innerHTML = '<p class="text-zinc-400 text-sm">Searching...</p>';
 
     try {
-        const res = await fetch(`/api/messages/search?q=${encodeURIComponent(query)}`);
+        const res = await fetch(`/api/messages/search?q=${encodeURIComponent(query)}&page=${page}`);
         if (!res.ok) {
             const data = await res.json().catch(() => ({}));
             showToast(data.error || 'Search failed', 'error');
@@ -1499,13 +1523,15 @@ async function searchMessages(event) {
 
         const data = await res.json();
         const messages = data.messages || [];
+        const totalPages = Number(data.total_pages || 1);
+        const currentPage = Number(data.page || 1);
 
         if (messages.length === 0) {
             results.innerHTML = '<p class="text-zinc-400 text-sm">No messages found.</p>';
             return;
         }
 
-        results.innerHTML = messages.map(msg => {
+        const messageItems = messages.map(msg => {
             const chatTitle = escapeHtml(String(msg.chat_title || msg.chat_number_formatted || ''));
             const chatType = String(msg.chat_type_normalized || '');
             const chatTypeLabel = chatType === 'group' ? 'Group Chat' : 'Private Chat';
@@ -1529,8 +1555,55 @@ async function searchMessages(event) {
                 </a>
             `;
         }).join('');
+
+        let paginationHtml = '';
+        if (totalPages > 1) {
+            const prevDisabled = currentPage <= 1;
+            const nextDisabled = currentPage >= totalPages;
+            const activeClass = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-300 hover:bg-zinc-700 text-sm transition js-msg-search-page';
+            const disabledClass = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800/40 border border-zinc-700/40 text-zinc-600 text-sm cursor-default';
+            paginationHtml = `
+                <div class="flex items-center justify-between mt-4 pt-4 border-t border-zinc-700">
+                    <button type="button" class="${prevDisabled ? disabledClass : activeClass}" data-page="${currentPage - 1}" ${prevDisabled ? 'disabled' : ''}>
+                        <i class="fa fa-arrow-left text-xs"></i> Previous
+                    </button>
+                    <span class="text-zinc-400 text-sm">Page ${currentPage} of ${totalPages}</span>
+                    <button type="button" class="${nextDisabled ? disabledClass : activeClass}" data-page="${currentPage + 1}" ${nextDisabled ? 'disabled' : ''}>
+                        Next <i class="fa fa-arrow-right text-xs"></i>
+                    </button>
+                </div>
+            `;
+        }
+
+        results.innerHTML = `<div class="space-y-2">${messageItems}</div>${paginationHtml}`;
+
+        results.querySelectorAll('.js-msg-search-page').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const targetPage = Number(btn.dataset.page || 1);
+                searchMessagesPage(query, targetPage);
+            });
+        });
     } catch {
         showToast('Search failed', 'error');
         results.innerHTML = '';
     }
+}
+
+async function searchMessages(event) {
+    event.preventDefault();
+    const input = document.getElementById('message-search-input');
+    const help = document.getElementById('message-search-help');
+    if (!input) return;
+
+    const query = input.value.trim();
+    if (query.length < 2) {
+        showToast('Please enter at least 2 characters', 'error');
+        return;
+    }
+
+    if (help) {
+        help.classList.add('hidden');
+    }
+
+    await searchMessagesPage(query, 1);
 }

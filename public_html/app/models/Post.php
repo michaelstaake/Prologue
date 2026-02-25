@@ -121,18 +121,30 @@ class Post extends Model {
         return true;
     }
 
-    public static function getByUserId(int $profileUserId, int $currentUserId, int $limit = 30): array {
+    public static function countByUserId(int $profileUserId): int {
+        if ($profileUserId <= 0) {
+            return 0;
+        }
+
+        return (int)Database::query(
+            "SELECT COUNT(*) FROM posts WHERE user_id = ?",
+            [$profileUserId]
+        )->fetchColumn();
+    }
+
+    public static function getByUserId(int $profileUserId, int $currentUserId, int $limit = 30, int $offset = 0): array {
         if ($profileUserId <= 0) {
             return [];
         }
 
         $safeLimit = max(1, min(100, $limit));
+        $safeOffset = max(0, $offset);
         $rows = Database::query(
             "SELECT p.id, p.user_id, p.content, p.created_at
              FROM posts p
              WHERE p.user_id = ?
              ORDER BY p.created_at DESC, p.id DESC
-             LIMIT $safeLimit",
+             LIMIT $safeLimit OFFSET $safeOffset",
             [$profileUserId]
         )->fetchAll();
 
@@ -261,12 +273,31 @@ class Post extends Model {
         return self::areUsersFriends($viewerUserId, $postOwnerUserId);
     }
 
-    public static function getFriendsFeed(int $userId, int $limit = 30): array {
+    public static function countFriendsFeed(int $userId): int {
+        if ($userId <= 0) {
+            return 0;
+        }
+
+        return (int)Database::query(
+            "SELECT COUNT(*)
+             FROM posts p
+             WHERE p.user_id = ?
+                OR p.user_id IN (
+                    SELECT CASE WHEN f.user_id = ? THEN f.friend_id ELSE f.user_id END
+                    FROM friends f
+                    WHERE (f.user_id = ? OR f.friend_id = ?) AND f.status = 'accepted'
+                )",
+            [$userId, $userId, $userId, $userId]
+        )->fetchColumn();
+    }
+
+    public static function getFriendsFeed(int $userId, int $limit = 30, int $offset = 0): array {
         if ($userId <= 0) {
             return [];
         }
 
         $safeLimit = max(1, min(100, $limit));
+        $safeOffset = max(0, $offset);
         $rows = Database::query(
             "SELECT p.id, p.user_id, p.content, p.created_at,
                     u.username, u.user_number, u.avatar_filename
@@ -279,7 +310,7 @@ class Post extends Model {
                     WHERE (f.user_id = ? OR f.friend_id = ?) AND f.status = 'accepted'
                 )
              ORDER BY p.created_at DESC, p.id DESC
-             LIMIT $safeLimit",
+             LIMIT $safeLimit OFFSET $safeOffset",
             [$userId, $userId, $userId, $userId]
         )->fetchAll();
 
@@ -289,19 +320,24 @@ class Post extends Model {
         return $posts;
     }
 
-    public static function getServerFeed(int $userId, int $limit = 30): array {
+    public static function countServerFeed(): int {
+        return (int)Database::query("SELECT COUNT(*) FROM posts")->fetchColumn();
+    }
+
+    public static function getServerFeed(int $userId, int $limit = 30, int $offset = 0): array {
         if ($userId <= 0) {
             return [];
         }
 
         $safeLimit = max(1, min(100, $limit));
+        $safeOffset = max(0, $offset);
         $rows = Database::query(
             "SELECT p.id, p.user_id, p.content, p.created_at,
                     u.username, u.user_number, u.avatar_filename
              FROM posts p
              JOIN users u ON u.id = p.user_id
              ORDER BY p.created_at DESC, p.id DESC
-             LIMIT $safeLimit"
+             LIMIT $safeLimit OFFSET $safeOffset"
         )->fetchAll();
 
         $posts = is_array($rows) ? $rows : [];
