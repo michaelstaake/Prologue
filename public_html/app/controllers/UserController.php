@@ -29,12 +29,14 @@ class UserController extends Controller {
         $friendshipDirection = null;
         $personalChatNumber = null;
         $isFavorite = false;
+        $canReactToPosts = false;
         if ((int)$profile->id !== (int)$currentUserId) {
             $friendship = Database::query(
                 "SELECT user_id, friend_id, status FROM friends WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?) LIMIT 1",
                 [$currentUserId, $profile->id, $profile->id, $currentUserId]
             )->fetch();
             $friendshipStatus = $friendship->status ?? null;
+            $canReactToPosts = ($friendshipStatus ?? null) === 'accepted';
             if ($friendship) {
                 $friendshipDirection = ((int)$friendship->user_id === (int)$currentUserId) ? 'outgoing' : 'incoming';
                 if (($friendshipStatus ?? null) === 'accepted') {
@@ -48,6 +50,8 @@ class UserController extends Controller {
             }
         }
 
+        $posts = Post::getByUserId((int)$profile->id, (int)$currentUserId);
+
         $this->view('profile', [
             'profile' => $profile,
             'currentUserId' => $currentUserId,
@@ -55,7 +59,9 @@ class UserController extends Controller {
             'friendshipDirection' => $friendshipDirection,
             'personalChatNumber' => $personalChatNumber,
             'isFavorite' => $isFavorite,
-            'friendCount' => $friendCount
+            'friendCount' => $friendCount,
+            'posts' => $posts,
+            'canReactToPosts' => $canReactToPosts
         ]);
     }
 }

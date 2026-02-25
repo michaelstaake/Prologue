@@ -146,6 +146,182 @@ async function toggleFavoriteUser(userId, favorite) {
     showToast(result.error || 'Unable to update favorite', 'error');
 }
 
+let openProfilePostReactionPickerId = 0;
+
+function closeAllProfilePostReactionPickers(resetState = true) {
+    document.querySelectorAll('.js-profile-post-reaction-picker').forEach((picker) => {
+        picker.classList.add('hidden');
+    });
+
+    if (resetState) {
+        openProfilePostReactionPickerId = 0;
+    }
+}
+
+function toggleProfilePostReactionPicker(postId) {
+    const safePostId = Number(postId || 0);
+    if (!Number.isFinite(safePostId) || safePostId <= 0) return;
+
+    const picker = document.querySelector(`.js-profile-post-reaction-picker[data-post-reaction-picker-for="${safePostId}"]`);
+    if (!picker) return;
+
+    const willOpen = picker.classList.contains('hidden');
+    closeAllProfilePostReactionPickers(false);
+
+    if (willOpen) {
+        picker.classList.remove('hidden');
+        openProfilePostReactionPickerId = safePostId;
+        return;
+    }
+
+    openProfilePostReactionPickerId = 0;
+}
+
+function normalizeProfilePostReactionCode(value) {
+    if (typeof normalizeReactionCode === 'function') {
+        return normalizeReactionCode(value);
+    }
+
+    const normalized = String(value || '').toUpperCase().replace(/[^0-9A-F]/g, '');
+    const allowed = new Set(['1F44D', '1F44E', '2665', '1F923', '1F622', '1F436', '1F4A9']);
+    return allowed.has(normalized) ? normalized : '';
+}
+
+async function reactToProfilePost(postId, reactionCode) {
+    const safePostId = Number(postId || 0);
+    const safeReactionCode = normalizeProfilePostReactionCode(reactionCode);
+    if (!Number.isFinite(safePostId) || safePostId <= 0 || !safeReactionCode) {
+        return;
+    }
+
+    const result = await postForm('/api/posts/react', {
+        csrf_token: getCsrfToken(),
+        post_id: String(safePostId),
+        reaction_code: safeReactionCode
+    });
+
+    if (!result.success) {
+        showToast(result.error || 'Unable to react to post', 'error');
+        return;
+    }
+
+    window.location.reload();
+}
+
+async function createProfilePost(content) {
+    const text = String(content || '').trim();
+    const length = Array.from(text).length;
+
+    if (!text) {
+        showToast('Post content is required', 'error');
+        return false;
+    }
+    if (length > 500) {
+        showToast('Posts can be at most 500 characters', 'error');
+        return false;
+    }
+
+    const result = await postForm('/api/posts', {
+        csrf_token: getCsrfToken(),
+        content: text
+    });
+
+    if (!result.success) {
+        showToast(result.error || 'Unable to create post', 'error');
+        return false;
+    }
+
+    showToast('Post published', 'success');
+    window.location.reload();
+    return true;
+}
+
+function bindProfilePosts() {
+    const root = document.getElementById('profile-posts-root');
+    if (!root) return;
+
+    const canReactToPosts = String(root.getAttribute('data-can-react-posts') || '0') === '1';
+    const form = document.getElementById('profile-post-create-form');
+    const input = document.getElementById('profile-post-input');
+    const submit = document.getElementById('profile-post-submit');
+    const counter = document.getElementById('profile-post-input-counter');
+
+    if (input && counter) {
+        const updateCounter = () => {
+            const count = Array.from(String(input.value || '')).length;
+            counter.textContent = `${count}/500`;
+            counter.classList.toggle('text-red-300', count > 500);
+        };
+
+        input.addEventListener('input', updateCounter);
+        updateCounter();
+    }
+
+    if (form && input && submit) {
+        form.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            if (submit.disabled) return;
+
+            submit.disabled = true;
+            const previousLabel = submit.textContent;
+            submit.textContent = 'Publishing...';
+
+            try {
+                await createProfilePost(input.value);
+            } finally {
+                submit.disabled = false;
+                submit.textContent = previousLabel;
+            }
+        });
+    }
+
+    if (!canReactToPosts) {
+        return;
+    }
+
+    root.addEventListener('click', (event) => {
+        const reactLink = event.target.closest('.js-profile-post-react-link');
+        if (reactLink) {
+            event.preventDefault();
+            const postId = Number(reactLink.getAttribute('data-post-id') || 0);
+            toggleProfilePostReactionPicker(postId);
+            return;
+        }
+
+        const option = event.target.closest('.js-profile-post-reaction-option');
+        if (option) {
+            event.preventDefault();
+            const postId = Number(option.getAttribute('data-post-id') || 0);
+            const reactionCode = String(option.getAttribute('data-reaction-code') || '');
+            reactToProfilePost(postId, reactionCode).catch(() => {
+                showToast('Unable to react to post', 'error');
+            });
+            return;
+        }
+
+        const badge = event.target.closest('.js-profile-post-reaction-badge');
+        if (badge) {
+            event.preventDefault();
+            const postId = Number(badge.getAttribute('data-post-id') || 0);
+            const reactionCode = String(badge.getAttribute('data-reaction-code') || '');
+            reactToProfilePost(postId, reactionCode).catch(() => {
+                showToast('Unable to update reaction', 'error');
+            });
+            return;
+        }
+
+        if (!event.target.closest('.js-profile-post-reaction-picker')) {
+            closeAllProfilePostReactionPickers();
+        }
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            closeAllProfilePostReactionPickers();
+        }
+    });
+}
+
 async function searchUsers(event) {
     event.preventDefault();
     const input = document.getElementById('user-search-input');

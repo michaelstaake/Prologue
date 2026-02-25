@@ -469,6 +469,7 @@ async function init() {
 
     bindInviteCopyButtons();
     bindUnfriendModal();
+    bindProfilePosts();
     bindAdminUsersPage();
     bindReportModal();
     bindPageToast();

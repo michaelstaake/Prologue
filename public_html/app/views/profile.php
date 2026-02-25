@@ -1,3 +1,104 @@
+<?php
+$postReactionCodes = Post::REACTION_CODES;
+$postReactionCodeToLabel = [
+    '1F44D' => 'Like',
+    '1F44E' => 'Dislike',
+    '2665' => 'Love',
+    '1F923' => 'Laugh',
+    '1F622' => 'Cry',
+    '1F436' => 'Pup',
+    '1F4A9' => 'Poop'
+];
+
+$unicodeCharForPostReaction = static function (string $reactionCode): string {
+    $hex = strtoupper(trim($reactionCode));
+    if ($hex === '' || !ctype_xdigit($hex)) {
+        return '';
+    }
+    $codepoint = hexdec($hex);
+    if ($codepoint <= 0) {
+        return '';
+    }
+    return mb_chr($codepoint, 'UTF-8');
+};
+
+$renderPostReactionBadges = static function (int $postId, array $reactions) use ($postReactionCodes, $postReactionCodeToLabel, $unicodeCharForPostReaction): string {
+    if (count($reactions) === 0) {
+        return '';
+    }
+
+    $reactionByCode = [];
+    foreach ($reactions as $reaction) {
+        $code = Post::normalizeReactionCode($reaction->reaction_code ?? '');
+        if ($code === '') {
+            continue;
+        }
+        $reactionByCode[$code] = $reaction;
+    }
+
+    $badges = '';
+    foreach ($postReactionCodes as $code) {
+        if (!isset($reactionByCode[$code])) {
+            continue;
+        }
+
+        $reaction = $reactionByCode[$code];
+        $count = max(0, (int)($reaction->count ?? 0));
+        if ($count <= 0) {
+            continue;
+        }
+
+        $users = [];
+        if (isset($reaction->users) && is_array($reaction->users)) {
+            foreach ($reaction->users as $username) {
+                $normalizedUsername = User::normalizeUsername($username ?? '');
+                if ($normalizedUsername !== '') {
+                    $users[] = $normalizedUsername;
+                }
+            }
+        }
+
+        $label = $postReactionCodeToLabel[$code] ?? 'Reaction';
+        $tooltip = $label . ': ' . (count($users) > 0 ? implode(', ', $users) : 'No users');
+        $reactedByCurrentUser = !empty($reaction->reacted_by_current_user);
+        $badgeClass = $reactedByCurrentUser
+            ? 'bg-zinc-700 border-zinc-500 text-zinc-100'
+            : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700';
+
+        $emojiChar = $unicodeCharForPostReaction($code);
+        $emojiMarkup = $emojiChar !== ''
+            ? '<span class="text-lg leading-none">' . htmlspecialchars($emojiChar, ENT_QUOTES, 'UTF-8') . '</span>'
+            : '<span>' . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . '</span>';
+
+        $badges .= '<button type="button" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[12px] js-profile-post-reaction-badge ' . $badgeClass . '" data-post-id="' . (int)$postId . '" data-reaction-code="' . htmlspecialchars($code, ENT_QUOTES, 'UTF-8') . '" title="' . htmlspecialchars($tooltip, ENT_QUOTES, 'UTF-8') . '">'
+            . $emojiMarkup
+            . '<span>' . $count . '</span>'
+            . '</button>';
+    }
+
+    if ($badges === '') {
+        return '';
+    }
+
+    return '<div class="flex items-center gap-1.5">' . $badges . '</div>';
+};
+
+$renderPostReactionPicker = static function (int $postId) use ($postReactionCodes, $postReactionCodeToLabel, $unicodeCharForPostReaction): string {
+    $options = '';
+    foreach ($postReactionCodes as $code) {
+        $label = $postReactionCodeToLabel[$code] ?? 'Reaction';
+        $emojiChar = $unicodeCharForPostReaction($code);
+        $emojiMarkup = $emojiChar !== ''
+            ? '<span class="text-2xl leading-none">' . htmlspecialchars($emojiChar, ENT_QUOTES, 'UTF-8') . '</span>'
+            : '<span>' . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . '</span>';
+
+        $options .= '<button type="button" class="w-10 h-10 rounded-full hover:bg-zinc-800 flex items-center justify-center js-profile-post-reaction-option" data-post-id="' . (int)$postId . '" data-reaction-code="' . htmlspecialchars($code, ENT_QUOTES, 'UTF-8') . '" title="' . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . '">' . $emojiMarkup . '</button>';
+    }
+
+    return '<div class="hidden js-profile-post-reaction-picker absolute left-0 bottom-full mb-1.5 z-30" data-post-reaction-picker-for="' . (int)$postId . '"><div class="inline-flex items-center gap-1.5 bg-zinc-900 border border-zinc-700 rounded-full px-2 py-1">' . $options . '</div></div>';
+};
+?>
+
 <div class="p-8">
     <div class="w-full">
         <?php $profileAvatar = User::avatarUrl($profile); ?>
@@ -80,6 +181,58 @@
             <button onclick="reportTarget('user', <?= (int)$profile->id ?>)" class="<?= htmlspecialchars($profileActionDangerClass, ENT_QUOTES, 'UTF-8') ?>"><i class="fa fa-flag text-xs"></i> Report User</button>
             </div>
         </div>
+        <?php endif; ?>
+    </div>
+</div>
+
+<div class="px-8 pb-8" id="profile-posts-root" data-profile-user-id="<?= (int)$profile->id ?>" data-can-react-posts="<?= !empty($canReactToPosts) ? '1' : '0' ?>">
+    <div class="flex items-center justify-between gap-3 mb-4">
+        <h2 class="text-xl font-semibold text-zinc-100">Posts</h2>
+        <span class="text-xs text-zinc-500 uppercase tracking-wide"><?= count($posts ?? []) ?> total</span>
+    </div>
+
+    <?php if ((int)$profile->id === (int)$currentUserId): ?>
+    <form id="profile-post-create-form" class="bg-zinc-800 rounded-xl p-4 mb-5 space-y-3">
+        <label for="profile-post-input" class="block text-sm font-medium text-zinc-300">Create post</label>
+        <textarea id="profile-post-input" rows="4" maxlength="500" class="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-zinc-100 resize-y" placeholder="Share what you're thinking" required></textarea>
+        <div class="flex items-center justify-between gap-3">
+            <span id="profile-post-input-counter" class="text-xs text-zinc-400">0/500</span>
+            <button type="submit" id="profile-post-submit" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm">Publish</button>
+        </div>
+    </form>
+    <?php endif; ?>
+
+    <div id="profile-post-list" class="space-y-3">
+        <?php foreach (($posts ?? []) as $post): ?>
+            <?php
+                $postId = (int)($post->id ?? 0);
+                $postContent = trim((string)($post->content ?? ''));
+                if ($postId <= 0 || $postContent === '') {
+                    continue;
+                }
+
+                $postCreatedAtRaw = trim((string)($post->created_at ?? ''));
+                $postCreatedAtTs = $postCreatedAtRaw !== '' ? strtotime($postCreatedAtRaw) : false;
+                $postCreatedAtLabel = $postCreatedAtTs !== false ? date('Y-m-d H:i', $postCreatedAtTs) : 'Unknown';
+                $postReactions = (isset($post->reactions) && is_array($post->reactions)) ? $post->reactions : [];
+            ?>
+            <article class="bg-zinc-800 rounded-xl p-3" data-profile-post-id="<?= $postId ?>">
+                <div class="text-zinc-100 whitespace-pre-wrap break-words leading-6"><?= nl2br(htmlspecialchars($postContent, ENT_QUOTES, 'UTF-8')) ?></div>
+                <div class="relative mt-2">
+                    <?= $renderPostReactionPicker($postId) ?>
+                    <div class="text-xs flex items-center gap-3">
+                        <span class="text-zinc-500" data-utc="<?= htmlspecialchars($postCreatedAtRaw, ENT_QUOTES, 'UTF-8') ?>" title="<?= htmlspecialchars($postCreatedAtRaw, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($postCreatedAtLabel, ENT_QUOTES, 'UTF-8') ?></span>
+                        <?php if (!empty($canReactToPosts)): ?>
+                            <button type="button" class="text-zinc-400 hover:text-zinc-300 js-profile-post-react-link" data-post-id="<?= $postId ?>">React</button>
+                        <?php endif; ?>
+                        <?= $renderPostReactionBadges($postId, $postReactions) ?>
+                    </div>
+                </div>
+            </article>
+        <?php endforeach; ?>
+
+        <?php if (count($posts ?? []) === 0): ?>
+            <p class="text-sm text-zinc-400">No posts yet.</p>
         <?php endif; ?>
     </div>
 </div>

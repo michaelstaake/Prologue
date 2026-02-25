@@ -224,6 +224,32 @@ CREATE TABLE message_reactions (
     CONSTRAINT chk_message_reactions_code CHECK (reaction_code IN ('1F44D','1F44E','2665','1F923','1F622','1F436','1F4A9'))
 );
 
+-- Profile posts
+CREATE TABLE posts (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    content VARCHAR(500) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    KEY idx_posts_user_created (user_id, created_at),
+    CONSTRAINT chk_posts_content_length CHECK (CHAR_LENGTH(content) BETWEEN 1 AND 500)
+);
+
+-- Profile post reactions
+CREATE TABLE post_reactions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    post_id BIGINT NOT NULL,
+    user_id INT NOT NULL,
+    reaction_code VARCHAR(12) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE KEY uniq_post_reactions_post_user (post_id, user_id),
+    KEY idx_post_reactions_post (post_id),
+    KEY idx_post_reactions_user (user_id),
+    CONSTRAINT chk_post_reactions_code CHECK (reaction_code IN ('1F44D','1F44E','2665','1F923','1F622','1F436','1F4A9'))
+);
+
 -- Message attachments
 CREATE TABLE attachments (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
