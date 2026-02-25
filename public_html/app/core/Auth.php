@@ -79,7 +79,7 @@ class Auth {
 
     public static function csrfValidate() {
         if (!isset($_POST['csrf_token'], $_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
-            die("CSRF validation failed");
+            ErrorHandler::abort(419, 'CSRF validation failed');
         }
     }
 
