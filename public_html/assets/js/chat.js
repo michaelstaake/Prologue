@@ -1049,7 +1049,15 @@ async function loadSidebarChats() {
         const unreadCount = Math.max(0, Number(chat.unread_count || 0));
         const secondaryLine = hasCustomTitle
             ? chatNumberLabel
-            : decodeStoredMentionsToPlainText(chat.last_message || 'No messages yet');
+            : (() => {
+                const rawMessage = decodeStoredMentionsToPlainText(chat.last_message || '');
+                if (!rawMessage) return 'No messages yet';
+                const senderId = Number(chat.last_message_user_id || 0);
+                const prefix = senderId && senderId === Number(currentUserId || 0)
+                    ? 'You'
+                    : (chat.last_message_sender_username || '');
+                return prefix ? `${prefix}: ${rawMessage}` : rawMessage;
+            })();
         const unreadBadge = unreadCount > 0
             ? `<span class="ml-auto min-w-[1.25rem] h-5 px-1 rounded-full bg-emerald-600 text-white text-xs inline-flex items-center justify-center">${escapeHtml(formatCountBadgeValue(unreadCount))}</span>`
             : '';

@@ -270,7 +270,9 @@ class ApiController extends Controller {
                  " . ($supportsChatTitle ? "c.title AS custom_title," : "NULL AS custom_title,") . "
                          c.created_at,
                          (SELECT m.content FROM messages m WHERE m.chat_id = c.id ORDER BY m.created_at DESC LIMIT 1) AS last_message,
-                         (SELECT m.created_at FROM messages m WHERE m.chat_id = c.id ORDER BY m.created_at DESC LIMIT 1) AS last_message_at,";
+                         (SELECT m.created_at FROM messages m WHERE m.chat_id = c.id ORDER BY m.created_at DESC LIMIT 1) AS last_message_at,
+                         (SELECT m.user_id FROM messages m WHERE m.chat_id = c.id ORDER BY m.created_at DESC LIMIT 1) AS last_message_user_id,
+                         (SELECT u.username FROM messages m JOIN users u ON u.id = m.user_id WHERE m.chat_id = c.id ORDER BY m.created_at DESC LIMIT 1) AS last_message_sender_username,";
 
         if ($supportsLastSeen) {
             $query .= "
