@@ -47,7 +47,6 @@ class Router {
 
     private function callAction($action, $params = []) {
         list($controllerName, $method) = explode('@', $action);
-        require_once __DIR__ . "/../controllers/{$controllerName}.php";
         $controller = new $controllerName();
 
         if (!method_exists($controller, $method)) {
