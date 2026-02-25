@@ -325,6 +325,29 @@
     </div>
     <?php endif; ?>
     <div id="toast-host" class="fixed top-20 right-5 space-y-2 z-40"></div>
+
+    <div id="new-post-modal" class="hidden fixed inset-0 bg-black/70 z-50 p-4 md:p-6" aria-hidden="true">
+        <div class="h-full w-full flex items-center justify-center">
+            <div class="w-full max-w-lg bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl p-6" role="dialog" aria-modal="true" aria-labelledby="new-post-modal-title">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 id="new-post-modal-title" class="text-lg font-semibold text-zinc-100">New Post</h2>
+                    <button type="button" id="new-post-modal-close" class="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition" aria-label="Close">
+                        <i class="fa fa-xmark"></i>
+                    </button>
+                </div>
+                <form id="new-post-modal-form" class="space-y-3">
+                    <textarea id="new-post-modal-input" rows="5" maxlength="500" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-zinc-100 resize-y" placeholder="Share what you're thinking" required></textarea>
+                    <div class="flex items-center justify-between gap-3">
+                        <span id="new-post-modal-counter" class="text-xs text-zinc-400">0/500</span>
+                        <div class="flex items-center gap-3">
+                            <button type="button" id="new-post-modal-cancel" class="px-4 py-2 rounded-xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-zinc-200 text-sm transition">Cancel</button>
+                            <button type="submit" id="new-post-modal-submit" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm transition">Publish</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 </body>
 <script>
     window.CSRF_TOKEN = <?= json_encode($csrf) ?>;

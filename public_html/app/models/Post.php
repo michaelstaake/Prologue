@@ -192,4 +192,32 @@ class Post extends Model {
     public static function canUserReactToPost(int $viewerUserId, int $postOwnerUserId): bool {
         return self::areUsersFriends($viewerUserId, $postOwnerUserId);
     }
+
+    public static function getFriendsFeed(int $userId, int $limit = 30): array {
+        if ($userId <= 0) {
+            return [];
+        }
+
+        $safeLimit = max(1, min(100, $limit));
+        $rows = Database::query(
+            "SELECT p.id, p.user_id, p.content, p.created_at,
+                    u.username, u.user_number, u.avatar_filename
+             FROM posts p
+             JOIN users u ON u.id = p.user_id
+             WHERE p.user_id = ?
+                OR p.user_id IN (
+                    SELECT CASE WHEN f.user_id = ? THEN f.friend_id ELSE f.user_id END
+                    FROM friends f
+                    WHERE (f.user_id = ? OR f.friend_id = ?) AND f.status = 'accepted'
+                )
+             ORDER BY p.created_at DESC, p.id DESC
+             LIMIT $safeLimit",
+            [$userId, $userId, $userId, $userId]
+        )->fetchAll();
+
+        $posts = is_array($rows) ? $rows : [];
+        self::attachReactions($posts, $userId);
+
+        return $posts;
+    }
 }

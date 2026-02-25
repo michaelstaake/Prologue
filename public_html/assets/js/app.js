@@ -469,6 +469,7 @@ async function init() {
 
     bindInviteCopyButtons();
     bindUnfriendModal();
+    bindNewPostModal();
     bindProfilePosts();
     bindAdminUsersPage();
     bindReportModal();
@@ -613,6 +614,7 @@ window.addGroupMemberByUsername = addGroupMemberByUsername;
 window.removeGroupMember = removeGroupMember;
 window.leaveCurrentGroup = leaveCurrentGroup;
 window.deleteCurrentGroup = deleteCurrentGroup;
+window.openNewPostModal = openNewPostModal;
 window.reportTarget = reportTarget;
 window.startVoiceCall = startVoiceCall;
 window.acceptCall = acceptCall;

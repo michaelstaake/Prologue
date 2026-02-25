@@ -102,6 +102,8 @@ class HomeController extends Controller {
 
         $invitesEnabled = (string)(Setting::get('invites_enabled') ?? '1') === '1';
 
+        $recentFriendPosts = Post::getFriendsFeed((int)$userId, 3);
+
         $this->view('dashboard', [
             'friends' => $friends,
             'visibleFriends' => $visibleFriends,
@@ -112,6 +114,18 @@ class HomeController extends Controller {
             'selectedTab' => $selectedTab,
             'selectedRequestsTab' => $selectedRequestsTab,
             'invitesEnabled' => $invitesEnabled,
+            'recentFriendPosts' => $recentFriendPosts,
+            'csrf' => $this->csrfToken()
+        ]);
+    }
+
+    public function posts() {
+        Auth::requireAuth();
+        $userId = (int)Auth::user()->id;
+        $friendPosts = Post::getFriendsFeed($userId, 100);
+
+        $this->view('posts', [
+            'friendPosts' => $friendPosts,
             'csrf' => $this->csrfToken()
         ]);
     }

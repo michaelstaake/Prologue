@@ -188,19 +188,15 @@ $renderPostReactionPicker = static function (int $postId) use ($postReactionCode
 <div class="px-8 pb-8" id="profile-posts-root" data-profile-user-id="<?= (int)$profile->id ?>" data-can-react-posts="<?= !empty($canReactToPosts) ? '1' : '0' ?>">
     <div class="flex items-center justify-between gap-3 mb-4">
         <h2 class="text-xl font-semibold text-zinc-100">Posts</h2>
-        <span class="text-xs text-zinc-500 uppercase tracking-wide"><?= count($posts ?? []) ?> total</span>
-    </div>
-
-    <?php if ((int)$profile->id === (int)$currentUserId): ?>
-    <form id="profile-post-create-form" class="bg-zinc-800 rounded-xl p-4 mb-5 space-y-3">
-        <label for="profile-post-input" class="block text-sm font-medium text-zinc-300">Create post</label>
-        <textarea id="profile-post-input" rows="4" maxlength="500" class="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-zinc-100 resize-y" placeholder="Share what you're thinking" required></textarea>
-        <div class="flex items-center justify-between gap-3">
-            <span id="profile-post-input-counter" class="text-xs text-zinc-400">0/500</span>
-            <button type="submit" id="profile-post-submit" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm">Publish</button>
+        <div class="flex items-center gap-3">
+            <?php if ((int)$profile->id === (int)$currentUserId): ?>
+                <button type="button" onclick="openNewPostModal()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm transition">
+                    <i class="fa fa-plus text-xs"></i> New Post
+                </button>
+            <?php endif; ?>
+            <span class="text-xs text-zinc-500 uppercase tracking-wide"><?= count($posts ?? []) ?> total</span>
         </div>
-    </form>
-    <?php endif; ?>
+    </div>
 
     <div id="profile-post-list" class="space-y-3">
         <?php foreach (($posts ?? []) as $post): ?>

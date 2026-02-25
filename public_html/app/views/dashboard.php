@@ -3,35 +3,7 @@
         <h1 class="text-3xl font-bold">Dashboard</h1>
     </div>
 
-    <section class="max-w-4xl mb-6">
-        <h2 class="text-xl font-semibold text-zinc-300 mb-3">Groups</h2>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <?php if (!empty($lastGroupChat)): ?>
-                <a href="<?= htmlspecialchars(base_url('/c/' . User::formatUserNumber((string)$lastGroupChat->chat_number)), ENT_QUOTES, 'UTF-8') ?>" class="block bg-zinc-800 rounded-xl p-3 hover:bg-zinc-700 transition">
-                    <div class="flex items-center gap-3 min-w-0">
-                        <div class="w-9 h-9 rounded-full border border-zinc-700 flex items-center justify-center bg-zinc-900 text-zinc-300">
-                            <i class="fa fa-user-group text-sm"></i>
-                        </div>
-                        <div class="min-w-0">
-                            <div class="font-medium truncate"><?= htmlspecialchars((string)$lastGroupChat->chat_title, ENT_QUOTES, 'UTF-8') ?></div>
-                            <p class="text-xs text-zinc-400 mt-1">Your most recently active group</p>
-                        </div>
-                    </div>
-                </a>
-            <?php endif; ?>
-
-            <button type="button" onclick="createGroupChat()" class="w-full bg-zinc-800 hover:bg-zinc-700 rounded-xl p-3 flex items-center gap-3 transition">
-                <div class="w-9 h-9 rounded-full border border-zinc-700 flex items-center justify-center bg-zinc-900 text-zinc-300">
-                    <i class="fa fa-user-group text-sm"></i>
-                </div>
-                <div class="min-w-0 text-left">
-                    <span class="font-medium block">New Group</span>
-                    <p class="text-xs text-zinc-400 mt-1">Make something awesome</p>
-                </div>
-            </button>
-        </div>
-    </section>
-
+    <section class="mb-8">
     <h2 class="text-xl font-semibold text-zinc-300 mb-4">Friends</h2>
 
     <?php
@@ -76,7 +48,7 @@
     </div>
 
     <?php if ($tab === 'requests'): ?>
-        <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-5 max-w-3xl">
+        <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-5">
             <div class="text-sm font-semibold text-zinc-300 mb-3">Incoming</div>
             <div class="space-y-3 mb-6">
                 <?php if (empty($pendingIncoming)): ?>
@@ -140,7 +112,7 @@
             </div>
         </section>
     <?php else: ?>
-        <section class="max-w-4xl">
+        <section>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <?php if (empty($friendList)): ?>
                     <p class="text-zinc-400 text-sm">No friends in this list.</p>
@@ -174,8 +146,41 @@
             </div>
         </section>
     <?php endif; ?>
+    </section>
 
-    <section class="max-w-4xl mt-8">
+    <div class="grid grid-cols-1 2xl:grid-cols-2 gap-8 items-start">
+    <div class="min-w-8">
+
+    <section class="mb-6">
+        <h2 class="text-xl font-semibold text-zinc-300 mb-3">Groups</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <?php if (!empty($lastGroupChat)): ?>
+                <a href="<?= htmlspecialchars(base_url('/c/' . User::formatUserNumber((string)$lastGroupChat->chat_number)), ENT_QUOTES, 'UTF-8') ?>" class="block bg-zinc-800 rounded-xl p-3 hover:bg-zinc-700 transition">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <div class="w-9 h-9 rounded-full border border-zinc-700 flex items-center justify-center bg-zinc-900 text-zinc-300">
+                            <i class="fa fa-user-group text-sm"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <div class="font-medium truncate"><?= htmlspecialchars((string)$lastGroupChat->chat_title, ENT_QUOTES, 'UTF-8') ?></div>
+                            <p class="text-xs text-zinc-400 mt-1">Your most recently active group</p>
+                        </div>
+                    </div>
+                </a>
+            <?php endif; ?>
+
+            <button type="button" onclick="createGroupChat()" class="w-full bg-zinc-800 hover:bg-zinc-700 rounded-xl p-3 flex items-center gap-3 transition">
+                <div class="w-9 h-9 rounded-full border border-zinc-700 flex items-center justify-center bg-zinc-900 text-zinc-300">
+                    <i class="fa fa-user-group text-sm"></i>
+                </div>
+                <div class="min-w-0 text-left">
+                    <span class="font-medium block">New Group</span>
+                    <p class="text-xs text-zinc-400 mt-1">Make something awesome</p>
+                </div>
+            </button>
+        </div>
+    </section>
+
+    <section class="mt-8">
         <h2 class="text-xl font-semibold text-zinc-300 mb-4">Search</h2>
         <form id="user-search-form" class="flex items-center gap-3 w-full mb-4">
             <input type="text" id="user-search-input" placeholder="Search by username or user number" class="bg-zinc-900 border border-zinc-700 rounded-xl px-5 py-2.5 w-full" pattern="[A-Za-z0-9-]+" title="Use only letters, numbers, and dashes." required>
@@ -189,16 +194,76 @@
 
     <?php if (($invitesEnabled ?? false) === true): ?>
         <?php $inviteProfileUrl = base_url('/u/' . User::formatUserNumber((string)Auth::user()->user_number)); ?>
-        <section class="max-w-4xl mt-8">
-            <h2 class="text-xl font-semibold text-zinc-300 mb-2">Sharing is caring</h2>
+        <section class="mt-8">
+            <h2 class="text-xl font-semibold text-zinc-300 mb-2">Invites</h2>
             <p class="text-zinc-400 text-sm mb-4 leading-relaxed">
                 Invite your friends, family, or teammates to join you on this Prologue Server. Each user will need an invite code to create an account. If they don't receive the verification email after creating an account using the invite code you provided them, remind them to check their spam folder. Once their account is set up, they can use the Search function to add you as a friend. Enjoy!
             </p>
 
-            <a href="<?= htmlspecialchars(base_url('/settings'), ENT_QUOTES, 'UTF-8') ?>" 
-            class="inline-flex items-center justify-center bg-zinc-700 hover:bg-zinc-600 border border-zinc-700 px-4 py-2 rounded-xl text-sm whitespace-nowrap transition-colors">
-                Manage Invite Codes in Settings
+            <a href="<?= htmlspecialchars(base_url('/settings'), ENT_QUOTES, 'UTF-8') ?>"
+            class="inline-flex items-center gap-2 text-sm text-emerald-400 hover:text-emerald-300 transition">
+                Manage Invite Codes <i class="fa fa-arrow-right text-xs"></i>
             </a>
         </section>
     <?php endif; ?>
+
+    </div><!-- end left column -->
+    <div class="min-w-0"><!-- right column -->
+
+    <section class="mt-0">
+        <div class="flex items-center justify-between gap-3 mb-4">
+            <h2 class="text-xl font-semibold text-zinc-300">Posts</h2>
+            <div class="flex items-center gap-3">
+                <button type="button" onclick="openNewPostModal()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm transition">
+                    <i class="fa fa-plus text-xs"></i> New Post
+                </button>
+            </div>
+        </div>
+
+        <?php $recentPosts = $recentFriendPosts ?? []; ?>
+        <?php if (empty($recentPosts)): ?>
+            <p class="text-zinc-400 text-sm">No posts from friends yet.</p>
+        <?php else: ?>
+            <div class="space-y-3">
+                <?php foreach ($recentPosts as $post): ?>
+                    <?php
+                        $postId = (int)($post->id ?? 0);
+                        $postContent = trim((string)($post->content ?? ''));
+                        if ($postId <= 0 || $postContent === '') {
+                            continue;
+                        }
+                        $postAuthorUsername = htmlspecialchars((string)($post->username ?? ''), ENT_QUOTES, 'UTF-8');
+                        $postAuthorNumber = (string)($post->user_number ?? '');
+                        $postAuthorUrl = base_url('/u/' . User::formatUserNumber($postAuthorNumber));
+                        $postCreatedAtRaw = trim((string)($post->created_at ?? ''));
+                        $postCreatedAtTs = $postCreatedAtRaw !== '' ? strtotime($postCreatedAtRaw) : false;
+                        $postCreatedAtLabel = $postCreatedAtTs !== false ? date('Y-m-d H:i', $postCreatedAtTs) : 'Unknown';
+                        $postAvatar = User::avatarUrl($post);
+                    ?>
+                    <article class="bg-zinc-800 rounded-xl p-3">
+                        <div class="flex items-center gap-2 mb-2">
+                            <?php if ($postAvatar): ?>
+                                <img src="<?= htmlspecialchars($postAvatar, ENT_QUOTES, 'UTF-8') ?>" alt="<?= $postAuthorUsername ?> avatar" class="w-7 h-7 rounded-full object-cover border border-zinc-700">
+                            <?php else: ?>
+                                <div class="w-7 h-7 rounded-full border border-zinc-700 flex items-center justify-center font-semibold text-xs <?= htmlspecialchars(User::avatarColorClasses($postAuthorNumber), ENT_QUOTES, 'UTF-8') ?>">
+                                    <?= htmlspecialchars(User::avatarInitial((string)($post->username ?? '')), ENT_QUOTES, 'UTF-8') ?>
+                                </div>
+                            <?php endif; ?>
+                            <a href="<?= htmlspecialchars($postAuthorUrl, ENT_QUOTES, 'UTF-8') ?>" class="text-sm font-medium text-zinc-200 hover:text-white transition"><?= $postAuthorUsername ?></a>
+                            <span class="text-xs text-zinc-500 ml-auto" data-utc="<?= htmlspecialchars($postCreatedAtRaw, ENT_QUOTES, 'UTF-8') ?>" title="<?= htmlspecialchars($postCreatedAtRaw, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($postCreatedAtLabel, ENT_QUOTES, 'UTF-8') ?></span>
+                        </div>
+                        <p class="text-sm text-zinc-100 whitespace-pre-wrap break-words leading-6"><?= nl2br(htmlspecialchars($postContent, ENT_QUOTES, 'UTF-8')) ?></p>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+            <div class="mt-4">
+                <a href="<?= htmlspecialchars(base_url('/posts'), ENT_QUOTES, 'UTF-8') ?>" class="inline-flex items-center gap-2 text-sm text-emerald-400 hover:text-emerald-300 transition">
+                    All Posts <i class="fa fa-arrow-right text-xs"></i>
+                </a>
+            </div>
+        <?php endif; ?>
+    </section>
+
+    </div><!-- end right column -->
+    </div><!-- end two-column grid -->
 </div>

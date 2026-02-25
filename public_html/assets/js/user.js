@@ -232,8 +232,90 @@ async function createProfilePost(content) {
     }
 
     showToast('Post published', 'success');
+    await new Promise(resolve => setTimeout(resolve, 700));
     window.location.reload();
     return true;
+}
+
+function openNewPostModal() {
+    const modal = document.getElementById('new-post-modal');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+    const input = document.getElementById('new-post-modal-input');
+    if (input) {
+        input.value = '';
+        updateNewPostModalCounter();
+        setTimeout(() => input.focus(), 0);
+    }
+}
+
+function closeNewPostModal() {
+    const modal = document.getElementById('new-post-modal');
+    if (!modal) return;
+    modal.classList.add('hidden');
+    modal.setAttribute('aria-hidden', 'true');
+    const submit = document.getElementById('new-post-modal-submit');
+    if (submit) {
+        submit.disabled = false;
+        submit.textContent = 'Publish';
+    }
+}
+
+function updateNewPostModalCounter() {
+    const input = document.getElementById('new-post-modal-input');
+    const counter = document.getElementById('new-post-modal-counter');
+    if (!input || !counter) return;
+    const count = Array.from(String(input.value || '')).length;
+    counter.textContent = `${count}/500`;
+    counter.classList.toggle('text-red-300', count > 500);
+}
+
+function bindNewPostModal() {
+    const modal = document.getElementById('new-post-modal');
+    const closeBtn = document.getElementById('new-post-modal-close');
+    const cancelBtn = document.getElementById('new-post-modal-cancel');
+    const form = document.getElementById('new-post-modal-form');
+    const input = document.getElementById('new-post-modal-input');
+    const submit = document.getElementById('new-post-modal-submit');
+    if (!modal || !form || !input || !submit) return;
+
+    input.addEventListener('input', updateNewPostModalCounter);
+
+    const close = () => closeNewPostModal();
+
+    if (closeBtn) closeBtn.addEventListener('click', (event) => { event.preventDefault(); close(); });
+    if (cancelBtn) cancelBtn.addEventListener('click', (event) => { event.preventDefault(); close(); });
+
+    modal.addEventListener('click', (event) => {
+        if (event.target !== modal) return;
+        close();
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return;
+        if (modal.classList.contains('hidden')) return;
+        close();
+    });
+
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (submit.disabled) return;
+
+        submit.disabled = true;
+        const previousLabel = submit.textContent;
+        submit.textContent = 'Publishing...';
+
+        try {
+            const success = await createProfilePost(input.value);
+            if (success) {
+                closeNewPostModal();
+            }
+        } finally {
+            submit.disabled = false;
+            submit.textContent = previousLabel;
+        }
+    });
 }
 
 function bindProfilePosts() {
@@ -241,39 +323,6 @@ function bindProfilePosts() {
     if (!root) return;
 
     const canReactToPosts = String(root.getAttribute('data-can-react-posts') || '0') === '1';
-    const form = document.getElementById('profile-post-create-form');
-    const input = document.getElementById('profile-post-input');
-    const submit = document.getElementById('profile-post-submit');
-    const counter = document.getElementById('profile-post-input-counter');
-
-    if (input && counter) {
-        const updateCounter = () => {
-            const count = Array.from(String(input.value || '')).length;
-            counter.textContent = `${count}/500`;
-            counter.classList.toggle('text-red-300', count > 500);
-        };
-
-        input.addEventListener('input', updateCounter);
-        updateCounter();
-    }
-
-    if (form && input && submit) {
-        form.addEventListener('submit', async (event) => {
-            event.preventDefault();
-            if (submit.disabled) return;
-
-            submit.disabled = true;
-            const previousLabel = submit.textContent;
-            submit.textContent = 'Publishing...';
-
-            try {
-                await createProfilePost(input.value);
-            } finally {
-                submit.disabled = false;
-                submit.textContent = previousLabel;
-            }
-        });
-    }
 
     if (!canReactToPosts) {
         return;
