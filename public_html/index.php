@@ -159,6 +159,7 @@ $router->post('/reset-password', 'AuthController@resetPassword');
 // Main
 $router->get('/', 'HomeController@index');
 $router->get('/posts', 'HomeController@posts');
+$router->get('/search', 'HomeController@search');
 
 // User
 $router->get('/u/{user_number}', 'UserController@profile');

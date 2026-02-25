@@ -554,9 +554,21 @@ async function searchUsers(event) {
                     <div class="text-xs ${escapeHtml(user.effective_status_text_class || 'text-zinc-500')} mt-0.5">${escapeHtml(user.effective_status_label || 'Offline')}</div>
                 </div>
             </div>
-            <button class="mt-3 w-full bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded-lg text-sm" onclick="sendFriendRequestByValue('${escapeHtml(formatNumber(user.user_number))}')">Add Friend</button>
+            ${renderSearchResultAction(user)}
         </div>
     `).join('') || '<p class="text-zinc-400 text-sm sm:col-span-2">No users found.</p>';
+}
+
+function renderSearchResultAction(user) {
+    const formattedUserNumber = String(user.formatted_user_number || formatNumber(user.user_number || ''));
+    const friendshipStatus = String(user.friendship_status || '').toLowerCase();
+    const personalChatNumber = String(user.personal_chat_number || '').trim();
+
+    if (friendshipStatus === 'accepted' && personalChatNumber !== '') {
+        return `<a href="/c/${escapeHtml(personalChatNumber)}" class="mt-3 w-full bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded-lg text-sm inline-flex items-center justify-center">Personal Chat</a>`;
+    }
+
+    return `<button class="mt-3 w-full bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded-lg text-sm" onclick="sendFriendRequestByValue('${escapeHtml(formattedUserNumber)}')">Add Friend</button>`;
 }
 
 function getAdminUserListNodes() {

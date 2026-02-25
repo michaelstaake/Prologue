@@ -91,6 +91,30 @@ class ApiController extends Controller {
             $r->formatted_user_number = User::formatUserNumber($r->user_number);
             $r->avatar_url = User::avatarUrl($r);
             User::attachEffectiveStatus($r);
+
+            $r->friendship_status = null;
+            $r->friendship_direction = null;
+            $r->personal_chat_number = null;
+
+            $friendship = Database::query(
+                "SELECT user_id, friend_id, status
+                 FROM friends
+                 WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)
+                 LIMIT 1",
+                [$currentUserId, $r->id, $r->id, $currentUserId]
+            )->fetch();
+
+            if ($friendship) {
+                $r->friendship_status = $friendship->status ?? null;
+                $r->friendship_direction = ((int)$friendship->user_id === (int)$currentUserId) ? 'outgoing' : 'incoming';
+
+                if (($r->friendship_status ?? null) === 'accepted') {
+                    $chat = Chat::getOrCreatePersonalChat($currentUserId, $currentUserId, (int)$r->id);
+                    if ($chat) {
+                        $r->personal_chat_number = User::formatUserNumber($chat->chat_number);
+                    }
+                }
+            }
         }
 
         $this->json(['users' => $results]);

@@ -140,6 +140,14 @@ class HomeController extends Controller {
         ]);
     }
 
+    public function search() {
+        Auth::requireAuth();
+
+        $this->view('search', [
+            'csrf' => $this->csrfToken()
+        ]);
+    }
+
     public function settings() {
         Auth::requireAuth();
         $user = Auth::user();
