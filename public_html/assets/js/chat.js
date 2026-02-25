@@ -1047,17 +1047,15 @@ async function loadSidebarChats() {
         const hasPersonalStatus = type === 'personal' && Boolean(chat.effective_status_label);
         const showFavoriteStar = type === 'personal' && (Number(chat.is_favorite) === 1 || chat.is_favorite === true);
         const unreadCount = Math.max(0, Number(chat.unread_count || 0));
-        const secondaryLine = hasCustomTitle
-            ? chatNumberLabel
-            : (() => {
-                const rawMessage = decodeStoredMentionsToPlainText(chat.last_message || '');
-                if (!rawMessage) return 'No messages yet';
-                const senderId = Number(chat.last_message_user_id || 0);
-                const prefix = senderId && senderId === Number(currentUserId || 0)
-                    ? 'You'
-                    : (chat.last_message_sender_username || '');
-                return prefix ? `${prefix}: ${rawMessage}` : rawMessage;
-            })();
+        const rawMessage = decodeStoredMentionsToPlainText(chat.last_message || '');
+        const secondaryLine = (() => {
+            if (!rawMessage) return 'No messages yet';
+            const senderId = Number(chat.last_message_user_id || 0);
+            const prefix = senderId && senderId === Number(currentUserId || 0)
+                ? 'You'
+                : (chat.last_message_sender_username || '');
+            return prefix ? `${prefix}: ${rawMessage}` : rawMessage;
+        })();
         const unreadBadge = unreadCount > 0
             ? `<span class="ml-auto min-w-[1.25rem] h-5 px-1 rounded-full bg-emerald-600 text-white text-xs inline-flex items-center justify-center">${escapeHtml(formatCountBadgeValue(unreadCount))}</span>`
             : '';
