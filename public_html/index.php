@@ -255,7 +255,9 @@ $router->group('/api', function($r) {
     $r->get('/users/search', 'ApiController@searchUsers');
     $r->get('/friends', 'ApiController@getFriends');
     $r->get('/chats', 'ApiController@getChats');
+    $r->get('/messages/search', 'ApiController@searchMessages');
     $r->get('/messages/{chat_id}', 'ApiController@getMessages');
+    $r->get('/posts/search', 'ApiController@searchPosts');
     $r->get('/notifications', 'ApiController@getNotifications');
     $r->get('/invites', 'ApiController@getInvites');
     $r->get('/calls/active/{chat_id}', 'ApiController@getActiveCall');

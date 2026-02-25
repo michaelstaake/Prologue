@@ -1784,6 +1784,23 @@ function applyInitialChatScrollPosition() {
     const box = document.getElementById('messages');
     if (!chatView || !box) return;
 
+    const urlParams = new URLSearchParams(window.location.search);
+    const targetMsgId = Number(urlParams.get('msg') || 0);
+    if (targetMsgId > 0) {
+        const anchor = getMessageScrollAnchor(targetMsgId);
+        if (anchor !== null) {
+            box.scrollTop = anchor;
+            const target = box.querySelector(`[data-message-id="${targetMsgId}"]`);
+            if (target) {
+                target.style.backgroundColor = 'rgba(52, 211, 153, 0.08)';
+                target.style.borderRadius = '0.5rem';
+                target.style.transition = 'background-color 1.5s ease';
+                setTimeout(() => { target.style.backgroundColor = ''; }, 2500);
+            }
+            return;
+        }
+    }
+
     const firstUnseenMessageId = Number(chatView.dataset.firstUnseenMessageId || 0);
     const anchor = getMessageScrollAnchor(firstUnseenMessageId);
 

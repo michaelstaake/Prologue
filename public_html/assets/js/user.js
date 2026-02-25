@@ -1383,3 +1383,154 @@ function bindInviteCopyButtons() {
         });
     });
 }
+
+function stripMessageMentions(content) {
+    return String(content || '').replace(/@\[\d{16}\|([a-zA-Z][a-zA-Z0-9]{3,31})\]/g, '@$1');
+}
+
+function highlightSearchTerm(text, query) {
+    if (!query || !text) return escapeHtml(text);
+    const escapedText = escapeHtml(text);
+    const escapedQuery = escapeHtml(query);
+    const regexSafe = escapedQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return escapedText.replace(
+        new RegExp(regexSafe, 'gi'),
+        '<mark style="background:rgba(52,211,153,0.2);color:#6ee7b7;border-radius:2px;padding:0 2px;">$&</mark>'
+    );
+}
+
+async function searchPosts(event) {
+    event.preventDefault();
+    const input = document.getElementById('post-search-input');
+    const results = document.getElementById('post-search-results');
+    const help = document.getElementById('post-search-help');
+    if (!input || !results) return;
+
+    const query = input.value.trim();
+    if (query.length < 2) {
+        showToast('Please enter at least 2 characters', 'error');
+        return;
+    }
+
+    if (help) {
+        help.classList.add('hidden');
+    }
+
+    results.innerHTML = '<p class="text-zinc-400 text-sm">Searching...</p>';
+
+    try {
+        const res = await fetch(`/api/posts/search?q=${encodeURIComponent(query)}`);
+        if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            showToast(data.error || 'Search failed', 'error');
+            results.innerHTML = '';
+            return;
+        }
+
+        const data = await res.json();
+        const posts = data.posts || [];
+
+        if (posts.length === 0) {
+            results.innerHTML = '<p class="text-zinc-400 text-sm">No posts found.</p>';
+            return;
+        }
+
+        results.innerHTML = posts.map(post => {
+            const authorUsername = escapeHtml(String(post.author_username || ''));
+            const authorNumFormatted = escapeHtml(String(post.author_user_number_formatted || ''));
+            const postId = Number(post.post_id || 0);
+            const profileUrl = `/u/${authorNumFormatted}?post=${postId}`;
+            const rawContent = String(post.content || '');
+            const highlightedContent = highlightSearchTerm(rawContent, query);
+            const timestamp = formatCompactMessageTimestamp(String(post.created_at || ''));
+            const authorObj = {
+                avatar_url: String(post.author_avatar_url || ''),
+                username: String(post.author_username || ''),
+                user_number: String(post.author_user_number || '')
+            };
+            const isFriend = post.is_friend === true || post.is_friend === 1;
+            const friendLabel = isFriend ? 'Friend' : 'Not Friend';
+
+            return `
+                <a href="${profileUrl}" class="block bg-zinc-800 hover:bg-zinc-700/80 rounded-xl p-4 transition border border-zinc-700 hover:border-zinc-600">
+                    <div class="flex items-center gap-2 mb-2 min-w-0">
+                        ${renderAvatarMarkup(authorObj, 'w-7 h-7', 'text-xs')}
+                        <span class="font-medium text-zinc-100 truncate">${authorUsername}</span>
+                        <span class="shrink-0 text-xs text-zinc-500 bg-zinc-900 border border-zinc-700 px-1.5 py-0.5 rounded">${friendLabel}</span>
+                        <span class="ml-auto shrink-0 text-xs text-zinc-500">${escapeHtml(timestamp)}</span>
+                    </div>
+                    <div class="text-sm text-zinc-300 leading-5 overflow-hidden" style="display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;">${highlightedContent}</div>
+                </a>
+            `;
+        }).join('');
+    } catch {
+        showToast('Search failed', 'error');
+        results.innerHTML = '';
+    }
+}
+
+async function searchMessages(event) {
+    event.preventDefault();
+    const input = document.getElementById('message-search-input');
+    const results = document.getElementById('message-search-results');
+    const help = document.getElementById('message-search-help');
+    if (!input || !results) return;
+
+    const query = input.value.trim();
+    if (query.length < 2) {
+        showToast('Please enter at least 2 characters', 'error');
+        return;
+    }
+
+    if (help) {
+        help.classList.add('hidden');
+    }
+
+    results.innerHTML = '<p class="text-zinc-400 text-sm">Searching...</p>';
+
+    try {
+        const res = await fetch(`/api/messages/search?q=${encodeURIComponent(query)}`);
+        if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            showToast(data.error || 'Search failed', 'error');
+            results.innerHTML = '';
+            return;
+        }
+
+        const data = await res.json();
+        const messages = data.messages || [];
+
+        if (messages.length === 0) {
+            results.innerHTML = '<p class="text-zinc-400 text-sm">No messages found.</p>';
+            return;
+        }
+
+        results.innerHTML = messages.map(msg => {
+            const chatTitle = escapeHtml(String(msg.chat_title || msg.chat_number_formatted || ''));
+            const chatType = String(msg.chat_type_normalized || '');
+            const chatTypeLabel = chatType === 'group' ? 'Group Chat' : 'Private Chat';
+            const chatNumFormatted = escapeHtml(String(msg.chat_number_formatted || ''));
+            const msgId = Number(msg.message_id || 0);
+            const chatUrl = `/c/${chatNumFormatted}?msg=${msgId}`;
+            const rawContent = stripMessageMentions(String(msg.content || ''));
+            const highlightedContent = highlightSearchTerm(rawContent, query);
+            const senderUsername = escapeHtml(String(msg.sender_username || ''));
+            const timestamp = formatCompactMessageTimestamp(String(msg.created_at || ''));
+
+            return `
+                <a href="${chatUrl}" class="block bg-zinc-800 hover:bg-zinc-700/80 rounded-xl p-4 transition border border-zinc-700 hover:border-zinc-600">
+                    <div class="flex items-center gap-2 mb-2 min-w-0">
+                        <span class="font-medium text-zinc-100 truncate">${chatTitle}</span>
+                        <span class="shrink-0 text-xs text-zinc-500 bg-zinc-900 border border-zinc-700 px-1.5 py-0.5 rounded">${chatTypeLabel}</span>
+                        <span class="ml-auto shrink-0 text-xs text-zinc-500">${escapeHtml(timestamp)}</span>
+                    </div>
+                    <div class="text-sm text-zinc-300 leading-5 overflow-hidden" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${highlightedContent}</div>
+                    <div class="mt-2 text-xs text-zinc-500">Sent by <span class="text-zinc-400">${senderUsername}</span></div>
+                </a>
+            `;
+        }).join('');
+    } catch {
+        showToast('Search failed', 'error');
+        results.innerHTML = '';
+    }
+}

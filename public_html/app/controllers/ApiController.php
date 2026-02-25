@@ -69,6 +69,121 @@ class ApiController extends Controller {
         return $supports;
     }
 
+    public function searchPosts() {
+        Auth::requireAuth();
+        $userId = (int)Auth::user()->id;
+        $q = trim($_GET['q'] ?? '');
+
+        if ($q === '' || mb_strlen($q) < 2) {
+            $this->json(['posts' => []]);
+        }
+
+        if (mb_strlen($q) > 200) {
+            $q = mb_substr($q, 0, 200);
+        }
+
+        $search = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $q) . '%';
+
+        $results = Database::query(
+            "SELECT p.id AS post_id,
+                    p.content,
+                    p.created_at,
+                    u.id AS author_id,
+                    u.username AS author_username,
+                    u.user_number AS author_user_number,
+                    u.avatar_filename AS author_avatar_filename,
+                    CASE WHEN f.id IS NOT NULL THEN 1 ELSE 0 END AS is_friend
+             FROM posts p
+             JOIN users u ON u.id = p.user_id
+             LEFT JOIN friends f ON f.status = 'accepted'
+                 AND ((f.user_id = ? AND f.friend_id = u.id) OR (f.friend_id = ? AND f.user_id = u.id))
+             WHERE p.content LIKE ?
+             ORDER BY p.created_at DESC
+             LIMIT 30",
+            [$userId, $userId, $search]
+        )->fetchAll();
+
+        foreach ($results as $r) {
+            $r->author_user_number_formatted = User::formatUserNumber($r->author_user_number);
+            $r->author_avatar_url = User::avatarUrl((object)[
+                'avatar_filename' => $r->author_avatar_filename ?? null,
+                'user_number' => $r->author_user_number ?? null
+            ]);
+            $r->is_friend = (bool)$r->is_friend;
+        }
+
+        $this->json(['posts' => $results]);
+    }
+
+    public function searchMessages() {
+        Auth::requireAuth();
+        $userId = (int)Auth::user()->id;
+        $q = trim($_GET['q'] ?? '');
+
+        if ($q === '' || mb_strlen($q) < 2) {
+            $this->json(['messages' => []]);
+        }
+
+        if (mb_strlen($q) > 200) {
+            $q = mb_substr($q, 0, 200);
+        }
+
+        $supportsChatTitle = $this->supportsChatTitle();
+        $search = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $q) . '%';
+
+        $query = "SELECT
+                    m.id AS message_id,
+                    m.content,
+                    m.created_at,
+                    m.user_id AS sender_id,
+                    u.username AS sender_username,
+                    u.user_number AS sender_user_number,
+                    u.avatar_filename AS sender_avatar_filename,
+                    c.id AS chat_id,
+                    c.chat_number,
+                    c.type AS chat_type,"
+            . ($supportsChatTitle ? "c.title AS chat_custom_title," : "NULL AS chat_custom_title,")
+            . "(SELECT u2.username
+               FROM chat_members cm2
+               JOIN users u2 ON u2.id = cm2.user_id
+               WHERE cm2.chat_id = c.id AND cm2.user_id != ?
+               ORDER BY cm2.joined_at ASC LIMIT 1) AS other_username
+              FROM messages m
+              JOIN chats c ON c.id = m.chat_id
+              JOIN chat_members cm ON cm.chat_id = c.id AND cm.user_id = ?
+              JOIN users u ON u.id = m.user_id
+              WHERE m.content LIKE ?";
+
+        if ($this->supportsChatSoftDelete()) {
+            $query .= " AND c.deleted_at IS NULL";
+        }
+
+        $query .= " ORDER BY m.created_at DESC LIMIT 30";
+
+        $results = Database::query($query, [$userId, $userId, $search])->fetchAll();
+
+        foreach ($results as $r) {
+            $chatType = Chat::normalizeType($r->chat_type ?? null);
+            $r->chat_number_formatted = User::formatUserNumber($r->chat_number);
+            $r->chat_type_normalized = $chatType;
+
+            if ($chatType === 'group') {
+                $customTitle = trim((string)($r->chat_custom_title ?? ''));
+                $r->chat_title = $customTitle !== '' ? $customTitle : $r->chat_number_formatted;
+            } else {
+                $otherUsername = trim((string)($r->other_username ?? ''));
+                $r->chat_title = $otherUsername !== '' ? $otherUsername : ('Chat ' . $r->chat_number_formatted);
+            }
+
+            $r->sender_avatar_url = User::avatarUrl((object)[
+                'avatar_filename' => $r->sender_avatar_filename ?? null,
+                'user_number' => $r->sender_user_number ?? null
+            ]);
+        }
+
+        $this->json(['messages' => $results]);
+    }
+
     public function searchUsers() {
         Auth::requireAuth();
         $currentUserId = Auth::user()->id;

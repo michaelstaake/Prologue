@@ -468,6 +468,30 @@ async function init() {
         searchForm.addEventListener('submit', searchUsers);
     }
 
+    const messageSearchForm = document.getElementById('message-search-form');
+    if (messageSearchForm) {
+        messageSearchForm.addEventListener('submit', searchMessages);
+    }
+
+    const postSearchForm = document.getElementById('post-search-form');
+    if (postSearchForm) {
+        postSearchForm.addEventListener('submit', searchPosts);
+    }
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const targetPostId = Number(urlParams.get('post') || 0);
+    if (targetPostId > 0) {
+        const targetPost = document.querySelector(`[data-profile-post-id="${targetPostId}"]`);
+        if (targetPost) {
+            setTimeout(() => {
+                targetPost.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                targetPost.style.transition = 'box-shadow 1.5s ease';
+                targetPost.style.boxShadow = '0 0 0 2px rgba(52,211,153,0.4)';
+                setTimeout(() => { targetPost.style.boxShadow = ''; }, 2500);
+            }, 100);
+        }
+    }
+
     bindInviteCopyButtons();
     bindUnfriendModal();
     bindNewPostModal();
@@ -605,6 +629,8 @@ window.cancelFriendRequest = cancelFriendRequest;
 window.openUnfriendModal = openUnfriendModal;
 window.toggleFavoriteUser = toggleFavoriteUser;
 window.searchUsers = searchUsers;
+window.searchMessages = searchMessages;
+window.searchPosts = searchPosts;
 window.toggleAdminUserMenu = toggleAdminUserMenu;
 window.changeAdminUserGroup = changeAdminUserGroup;
 window.confirmAdminUserRoleAction = confirmAdminUserRoleAction;
