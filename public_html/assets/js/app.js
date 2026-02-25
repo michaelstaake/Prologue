@@ -79,6 +79,7 @@ let pendingUnfriendUserId = 0;
 let pendingReportTargetType = '';
 let pendingReportTargetId = 0;
 let pendingAdminUserAction = null;
+let pendingProfilePostDeleteId = 0;
 
 const DEFAULT_EMOJI_KEYS = [
     '1F600', '1F603', '1F604', '1F601', '1F606', '1F605', '1F923', '1F602', '1F642', '1F609',
@@ -470,6 +471,7 @@ async function init() {
     bindInviteCopyButtons();
     bindUnfriendModal();
     bindNewPostModal();
+    bindProfilePostDeleteModal();
     bindProfilePosts();
     bindAdminUsersPage();
     bindReportModal();

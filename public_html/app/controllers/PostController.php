@@ -91,4 +91,31 @@ class PostController extends Controller {
 
         $this->json(['success' => true, 'action' => $action]);
     }
+
+    public function delete() {
+        Auth::requireAuth();
+        Auth::csrfValidate();
+
+        $currentUser = Auth::user();
+        $postId = (int)($_POST['post_id'] ?? 0);
+
+        if ($postId <= 0) {
+            $this->json(['error' => 'Invalid payload'], 400);
+        }
+
+        $post = Post::findById($postId);
+        if (!$post) {
+            $this->json(['error' => 'Post not found'], 404);
+        }
+
+        if (!Post::canUserDeletePost($currentUser, $post)) {
+            $this->json(['error' => 'You are not allowed to delete this post'], 403);
+        }
+
+        if (!Post::deleteById($postId)) {
+            $this->json(['error' => 'Unable to delete post'], 500);
+        }
+
+        $this->json(['success' => true]);
+    }
 }

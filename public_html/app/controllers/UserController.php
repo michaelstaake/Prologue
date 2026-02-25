@@ -29,7 +29,7 @@ class UserController extends Controller {
         $friendshipDirection = null;
         $personalChatNumber = null;
         $isFavorite = false;
-        $canReactToPosts = false;
+        $canReactToPosts = (int)$profile->id === (int)$currentUserId;
         if ((int)$profile->id !== (int)$currentUserId) {
             $friendship = Database::query(
                 "SELECT user_id, friend_id, status FROM friends WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?) LIMIT 1",

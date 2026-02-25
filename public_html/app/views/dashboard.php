@@ -48,13 +48,17 @@
     </div>
 
     <?php if ($tab === 'requests'): ?>
-        <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-5">
-            <div class="text-sm font-semibold text-zinc-300 mb-3">Incoming</div>
-            <div class="space-y-3 mb-6">
-                <?php if (empty($pendingIncoming)): ?>
-                    <p class="text-zinc-400 text-sm">No incoming requests.</p>
-                <?php else: ?>
-                    <?php foreach ($pendingIncoming as $request): ?>
+        <section>
+            <?php
+                $incomingRequests = $pendingIncoming ?? [];
+                $outgoingRequests = $pendingOutgoing ?? [];
+                $hasRequests = !empty($incomingRequests) || !empty($outgoingRequests);
+            ?>
+            <?php if (!$hasRequests): ?>
+                <p class="text-zinc-400 text-sm">No pending requests.</p>
+            <?php else: ?>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <?php foreach ($incomingRequests as $request): ?>
                         <?php $requestAvatar = User::avatarUrl($request); ?>
                         <div class="bg-zinc-800 rounded-xl p-3">
                             <div class="flex items-center justify-between gap-3">
@@ -68,24 +72,15 @@
                                     <?php endif; ?>
                                     <div class="min-w-0">
                                         <div class="font-medium truncate"><?= htmlspecialchars($request->username, ENT_QUOTES, 'UTF-8') ?></div>
-                                        <div class="text-xs <?= htmlspecialchars($request->effective_status_text_class ?? 'text-zinc-500', ENT_QUOTES, 'UTF-8') ?> mt-0.5">
-                                            <?= htmlspecialchars($request->effective_status_label ?? 'Offline', ENT_QUOTES, 'UTF-8') ?>
-                                        </div>
+                                        <div class="text-[11px] text-emerald-400 mt-0.5">Incoming request</div>
                                     </div>
                                 </div>
                                 <button class="bg-emerald-600 hover:bg-emerald-500 text-sm px-3 py-1.5 rounded-lg" onclick="acceptFriendRequest(<?= (int)$request->requester_id ?>)">Accept</button>
                             </div>
                         </div>
                     <?php endforeach; ?>
-                <?php endif; ?>
-            </div>
 
-            <div class="text-sm font-semibold text-zinc-300 mb-3">Outgoing</div>
-            <div class="space-y-3">
-                <?php if (empty($pendingOutgoing)): ?>
-                    <p class="text-zinc-400 text-sm">No outgoing requests.</p>
-                <?php else: ?>
-                    <?php foreach ($pendingOutgoing as $request): ?>
+                    <?php foreach ($outgoingRequests as $request): ?>
                         <?php $requestAvatar = User::avatarUrl($request); ?>
                         <div class="bg-zinc-800 rounded-xl p-3">
                             <div class="flex items-center justify-between gap-3">
@@ -99,17 +94,15 @@
                                     <?php endif; ?>
                                     <div class="min-w-0">
                                         <div class="font-medium truncate"><?= htmlspecialchars($request->username, ENT_QUOTES, 'UTF-8') ?></div>
-                                        <div class="text-xs <?= htmlspecialchars($request->effective_status_text_class ?? 'text-zinc-500', ENT_QUOTES, 'UTF-8') ?> mt-0.5">
-                                            <?= htmlspecialchars($request->effective_status_label ?? 'Offline', ENT_QUOTES, 'UTF-8') ?>
-                                        </div>
+                                        <div class="text-[11px] text-zinc-400 mt-0.5">Outgoing request</div>
                                     </div>
                                 </div>
                                 <button class="bg-zinc-700 hover:bg-zinc-600 text-sm px-3 py-1.5 rounded-lg" onclick="cancelFriendRequest(<?= (int)($request->target_user_id ?? 0) ?>)">Cancel</button>
                             </div>
                         </div>
                     <?php endforeach; ?>
-                <?php endif; ?>
-            </div>
+                </div>
+            <?php endif; ?>
         </section>
     <?php else: ?>
         <section>
@@ -187,7 +180,7 @@
             <button type="submit" class="bg-zinc-700 hover:bg-zinc-600 border border-zinc-700 px-5 py-2.5 rounded-xl">Search</button>
         </form>
 
-        <p id="user-search-help" class="text-sm text-zinc-400 mb-4">Enter a partial or full username or user number and press Enter/Return or click the Search button.</p>
+        <p id="user-search-help" class="text-sm text-zinc-400 mb-4">Press Enter/Return or click the Search button to find users.</p>
 
         <div id="user-search-results" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
     </section>
@@ -220,7 +213,11 @@
             </div>
         </div>
 
-        <?php $recentPosts = $recentFriendPosts ?? []; ?>
+        <?php
+            $recentPosts = $recentFriendPosts ?? [];
+            $dashboardCurrentUser = Auth::user();
+            $dashboardCurrentUserId = (int)($dashboardCurrentUser->id ?? 0);
+        ?>
         <?php if (empty($recentPosts)): ?>
             <p class="text-zinc-400 text-sm">No posts from friends yet.</p>
         <?php else: ?>
@@ -232,6 +229,9 @@
                         if ($postId <= 0 || $postContent === '') {
                             continue;
                         }
+                        $postOwnerId = (int)($post->user_id ?? 0);
+                        $isOwnPost = $postOwnerId > 0 && $dashboardCurrentUserId > 0 && $postOwnerId === $dashboardCurrentUserId;
+                        $postContainerClass = $isOwnPost ? 'bg-zinc-900' : 'bg-zinc-800';
                         $postAuthorUsername = htmlspecialchars((string)($post->username ?? ''), ENT_QUOTES, 'UTF-8');
                         $postAuthorNumber = (string)($post->user_number ?? '');
                         $postAuthorUrl = base_url('/u/' . User::formatUserNumber($postAuthorNumber));
@@ -240,7 +240,7 @@
                         $postCreatedAtLabel = $postCreatedAtTs !== false ? date('Y-m-d H:i', $postCreatedAtTs) : 'Unknown';
                         $postAvatar = User::avatarUrl($post);
                     ?>
-                    <article class="bg-zinc-800 rounded-xl p-3">
+                    <article class="<?= htmlspecialchars($postContainerClass, ENT_QUOTES, 'UTF-8') ?> rounded-xl p-3">
                         <div class="flex items-center gap-2 mb-2">
                             <?php if ($postAvatar): ?>
                                 <img src="<?= htmlspecialchars($postAvatar, ENT_QUOTES, 'UTF-8') ?>" alt="<?= $postAuthorUsername ?> avatar" class="w-7 h-7 rounded-full object-cover border border-zinc-700">

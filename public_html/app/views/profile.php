@@ -1,5 +1,7 @@
 <?php
 $postReactionCodes = Post::REACTION_CODES;
+$currentUser = Auth::user();
+$isCurrentUserAdmin = strtolower((string)($currentUser->role ?? '')) === 'admin';
 $postReactionCodeToLabel = [
     '1F44D' => 'Like',
     '1F44E' => 'Dislike',
@@ -99,6 +101,7 @@ $renderPostReactionPicker = static function (int $postId) use ($postReactionCode
 };
 ?>
 
+<div class="h-full overflow-auto">
 <div class="p-8">
     <div class="w-full">
         <?php $profileAvatar = User::avatarUrl($profile); ?>
@@ -189,12 +192,12 @@ $renderPostReactionPicker = static function (int $postId) use ($postReactionCode
     <div class="flex items-center justify-between gap-3 mb-4">
         <h2 class="text-xl font-semibold text-zinc-100">Posts</h2>
         <div class="flex items-center gap-3">
+            <span class="text-xs text-zinc-500 uppercase tracking-wide"><?= count($posts ?? []) ?> total</span>
             <?php if ((int)$profile->id === (int)$currentUserId): ?>
                 <button type="button" onclick="openNewPostModal()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm transition">
                     <i class="fa fa-plus text-xs"></i> New Post
                 </button>
             <?php endif; ?>
-            <span class="text-xs text-zinc-500 uppercase tracking-wide"><?= count($posts ?? []) ?> total</span>
         </div>
     </div>
 
@@ -211,6 +214,8 @@ $renderPostReactionPicker = static function (int $postId) use ($postReactionCode
                 $postCreatedAtTs = $postCreatedAtRaw !== '' ? strtotime($postCreatedAtRaw) : false;
                 $postCreatedAtLabel = $postCreatedAtTs !== false ? date('Y-m-d H:i', $postCreatedAtTs) : 'Unknown';
                 $postReactions = (isset($post->reactions) && is_array($post->reactions)) ? $post->reactions : [];
+                $postOwnerId = (int)($post->user_id ?? (int)$profile->id);
+                $canDeletePost = Post::canUserDeletePost($currentUser, $post);
             ?>
             <article class="bg-zinc-800 rounded-xl p-3" data-profile-post-id="<?= $postId ?>">
                 <div class="text-zinc-100 whitespace-pre-wrap break-words leading-6"><?= nl2br(htmlspecialchars($postContent, ENT_QUOTES, 'UTF-8')) ?></div>
@@ -218,6 +223,17 @@ $renderPostReactionPicker = static function (int $postId) use ($postReactionCode
                     <?= $renderPostReactionPicker($postId) ?>
                     <div class="text-xs flex items-center gap-3">
                         <span class="text-zinc-500" data-utc="<?= htmlspecialchars($postCreatedAtRaw, ENT_QUOTES, 'UTF-8') ?>" title="<?= htmlspecialchars($postCreatedAtRaw, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($postCreatedAtLabel, ENT_QUOTES, 'UTF-8') ?></span>
+                        <?php if ($canDeletePost): ?>
+                            <button
+                                type="button"
+                                class="text-zinc-400 hover:text-red-300 js-profile-post-delete-open"
+                                data-post-id="<?= $postId ?>"
+                                data-post-username="<?= htmlspecialchars((string)$profile->username, ENT_QUOTES, 'UTF-8') ?>"
+                                aria-label="Delete post"
+                            >
+                                Delete
+                            </button>
+                        <?php endif; ?>
                         <?php if (!empty($canReactToPosts)): ?>
                             <button type="button" class="text-zinc-400 hover:text-zinc-300 js-profile-post-react-link" data-post-id="<?= $postId ?>">React</button>
                         <?php endif; ?>
@@ -231,6 +247,8 @@ $renderPostReactionPicker = static function (int $postId) use ($postReactionCode
             <p class="text-sm text-zinc-400">No posts yet.</p>
         <?php endif; ?>
     </div>
+</div>
+
 </div>
 
 <?php if ((int)$profile->id !== (int)$currentUserId && ($friendshipStatus ?? null) === 'accepted'): ?>

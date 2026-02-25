@@ -408,6 +408,19 @@
             </div>
         </div>
     </div>
+
+    <div id="profile-post-delete-modal" class="hidden fixed inset-0 bg-black/70 z-50 p-4 md:p-6" aria-hidden="true">
+        <div class="h-full w-full flex items-center justify-center">
+            <div class="w-full max-w-md bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl p-6" role="dialog" aria-modal="true" aria-labelledby="profile-post-delete-title">
+                <h2 id="profile-post-delete-title" class="text-lg font-semibold text-zinc-100">Delete post</h2>
+                <p id="profile-post-delete-description" class="mt-2 text-sm text-zinc-400">Are you sure you want to delete this post? This cannot be undone.</p>
+                <div class="mt-5 flex items-center justify-end gap-3">
+                    <button type="button" id="profile-post-delete-cancel" class="px-4 py-2 rounded-xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-zinc-200">Cancel</button>
+                    <button type="button" id="profile-post-delete-submit" class="px-4 py-2 rounded-xl bg-red-700 hover:bg-red-600 text-white">Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 <script>
     window.CSRF_TOKEN = <?= json_encode($csrf) ?>;

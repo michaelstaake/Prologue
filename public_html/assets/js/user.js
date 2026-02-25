@@ -265,6 +265,116 @@ async function createProfilePost(content) {
     return true;
 }
 
+async function deleteProfilePost(postId) {
+    const safePostId = Number(postId || 0);
+    if (!Number.isFinite(safePostId) || safePostId <= 0) {
+        showToast('Invalid post', 'error');
+        return false;
+    }
+
+    const result = await postForm('/api/posts/delete', {
+        csrf_token: getCsrfToken(),
+        post_id: String(safePostId)
+    });
+
+    if (!result.success) {
+        showToast(result.error || 'Unable to delete post', 'error');
+        return false;
+    }
+
+    if (typeof queuePendingPageToast === 'function') {
+        queuePendingPageToast('Post deleted', 'success');
+    } else {
+        showToast('Post deleted', 'success');
+    }
+
+    window.location.reload();
+    return true;
+}
+
+function openProfilePostDeleteModal(postId, username = '') {
+    const safePostId = Number(postId || 0);
+    if (!Number.isFinite(safePostId) || safePostId <= 0) {
+        showToast('Invalid post', 'error');
+        return;
+    }
+
+    const modal = document.getElementById('profile-post-delete-modal');
+    const description = document.getElementById('profile-post-delete-description');
+    if (!modal) {
+        deleteProfilePost(safePostId).catch(() => {
+            showToast('Unable to delete post', 'error');
+        });
+        return;
+    }
+
+    const safeUsername = String(username || '').trim();
+    if (description) {
+        description.textContent = safeUsername
+            ? `Are you sure you want to delete @${safeUsername}'s post? This cannot be undone.`
+            : 'Are you sure you want to delete this post? This cannot be undone.';
+    }
+
+    pendingProfilePostDeleteId = safePostId;
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+}
+
+function closeProfilePostDeleteModal() {
+    const modal = document.getElementById('profile-post-delete-modal');
+    if (!modal) return;
+
+    modal.classList.add('hidden');
+    modal.setAttribute('aria-hidden', 'true');
+    pendingProfilePostDeleteId = 0;
+}
+
+function bindProfilePostDeleteModal() {
+    const modal = document.getElementById('profile-post-delete-modal');
+    const cancel = document.getElementById('profile-post-delete-cancel');
+    const submit = document.getElementById('profile-post-delete-submit');
+    if (!modal || !cancel || !submit) return;
+
+    cancel.addEventListener('click', (event) => {
+        event.preventDefault();
+        closeProfilePostDeleteModal();
+    });
+
+    modal.addEventListener('click', (event) => {
+        if (event.target !== modal) return;
+        closeProfilePostDeleteModal();
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return;
+        if (modal.classList.contains('hidden')) return;
+        closeProfilePostDeleteModal();
+    });
+
+    submit.addEventListener('click', async (event) => {
+        event.preventDefault();
+        if (submit.disabled) return;
+        if (!Number.isFinite(pendingProfilePostDeleteId) || pendingProfilePostDeleteId <= 0) {
+            closeProfilePostDeleteModal();
+            return;
+        }
+
+        submit.disabled = true;
+        const previousLabel = submit.textContent;
+        submit.textContent = 'Deleting...';
+
+        try {
+            const success = await deleteProfilePost(pendingProfilePostDeleteId);
+            if (success) {
+                closeProfilePostDeleteModal();
+            }
+        } finally {
+            submit.disabled = false;
+            submit.textContent = previousLabel;
+        }
+    });
+}
+
 function openNewPostModal() {
     const modal = document.getElementById('new-post-modal');
     if (!modal) return;
@@ -354,13 +464,19 @@ function bindProfilePosts() {
 
     const canReactToPosts = String(root.getAttribute('data-can-react-posts') || '0') === '1';
 
-    if (!canReactToPosts) {
-        return;
-    }
-
     root.addEventListener('click', (event) => {
+        const deleteButton = event.target.closest('.js-profile-post-delete-open');
+        if (deleteButton) {
+            event.preventDefault();
+            const postId = Number(deleteButton.getAttribute('data-post-id') || 0);
+            const username = String(deleteButton.getAttribute('data-post-username') || '');
+            openProfilePostDeleteModal(postId, username);
+            return;
+        }
+
         const reactLink = event.target.closest('.js-profile-post-react-link');
         if (reactLink) {
+            if (!canReactToPosts) return;
             event.preventDefault();
             const postId = Number(reactLink.getAttribute('data-post-id') || 0);
             toggleProfilePostReactionPicker(postId);
@@ -369,6 +485,7 @@ function bindProfilePosts() {
 
         const option = event.target.closest('.js-profile-post-reaction-option');
         if (option) {
+            if (!canReactToPosts) return;
             event.preventDefault();
             const postId = Number(option.getAttribute('data-post-id') || 0);
             const reactionCode = String(option.getAttribute('data-reaction-code') || '');
@@ -380,6 +497,7 @@ function bindProfilePosts() {
 
         const badge = event.target.closest('.js-profile-post-reaction-badge');
         if (badge) {
+            if (!canReactToPosts) return;
             event.preventDefault();
             const postId = Number(badge.getAttribute('data-post-id') || 0);
             const reactionCode = String(badge.getAttribute('data-reaction-code') || '');

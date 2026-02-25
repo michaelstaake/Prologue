@@ -103,6 +103,9 @@ $renderPostReactionPicker = static function (int $postId, int $postOwnerId) use 
     <?php
         $selectedPostScope = ($selectedPostScope ?? 'friends') === 'server' ? 'server' : 'friends';
         $posts = $posts ?? ($friendPosts ?? []);
+        $currentUser = Auth::user();
+        $currentUserId = (int)($currentUser->id ?? 0);
+        $isCurrentUserAdmin = strtolower((string)($currentUser->role ?? '')) === 'admin';
         $friendsScopeUrl = base_url('/posts?scope=friends');
         $serverScopeUrl = base_url('/posts?scope=server');
     ?>
@@ -150,8 +153,11 @@ $renderPostReactionPicker = static function (int $postId, int $postOwnerId) use 
                     $postCreatedAtLabel = $postCreatedAtTs !== false ? date('Y-m-d H:i', $postCreatedAtTs) : 'Unknown';
                     $postReactions = (isset($post->reactions) && is_array($post->reactions)) ? $post->reactions : [];
                     $postAvatar = User::avatarUrl($post);
+                    $canDeletePost = Post::canUserDeletePost($currentUser, $post);
+                    $isOwnPost = $postOwnerId > 0 && $currentUserId > 0 && $postOwnerId === $currentUserId;
+                    $postContainerClass = $isOwnPost ? 'bg-zinc-900' : 'bg-zinc-800';
                 ?>
-                <article class="bg-zinc-800 rounded-xl p-4" data-profile-post-id="<?= $postId ?>">
+                <article class="<?= htmlspecialchars($postContainerClass, ENT_QUOTES, 'UTF-8') ?> rounded-xl p-4" data-profile-post-id="<?= $postId ?>">
                     <div class="flex items-center gap-2.5 mb-3">
                         <a href="<?= htmlspecialchars($postAuthorUrl, ENT_QUOTES, 'UTF-8') ?>">
                             <?php if ($postAvatar): ?>
@@ -171,9 +177,18 @@ $renderPostReactionPicker = static function (int $postId, int $postOwnerId) use 
                     <div class="relative mt-3">
                         <?= $renderPostReactionPicker($postId, $postOwnerId) ?>
                         <div class="text-xs flex items-center gap-3">
-                            <?php if ($postOwnerId !== (int)Auth::user()->id): ?>
-                                <button type="button" class="text-zinc-400 hover:text-zinc-300 js-profile-post-react-link" data-post-id="<?= $postId ?>">React</button>
+                            <?php if ($canDeletePost): ?>
+                                <button
+                                    type="button"
+                                    class="text-zinc-400 hover:text-red-300 js-profile-post-delete-open"
+                                    data-post-id="<?= $postId ?>"
+                                    data-post-username="<?= htmlspecialchars($postAuthorUsername, ENT_QUOTES, 'UTF-8') ?>"
+                                    aria-label="Delete post"
+                                >
+                                    Delete
+                                </button>
                             <?php endif; ?>
+                            <button type="button" class="text-zinc-400 hover:text-zinc-300 js-profile-post-react-link" data-post-id="<?= $postId ?>">React</button>
                             <?= $renderPostReactionBadges($postId, $postReactions) ?>
                         </div>
                     </div>

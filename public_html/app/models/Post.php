@@ -1,6 +1,7 @@
 <?php
 class Post extends Model {
     public const MAX_CONTENT_LENGTH = 500;
+    public const OWNER_DELETE_WINDOW_SECONDS = 3600;
     public const REACTION_CODES = [
         '1F44D',
         '1F44E',
@@ -67,6 +68,59 @@ class Post extends Model {
         )->fetch() ?: null;
     }
 
+    public static function canUserDeletePost(object $user, object $post): bool {
+        $currentUserId = (int)($user->id ?? 0);
+        if ($currentUserId <= 0) {
+            return false;
+        }
+
+        $isCurrentUserAdmin = strtolower((string)($user->role ?? '')) === 'admin';
+        if ($isCurrentUserAdmin) {
+            return true;
+        }
+
+        $postOwnerId = (int)($post->user_id ?? 0);
+        if ($postOwnerId <= 0 || $postOwnerId !== $currentUserId) {
+            return false;
+        }
+
+        $postCreatedAtRaw = trim((string)($post->created_at ?? ''));
+        $postCreatedAtTs = $postCreatedAtRaw !== '' ? strtotime($postCreatedAtRaw) : false;
+        if ($postCreatedAtTs === false) {
+            return false;
+        }
+
+        $postAgeInSeconds = time() - (int)$postCreatedAtTs;
+        if ($postAgeInSeconds > self::OWNER_DELETE_WINDOW_SECONDS) {
+            return false;
+        }
+
+        if (property_exists($post, 'has_reaction_from_other_users') && !empty($post->has_reaction_from_other_users)) {
+            return false;
+        }
+
+        $postId = (int)($post->id ?? 0);
+        if ($postId <= 0) {
+            return false;
+        }
+
+        $otherReaction = Database::query(
+            "SELECT id FROM post_reactions WHERE post_id = ? AND user_id <> ? LIMIT 1",
+            [$postId, $postOwnerId]
+        )->fetch();
+
+        return !$otherReaction;
+    }
+
+    public static function deleteById(int $postId): bool {
+        if ($postId <= 0) {
+            return false;
+        }
+
+        Database::query("DELETE FROM posts WHERE id = ? LIMIT 1", [$postId]);
+        return true;
+    }
+
     public static function getByUserId(int $profileUserId, int $currentUserId, int $limit = 30): array {
         if ($profileUserId <= 0) {
             return [];
@@ -94,13 +148,17 @@ class Post extends Model {
         }
 
         $postIds = [];
+        $postOwnerById = [];
+        $hasReactionFromOtherUsersByPost = [];
         foreach ($posts as $post) {
             $postId = (int)($post->id ?? 0);
             if ($postId <= 0) {
                 continue;
             }
+            $postOwnerById[$postId] = (int)($post->user_id ?? 0);
             $postIds[$postId] = true;
             $post->reactions = [];
+            $post->has_reaction_from_other_users = false;
         }
 
         if (count($postIds) === 0) {
@@ -145,6 +203,11 @@ class Post extends Model {
             if ($reactionUserId === $currentUserId) {
                 $aggregatedByPost[$postId][$reactionCode]['reacted_by_current_user'] = true;
             }
+
+            $postOwnerId = (int)($postOwnerById[$postId] ?? 0);
+            if ($postOwnerId > 0 && $reactionUserId !== $postOwnerId) {
+                $hasReactionFromOtherUsersByPost[$postId] = true;
+            }
         }
 
         foreach ($posts as $post) {
@@ -169,6 +232,7 @@ class Post extends Model {
             }
 
             $post->reactions = $reactionRows;
+            $post->has_reaction_from_other_users = !empty($hasReactionFromOtherUsersByPost[$postId]);
         }
     }
 
@@ -190,6 +254,10 @@ class Post extends Model {
     }
 
     public static function canUserReactToPost(int $viewerUserId, int $postOwnerUserId): bool {
+        if ($viewerUserId > 0 && $viewerUserId === $postOwnerUserId) {
+            return true;
+        }
+
         return self::areUsersFriends($viewerUserId, $postOwnerUserId);
     }
 

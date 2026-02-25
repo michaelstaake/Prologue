@@ -192,6 +192,7 @@ $router->post('/api/messages', 'ChatController@sendMessage'); // also used by we
 $router->post('/api/messages/react', 'ChatController@reactMessage');
 $router->post('/api/posts', 'PostController@create');
 $router->post('/api/posts/react', 'PostController@react');
+$router->post('/api/posts/delete', 'PostController@delete');
 $router->post('/api/attachments/upload', 'ChatController@uploadAttachment');
 $router->post('/api/attachments/delete', 'ChatController@deleteAttachment');
 $router->post('/api/chats/typing', 'ApiController@updateTyping');
