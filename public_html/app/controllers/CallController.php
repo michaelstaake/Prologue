@@ -302,7 +302,7 @@ class CallController extends Controller {
         }
 
         $call = Database::query(
-            "SELECT c.id, c.chat_id, c.started_by, c.status, ch.chat_number
+            "SELECT c.id, c.chat_id, c.started_by, c.status, ch.chat_number, ch.type AS chat_type
              FROM calls c
              JOIN chats ch ON ch.id = c.chat_id
              WHERE c.id = ?",
@@ -333,6 +333,31 @@ class CallController extends Controller {
         $chatNumber = (string)$call->chat_number;
         $this->clearCallNotificationsForUser($userId, $chatNumber);
 
+        $ended = false;
+        if (!Chat::isGroupType($call->chat_type ?? null) && (string)($call->status ?? '') === 'active') {
+            Database::query(
+                "UPDATE call_participants
+                 SET left_at = COALESCE(left_at, NOW())
+                 WHERE call_id = ?
+                   AND left_at IS NULL",
+                [$callId]
+            );
+
+            $endStatement = Database::query(
+                "UPDATE calls
+                 SET status = 'ended',
+                     ended_at = COALESCE(ended_at, NOW())
+                 WHERE id = ?
+                   AND status = 'active'",
+                [$callId]
+            );
+
+            if ($endStatement->rowCount() > 0) {
+                $ended = true;
+                $this->appendCallHistoryMessage($callId);
+            }
+        }
+
         $notifiedCaller = false;
         if ((int)$call->started_by > 0 && (int)$call->started_by !== $userId && (string)($call->status ?? '') === 'active') {
             Notification::create(
@@ -345,7 +370,7 @@ class CallController extends Controller {
             $notifiedCaller = true;
         }
 
-        $this->json(['success' => true, 'notified_caller' => $notifiedCaller]);
+        $this->json(['success' => true, 'notified_caller' => $notifiedCaller, 'ended' => $ended]);
     }
 
     public function endCall() {

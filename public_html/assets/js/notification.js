@@ -364,8 +364,17 @@ function bindNotificationSettingsToggles() {
     });
 }
 
-function getNotificationSoundBucket(notificationType) {
-    const normalizedType = String(notificationType || '').trim().toLowerCase();
+function getNotificationSoundBucket(notificationOrType) {
+    const notification = notificationOrType && typeof notificationOrType === 'object'
+        ? notificationOrType
+        : null;
+    const normalizedType = String(notification?.type || notificationOrType || '').trim().toLowerCase();
+    const normalizedTitle = String(notification?.title || '').trim().toLowerCase();
+
+    if (normalizedType === 'call' && normalizedTitle === 'call declined') {
+        return 'other';
+    }
+
     if (normalizedType === 'friend_request') return 'friend_request';
     if (normalizedType === 'message') return 'new_message';
     if (normalizedType === 'call') return 'call';
@@ -446,8 +455,8 @@ function playNotificationSoundBucket(bucket) {
     audio.play().catch(() => {});
 }
 
-function playNotificationSoundForType(notificationType) {
-    const bucket = getNotificationSoundBucket(notificationType);
+function playNotificationSoundForType(notificationOrType) {
+    const bucket = getNotificationSoundBucket(notificationOrType);
     if (!isNotificationSoundEnabled(bucket)) return;
     playNotificationSoundBucket(bucket);
 }
@@ -783,7 +792,7 @@ async function fetchNotifications() {
         if (!seenNotificationIds.has(notificationId) && Number(notification.read) === 0) {
             seenNotificationIds.add(notificationId);
             newlySeenIds.push(notificationId);
-            playNotificationSoundForType(notification.type);
+            playNotificationSoundForType(notification);
             if (shouldSuppressNotificationToast(notification)) {
                 continue;
             }

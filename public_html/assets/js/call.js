@@ -410,8 +410,11 @@ function getChatCallState(call) {
     const startedBy = Number(call?.started_by || 0);
     const me = Number(currentUserId || 0);
     const safeCurrentCallId = Number(currentCallId || 0);
-    const currentUserJoined = Number(call?.current_user_joined || 0) > 0
-        || (Number.isFinite(safeCurrentCallId) && safeCurrentCallId > 0 && safeCurrentCallId === callId);
+    const shouldInferCurrentUserJoined = Number.isFinite(safeCurrentCallId)
+        && safeCurrentCallId > 0
+        && safeCurrentCallId === callId
+        && participantCount > 0;
+    const currentUserJoined = Number(call?.current_user_joined || 0) > 0 || shouldInferCurrentUserJoined;
     const incomingAlert = startedBy > 0 && me > 0 && startedBy !== me && !currentUserJoined;
 
     if (!currentUserJoined) {
@@ -2305,6 +2308,7 @@ async function declineCall() {
     declinedCallId = declinedId;
     stopCallRingingAudio();
     clearAcceptedCallNotifications();
+    let declinedCallEnded = false;
 
     if (declinedId > 0) {
         const result = await postForm('/api/calls/decline', {
@@ -2314,12 +2318,22 @@ async function declineCall() {
 
         if (!result.success) {
             showToast(result.error || 'Unable to decline call', 'error');
+        } else {
+            declinedCallEnded = Number(result.ended || 0) > 0;
         }
     }
 
     document.getElementById('accept-call-btn')?.classList.add('hidden');
     document.getElementById('decline-call-btn')?.classList.add('hidden');
-    document.getElementById('join-call-btn')?.classList.remove('hidden');
+
+    if (declinedCallEnded) {
+        document.getElementById('join-call-btn')?.classList.add('hidden');
+        lastIncomingCallAlertId = 0;
+        latestChatCallId = 0;
+    } else {
+        document.getElementById('join-call-btn')?.classList.remove('hidden');
+    }
+
     refreshGlobalCallState({ force: true }).catch(() => {});
 }
 
