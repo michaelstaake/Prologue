@@ -73,6 +73,7 @@ class InstallController extends Controller {
 
         try {
             $this->executeDatabaseSchema();
+            Setting::set('database_version', APP_VERSION);
 
             $passwordHash = password_hash($passwordRaw, PASSWORD_DEFAULT);
             $userNumber = $this->generateUserNumber();

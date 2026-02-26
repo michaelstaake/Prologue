@@ -13,7 +13,7 @@ INSERT INTO settings (`key`, `value`) VALUES ('invite_codes_per_user', '3');
 INSERT INTO settings (`key`, `value`) VALUES ('invites_enabled', '1');
 INSERT INTO settings (`key`, `value`) VALUES ('attachments_accepted_file_types', 'png,jpg');
 INSERT INTO settings (`key`, `value`) VALUES ('attachments_maximum_file_size_mb', '10');
-INSERT INTO settings (`key`, `value`) VALUES ('database_version', '0.0.1');
+INSERT INTO settings (`key`, `value`) VALUES ('database_version', '0.0.0');
 INSERT INTO settings (`key`, `value`) VALUES ('mail_host', '');
 INSERT INTO settings (`key`, `value`) VALUES ('mail_port', '587');
 INSERT INTO settings (`key`, `value`) VALUES ('mail_user', '');
