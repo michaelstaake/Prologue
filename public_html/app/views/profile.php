@@ -256,13 +256,13 @@ $renderPostReactionPicker = static function (int $postId) use ($postReactionCode
     <?php if ($totalPages > 1): ?>
         <div class="flex items-center justify-between mt-6 pt-4 border-t border-zinc-700">
             <?php if ($currentPage > 1): ?>
-                <a href="<?= $profilePageBaseUrl ?>?page=<?= $currentPage - 1 ?>" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-300 hover:bg-zinc-700 text-sm transition"><i class="fa fa-arrow-left text-xs"></i> Previous</a>
+                <a href="<?= htmlspecialchars($profilePageBaseUrl, ENT_QUOTES, 'UTF-8') ?>?page=<?= $currentPage - 1 ?>" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-300 hover:bg-zinc-700 text-sm transition"><i class="fa fa-arrow-left text-xs"></i> Previous</a>
             <?php else: ?>
                 <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800/40 border border-zinc-700/40 text-zinc-600 text-sm cursor-default"><i class="fa fa-arrow-left text-xs"></i> Previous</span>
             <?php endif; ?>
             <span class="text-zinc-400 text-sm">Page <?= $currentPage ?> of <?= $totalPages ?></span>
             <?php if ($currentPage < $totalPages): ?>
-                <a href="<?= $profilePageBaseUrl ?>?page=<?= $currentPage + 1 ?>" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-300 hover:bg-zinc-700 text-sm transition">Next <i class="fa fa-arrow-right text-xs"></i></a>
+                <a href="<?= htmlspecialchars($profilePageBaseUrl, ENT_QUOTES, 'UTF-8') ?>?page=<?= $currentPage + 1 ?>" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-300 hover:bg-zinc-700 text-sm transition">Next <i class="fa fa-arrow-right text-xs"></i></a>
             <?php else: ?>
                 <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800/40 border border-zinc-700/40 text-zinc-600 text-sm cursor-default">Next <i class="fa fa-arrow-right text-xs"></i></span>
             <?php endif; ?>
