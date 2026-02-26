@@ -1,5 +1,4 @@
 .claude/
-.docker/
 public_html/app/config/config.php
 storage/*
 !storage/.gitkeep
