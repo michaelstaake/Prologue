@@ -423,6 +423,15 @@ function playNotificationSoundBucket(bucket) {
         return;
     }
 
+    if (
+        bucket === 'call'
+        && typeof callRingingAudio !== 'undefined'
+        && callRingingAudio
+        && !callRingingAudio.paused
+    ) {
+        return;
+    }
+
     const soundFile = NOTIFICATION_SOUND_FILE_BY_BUCKET[bucket] || NOTIFICATION_SOUND_FILE_BY_BUCKET.other;
     if (!soundFile) return;
 

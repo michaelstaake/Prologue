@@ -450,6 +450,9 @@ function startCallRingingAudio(direction) {
 
     const audio = ensureCallRingingAudio();
     callRingingDirection = nextDirection;
+    if (typeof stopAllNotificationSounds === 'function') {
+        stopAllNotificationSounds();
+    }
     audio.currentTime = 0;
     audio.play().catch(() => {});
 }
