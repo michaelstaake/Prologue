@@ -618,6 +618,7 @@ async function init() {
     bindNewPostModal();
     bindProfilePostDeleteModal();
     bindProfilePosts();
+    bindDashboardPostNavigation();
     bindAdminUsersPage();
     bindReportModal();
     bindPageToast();
@@ -710,6 +711,35 @@ function bindTrashDeleteModal() {
     form.addEventListener('submit', () => {
         submit.disabled = true;
         submit.textContent = 'Deleting...';
+    });
+}
+
+function bindDashboardPostNavigation() {
+    const postCards = Array.from(document.querySelectorAll('[data-dashboard-post-url]'));
+    if (postCards.length === 0) return;
+
+    const goToPost = (card) => {
+        const url = String(card.getAttribute('data-dashboard-post-url') || '').trim();
+        if (!url) return;
+        window.location.href = url;
+    };
+
+    postCards.forEach((card) => {
+        card.addEventListener('click', (event) => {
+            const interactiveTarget = event.target instanceof Element
+                ? event.target.closest('a, button, input, textarea, select, [role="button"], [role="link"]')
+                : null;
+            if (interactiveTarget && interactiveTarget !== card) {
+                return;
+            }
+            goToPost(card);
+        });
+
+        card.addEventListener('keydown', (event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            event.preventDefault();
+            goToPost(card);
+        });
     });
 }
 

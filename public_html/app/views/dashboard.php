@@ -230,9 +230,16 @@
                         $postCreatedAtRaw = trim((string)($post->created_at ?? ''));
                         $postCreatedAtTs = $postCreatedAtRaw !== '' ? strtotime($postCreatedAtRaw) : false;
                         $postCreatedAtLabel = $postCreatedAtTs !== false ? date('M j, Y H:i', $postCreatedAtTs) : 'Unknown';
+                        $postDestinationUrl = base_url('/posts?post=' . $postId);
                         $postAvatar = User::avatarUrl($post);
                     ?>
-                    <article class="<?= htmlspecialchars($postContainerClass, ENT_QUOTES, 'UTF-8') ?> rounded-xl p-3">
+                    <article
+                        class="<?= htmlspecialchars($postContainerClass, ENT_QUOTES, 'UTF-8') ?> rounded-xl p-3 cursor-pointer hover:bg-zinc-700 transition"
+                        data-dashboard-post-url="<?= htmlspecialchars($postDestinationUrl, ENT_QUOTES, 'UTF-8') ?>"
+                        role="link"
+                        tabindex="0"
+                        title="Open this post"
+                    >
                         <div class="flex items-center gap-2 mb-2">
                             <?php if ($postAvatar): ?>
                                 <img src="<?= htmlspecialchars($postAvatar, ENT_QUOTES, 'UTF-8') ?>" alt="<?= $postAuthorUsername ?> avatar" class="w-7 h-7 rounded-full object-cover border border-zinc-700">
@@ -241,7 +248,7 @@
                                     <?= htmlspecialchars(User::avatarInitial((string)($post->username ?? '')), ENT_QUOTES, 'UTF-8') ?>
                                 </div>
                             <?php endif; ?>
-                            <a href="<?= htmlspecialchars($postAuthorUrl, ENT_QUOTES, 'UTF-8') ?>" class="text-sm font-medium text-zinc-200 hover:text-white transition"><?= $postAuthorUsername ?></a>
+                            <a href="<?= htmlspecialchars($postAuthorUrl, ENT_QUOTES, 'UTF-8') ?>" class="text-sm font-medium text-zinc-200 hover:text-white transition" onclick="event.stopPropagation()"><?= $postAuthorUsername ?></a>
                             <span class="text-xs text-zinc-500 ml-auto" data-utc="<?= htmlspecialchars($postCreatedAtRaw, ENT_QUOTES, 'UTF-8') ?>" title="<?= htmlspecialchars($postCreatedAtRaw, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($postCreatedAtLabel, ENT_QUOTES, 'UTF-8') ?></span>
                         </div>
                         <p class="text-sm text-zinc-100 whitespace-pre-wrap break-words leading-6"><?= nl2br(htmlspecialchars($postContent, ENT_QUOTES, 'UTF-8')) ?></p>
