@@ -5,6 +5,15 @@ storage/*
 !storage/.gitkeep
 !storage/emojis/
 !storage/emojis/**
+!storage/logs/
+storage/logs/*
+!storage/logs/.gitkeep
+!storage/attachments/
+storage/attachments/*
+!storage/attachments/.gitkeep
+!storage/avatars/
+storage/avatars/*
+!storage/avatars/.gitkeep
 .DS_Store
 **/.DS_Store
 .vscode/
