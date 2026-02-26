@@ -80,6 +80,7 @@ let pendingReportTargetType = '';
 let pendingReportTargetId = 0;
 let pendingAdminUserAction = null;
 let pendingProfilePostDeleteId = 0;
+const TIMEZONE_PROMPT_SESSION_KEY_PREFIX = 'timezone_prompt_seen_';
 
 const DEFAULT_EMOJI_KEYS = [
     '1F600', '1F603', '1F604', '1F601', '1F606', '1F605', '1F923', '1F602', '1F642', '1F609',
@@ -650,6 +651,7 @@ async function init() {
     bindReportModal();
     bindPageToast();
     bindTrashDeleteModal();
+    bindTimezoneSuggestionModal();
     bindStatusMenu();
     bindNotificationSettingsToggles();
     bindNotificationSoundPreviewButtons();
@@ -738,6 +740,111 @@ function bindTrashDeleteModal() {
     form.addEventListener('submit', () => {
         submit.disabled = true;
         submit.textContent = 'Deleting...';
+    });
+}
+
+function formatUtcOffsetAsTimezoneLabel(utcOffsetMinutes) {
+    if (!Number.isFinite(utcOffsetMinutes)) return null;
+
+    const sign = utcOffsetMinutes >= 0 ? '+' : '-';
+    const absoluteMinutes = Math.abs(Math.trunc(utcOffsetMinutes));
+    const hours = Math.floor(absoluteMinutes / 60);
+    const minutes = absoluteMinutes % 60;
+
+    if (hours > 14 || (hours === 14 && minutes > 0)) {
+        return null;
+    }
+
+    if (absoluteMinutes === 0) {
+        return 'UTC+0';
+    }
+
+    if (minutes === 0) {
+        return `UTC${sign}${hours}:00`;
+    }
+
+    return `UTC${sign}${hours}:${String(minutes).padStart(2, '0')}`;
+}
+
+function detectBrowserTimezoneLabel() {
+    const now = new Date();
+    const timezoneOffsetMinutes = now.getTimezoneOffset();
+    if (!Number.isFinite(timezoneOffsetMinutes)) return null;
+    return formatUtcOffsetAsTimezoneLabel(-timezoneOffsetMinutes);
+}
+
+function bindTimezoneSuggestionModal() {
+    const userId = Number(window.CURRENT_USER_ID || 0);
+    if (userId <= 0) return;
+
+    const configuredTimezone = String(window.USER_TIMEZONE || 'UTC+0').trim();
+    if (configuredTimezone !== 'UTC+0') return;
+
+    const modal = document.getElementById('timezone-suggest-modal');
+    const value = document.getElementById('timezone-suggest-value');
+    const accept = document.getElementById('timezone-suggest-accept');
+    const decline = document.getElementById('timezone-suggest-decline');
+    if (!modal || !value || !accept || !decline) return;
+
+    const guessedTimezone = detectBrowserTimezoneLabel();
+    if (!guessedTimezone || guessedTimezone === 'UTC+0') return;
+
+    const sessionKey = `${TIMEZONE_PROMPT_SESSION_KEY_PREFIX}${userId}`;
+    try {
+        if (window.sessionStorage.getItem(sessionKey) === '1') {
+            return;
+        }
+        window.sessionStorage.setItem(sessionKey, '1');
+    } catch {
+    }
+
+    value.textContent = guessedTimezone;
+    modal.classList.remove('hidden');
+
+    const closeModal = () => {
+        modal.classList.add('hidden');
+    };
+
+    decline.addEventListener('click', () => {
+        closeModal();
+    });
+
+    accept.addEventListener('click', async () => {
+        accept.disabled = true;
+        decline.disabled = true;
+
+        try {
+            const result = await postForm('/settings/timezone', {
+                csrf_token: getCsrfToken(),
+                timezone: guessedTimezone
+            });
+
+            if (result && result.success) {
+                const savedTimezone = String(result.timezone || guessedTimezone || 'UTC+0');
+                window.USER_TIMEZONE = savedTimezone;
+                showToast(`Time zone updated to ${savedTimezone}.`, 'success');
+                closeModal();
+                return;
+            }
+
+            showToast(result?.error || 'Failed to update time zone.', 'error');
+        } catch {
+            showToast('Failed to update time zone.', 'error');
+        } finally {
+            accept.disabled = false;
+            decline.disabled = false;
+        }
+    });
+
+    modal.addEventListener('click', (event) => {
+        if (event.target !== modal) return;
+        closeModal();
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return;
+        if (modal.classList.contains('hidden')) return;
+        closeModal();
     });
 }
 

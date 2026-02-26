@@ -695,6 +695,16 @@ class HomeController extends Controller {
         }
 
         Setting::set('timezone_' . $userId, $timezone);
+
+        $acceptHeader = strtolower((string)($_SERVER['HTTP_ACCEPT'] ?? ''));
+        $isAjax = strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest';
+        if ($isAjax || strpos($acceptHeader, 'application/json') !== false) {
+            $this->json([
+                'success' => true,
+                'timezone' => $timezone
+            ]);
+        }
+
         $this->flash('success', 'timezone_saved');
         $this->redirect('/settings');
     }

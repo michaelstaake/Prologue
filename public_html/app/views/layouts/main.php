@@ -371,6 +371,20 @@
             </div>
         </div>
     </div>
+
+    <div id="timezone-suggest-modal" class="hidden fixed inset-0 bg-black/70 z-50 p-4 md:p-6" aria-hidden="true">
+        <div class="h-full w-full flex items-center justify-center">
+            <div class="w-full max-w-md bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl p-6" role="dialog" aria-modal="true" aria-labelledby="timezone-suggest-title">
+                <h2 id="timezone-suggest-title" class="text-lg font-semibold text-zinc-100">Update time zone?</h2>
+                <p class="mt-2 text-sm text-zinc-400">Your account is currently using UTC+0. Your browser appears to use <span id="timezone-suggest-value" class="text-zinc-200 font-medium">UTC+0</span>.</p>
+                <p class="mt-2 text-sm text-zinc-400">Would you like to switch automatically?</p>
+                <div class="mt-5 flex items-center justify-end gap-3">
+                    <button type="button" id="timezone-suggest-decline" class="px-4 py-2 rounded-xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-zinc-200">Keep UTC+0</button>
+                    <button type="button" id="timezone-suggest-accept" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white">Switch time zone</button>
+                </div>
+            </div>
+        </div>
+    </div>
     <?php else: ?>
     <div class="min-h-screen flex items-center justify-center px-4">
         <div class="w-full max-w-md">
