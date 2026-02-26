@@ -5,6 +5,7 @@ RUN apt-get update \
 		libfreetype6-dev \
 		libjpeg62-turbo-dev \
 		libpng-dev \
+		libonig-dev \
 	&& docker-php-ext-configure gd --with-freetype --with-jpeg \
 	&& docker-php-ext-install gd pdo pdo_mysql mbstring fileinfo \
 	&& rm -rf /var/lib/apt/lists/*
