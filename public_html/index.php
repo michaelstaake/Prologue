@@ -202,6 +202,7 @@ $router->post('/api/chats/typing', 'ApiController@updateTyping');
 $router->post('/api/chats/group/create', 'ChatController@createGroup');
 $router->post('/api/chats/group/add-member', 'ChatController@addGroupMember');
 $router->post('/api/chats/group/remove-member', 'ChatController@removeGroupMember');
+$router->post('/api/chats/group/take-ownership', 'ChatController@takeGroupOwnership');
 $router->post('/api/chats/group/leave', 'ChatController@leaveGroup');
 $router->post('/api/chats/group/delete', 'ChatController@deleteGroup');
 $router->post('/api/chats/rename', 'ChatController@renameChat');

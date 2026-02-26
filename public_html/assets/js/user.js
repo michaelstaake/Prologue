@@ -1307,6 +1307,13 @@ function bindChatHeaderMenu() {
             return;
         }
 
+        if (action === 'take-ownership') {
+            if (typeof window.takeCurrentGroupOwnership === 'function') {
+                await window.takeCurrentGroupOwnership();
+            }
+            return;
+        }
+
         if (action === 'report-chat' && currentChat) {
             await reportTarget('chat', currentChat.id);
         }

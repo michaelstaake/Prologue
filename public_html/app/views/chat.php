@@ -25,6 +25,8 @@ $messageDisabledNoticeText = $messageRestrictionReason === 'banned_user'
     : 'Messaging is disabled in this private chat until you add each other as friends again.';
 $canReportChat = ((int)$chat->created_by !== (int)$currentUserId);
 $isGroupOwner = $isGroupChat && ((int)$chat->created_by === (int)$currentUserId);
+$isCurrentUserAdmin = (bool)($isCurrentUserAdmin ?? false);
+$canTakeGroupOwnership = $isGroupChat && !$isGroupOwner && $isCurrentUserAdmin;
 $hasChatActions = $isGroupChat || $canReportChat;
 $pinnedMessage = $pinnedMessage ?? null;
 $personalChatUserId = 0;
@@ -144,6 +146,9 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                 <button type="button" data-chat-action="add-user" class="w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-zinc-800">Add User</button>
                 <?php if ($isGroupOwner): ?>
                 <button type="button" data-chat-action="rename-chat" class="w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-zinc-800">Rename Chat</button>
+                <?php endif; ?>
+                <?php if ($canTakeGroupOwnership): ?>
+                <button type="button" data-chat-action="take-ownership" class="w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-zinc-800">Take Ownership</button>
                 <?php endif; ?>
                 <button type="button" data-chat-action="leave-group" class="w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-zinc-800 text-red-300">Leave Group</button>
                 <?php if ($isGroupOwner): ?>
@@ -583,6 +588,21 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                 <div class="flex items-center justify-end gap-3">
                     <button type="button" id="delete-group-cancel" class="px-4 py-2 rounded-xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-zinc-200">Cancel</button>
                     <button type="submit" id="delete-group-submit" class="px-4 py-2 rounded-xl bg-red-700 hover:bg-red-600 text-white">Delete Group</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div id="take-ownership-modal" class="hidden fixed inset-0 bg-black/70 z-50 p-4 md:p-6" aria-hidden="true">
+    <div class="h-full w-full flex items-center justify-center">
+        <div class="w-full max-w-md bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl p-6" role="dialog" aria-modal="true" aria-labelledby="take-ownership-modal-title">
+            <h2 id="take-ownership-modal-title" class="text-lg font-semibold text-zinc-100">Take ownership</h2>
+            <p class="mt-2 text-sm text-zinc-400">Are you sure you want to take ownership of this group?</p>
+            <form id="take-ownership-form" class="mt-4">
+                <div class="flex items-center justify-end gap-3">
+                    <button type="button" id="take-ownership-cancel" class="px-4 py-2 rounded-xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-zinc-200">Cancel</button>
+                    <button type="submit" id="take-ownership-submit" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white">Take Ownership</button>
                 </div>
             </form>
         </div>

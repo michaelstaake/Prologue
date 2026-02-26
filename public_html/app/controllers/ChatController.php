@@ -234,7 +234,9 @@ class ChatController extends Controller {
 
     public function show($params) {
         Auth::requireAuth();
-        $currentUserId = Auth::user()->id;
+        $authUser = Auth::user();
+        $currentUserId = (int)$authUser->id;
+        $isCurrentUserAdmin = strtolower((string)($authUser->role ?? '')) === 'admin';
         $chatNumber = (string)($params['chat_number'] ?? '');
         if (!preg_match('/^\d{4}-\d{4}-\d{4}-\d{4}$/', $chatNumber)) {
             $this->flash('error', 'invalid_chat');
@@ -384,6 +386,7 @@ class ChatController extends Controller {
             'members' => $members,
             'pendingAttachments' => $pendingAttachments,
             'currentUserId' => $currentUserId,
+            'isCurrentUserAdmin' => $isCurrentUserAdmin,
             'firstUnseenMessageId' => $firstUnseenMessageId,
             'canSendMessages' => $canSendMessages,
             'messageRestrictionReason' => $messageRestrictionReason,
@@ -1109,6 +1112,77 @@ class ChatController extends Controller {
         }
 
         $this->json(['success' => true, 'redirect' => '/']);
+    }
+
+    public function takeGroupOwnership() {
+        Auth::requireAuth();
+        Auth::csrfValidate();
+
+        $chatId = (int)($_POST['chat_id'] ?? 0);
+        $authUser = Auth::user();
+        $currentUserId = (int)$authUser->id;
+        $isCurrentUserAdmin = strtolower((string)($authUser->role ?? '')) === 'admin';
+        $actorUsername = User::normalizeUsername($authUser->username ?? '');
+
+        if ($chatId <= 0) {
+            $this->json(['error' => 'Invalid payload'], 400);
+        }
+
+        if (!$isCurrentUserAdmin) {
+            $this->json(['error' => 'Only admins can take group ownership'], 403);
+        }
+
+        $chatSelect = $this->supportsChatSoftDelete()
+            ? "SELECT id, type, created_by, deleted_at FROM chats WHERE id = ?"
+            : "SELECT id, type, created_by FROM chats WHERE id = ?";
+        $chat = Database::query($chatSelect, [$chatId])->fetch();
+        if (!$chat) {
+            $this->json(['error' => 'Chat not found'], 404);
+        }
+
+        if ($this->chatIsSoftDeleted($chat)) {
+            $this->json(['error' => 'Chat not found'], 404);
+        }
+
+        if (!Chat::isGroupType($chat->type ?? null)) {
+            $this->json(['error' => 'Only group chats can change ownership'], 403);
+        }
+
+        $member = Database::query(
+            "SELECT id FROM chat_members WHERE chat_id = ? AND user_id = ? LIMIT 1",
+            [$chatId, $currentUserId]
+        )->fetch();
+        if (!$member) {
+            $this->json(['error' => 'Access denied'], 403);
+        }
+
+        $ownerUserId = (int)($chat->created_by ?? 0);
+        if ($ownerUserId === $currentUserId) {
+            $this->json(['error' => 'You already own this group'], 400);
+        }
+
+        Database::query("UPDATE chats SET created_by = ? WHERE id = ?", [$currentUserId, $chatId]);
+
+        if ($this->supportsSystemEvents() && $actorUsername !== '') {
+            $eventContent = $actorUsername . ' took group ownership';
+            if ($ownerUserId > 0) {
+                $previousOwnerUsername = (string)Database::query(
+                    "SELECT username FROM users WHERE id = ? LIMIT 1",
+                    [$ownerUserId]
+                )->fetchColumn();
+                $normalizedPreviousOwner = User::normalizeUsername($previousOwnerUsername);
+                if ($normalizedPreviousOwner !== '' && $normalizedPreviousOwner !== $actorUsername) {
+                    $eventContent .= ' from ' . $normalizedPreviousOwner;
+                }
+            }
+
+            Database::query(
+                "INSERT INTO chat_system_events (chat_id, event_type, content) VALUES (?, 'ownership_taken', ?)",
+                [$chatId, $eventContent]
+            );
+        }
+
+        $this->json(['success' => true]);
     }
 
     private function parseAttachmentIds($raw): array {

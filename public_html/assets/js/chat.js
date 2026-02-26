@@ -1705,6 +1705,110 @@ async function submitDeleteGroup() {
     showToast(result.error || 'Unable to delete group', 'error');
 }
 
+async function takeCurrentGroupOwnership() {
+    if (!currentChat) return;
+    if (normalizeChatType(currentChat.type) !== 'group') {
+        showToast('Only group chats can change ownership', 'error');
+        return;
+    }
+
+    const ownerUserId = Number(currentChat.owner_user_id || 0);
+    if (ownerUserId > 0 && ownerUserId === Number(currentUserId || 0)) {
+        showToast('You already own this group', 'error');
+        return;
+    }
+
+    if (typeof window.openTakeOwnershipModal === 'function') {
+        window.openTakeOwnershipModal();
+        return;
+    }
+
+    await submitTakeCurrentGroupOwnership();
+}
+
+async function submitTakeCurrentGroupOwnership() {
+    if (!currentChat) return;
+    if (normalizeChatType(currentChat.type) !== 'group') {
+        showToast('Only group chats can change ownership', 'error');
+        return;
+    }
+
+    const ownerUserId = Number(currentChat.owner_user_id || 0);
+    if (ownerUserId > 0 && ownerUserId === Number(currentUserId || 0)) {
+        showToast('You already own this group', 'error');
+        return;
+    }
+
+    const result = await postForm('/api/chats/group/take-ownership', {
+        csrf_token: getCsrfToken(),
+        chat_id: String(currentChat.id)
+    });
+
+    if (result.success) {
+        showToast('You now own this group', 'success');
+        window.location.reload();
+        return;
+    }
+
+    showToast(result.error || 'Unable to take ownership', 'error');
+}
+
+window.takeCurrentGroupOwnership = takeCurrentGroupOwnership;
+
+function bindTakeOwnershipModal() {
+    const modal = document.getElementById('take-ownership-modal');
+    const form = document.getElementById('take-ownership-form');
+    const cancel = document.getElementById('take-ownership-cancel');
+    const submit = document.getElementById('take-ownership-submit');
+    if (!modal || !form || !cancel || !submit) return;
+
+    const setOpenState = (isOpen) => {
+        modal.classList.toggle('hidden', !isOpen);
+        if (!isOpen) {
+            submit.disabled = false;
+            submit.textContent = 'Take Ownership';
+        }
+    };
+
+    const closeModal = () => {
+        setOpenState(false);
+    };
+
+    cancel.addEventListener('click', (event) => {
+        event.preventDefault();
+        closeModal();
+    });
+
+    modal.addEventListener('click', (event) => {
+        if (event.target !== modal) return;
+        closeModal();
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return;
+        if (modal.classList.contains('hidden')) return;
+        closeModal();
+    });
+
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (submit.disabled) return;
+
+        submit.disabled = true;
+        submit.textContent = 'Taking...';
+
+        try {
+            await submitTakeCurrentGroupOwnership();
+        } finally {
+            submit.disabled = false;
+            submit.textContent = 'Take Ownership';
+            closeModal();
+        }
+    });
+
+    window.openTakeOwnershipModal = () => setOpenState(true);
+}
+
 function bindLeaveGroupModal() {
     const modal = document.getElementById('leave-group-modal');
     const form = document.getElementById('leave-group-form');

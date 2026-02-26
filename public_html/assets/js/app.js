@@ -507,6 +507,7 @@ async function init() {
         bindRenameChatModal();
         bindLeaveGroupModal();
         bindDeleteGroupModal();
+        bindTakeOwnershipModal();
         bindChatHeaderMenu();
         bindMessageQuotesAndReactions();
         setChatComposerEnabled(currentChat.can_send_messages !== false, currentChat.message_restriction_reason || '');
