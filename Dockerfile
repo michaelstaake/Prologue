@@ -13,5 +13,9 @@ RUN apt-get update \
 RUN a2enmod rewrite
 
 COPY .docker/vhost.conf /etc/apache2/sites-available/000-default.conf
+COPY .docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 WORKDIR /var/www/html
+
+ENTRYPOINT ["/entrypoint.sh"]
