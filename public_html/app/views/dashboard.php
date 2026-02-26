@@ -145,7 +145,7 @@
     <?php endif; ?>
     </section>
 
-    <div class="grid grid-cols-1 2xl:grid-cols-2 gap-8 items-start">
+    <div class="grid grid-cols-1 2xl:grid-cols-2 gap-3 items-start">
     <div class="min-w-8">
 
     <section class="mb-6">
