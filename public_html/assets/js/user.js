@@ -1529,8 +1529,11 @@ async function searchPostsPage(query, page) {
                 username: String(post.author_username || ''),
                 user_number: String(post.author_user_number || '')
             };
+            const authorId = Number(post.author_id || 0);
+            const currentUserId = Number(window.CURRENT_USER_ID || 0);
+            const isOwnPost = authorId > 0 && currentUserId > 0 && authorId === currentUserId;
             const isFriend = post.is_friend === true || post.is_friend === 1;
-            const friendLabel = isFriend ? 'Friend' : 'Not Friend';
+            const friendLabel = isOwnPost ? 'You' : (isFriend ? 'Friend' : 'Not Friend');
 
             return `
                 <a href="${profileUrl}" class="block bg-zinc-800 hover:bg-zinc-700/80 rounded-xl p-4 transition border border-zinc-700 hover:border-zinc-600">
