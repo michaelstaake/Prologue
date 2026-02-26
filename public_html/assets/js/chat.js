@@ -1470,7 +1470,7 @@ async function createGroupChat() {
     });
 
     if (result.success && result.chat_number) {
-        window.location.href = `/c/${formatNumber(result.chat_number)}`;
+        window.location.href = `/c/${formatNumber(result.chat_number)}?prompt_group_name=1`;
         return;
     }
 
@@ -1983,12 +1983,17 @@ function bindRenameChatModal() {
     const submit = document.getElementById('rename-chat-submit');
     if (!modal || !form || !input || !cancel || !submit) return;
 
-    const setOpenState = (isOpen) => {
+    const defaultCancelLabel = 'Cancel';
+
+    const setOpenState = (isOpen, options = {}) => {
         modal.classList.toggle('hidden', !isOpen);
 
         if (isOpen) {
+            const preferGroupNumber = options && options.preferGroupNumber === true;
             const currentTitle = String(document.getElementById('chat-title')?.textContent || '').trim();
             input.value = currentTitle;
+            cancel.textContent = preferGroupNumber ? 'Use Group Number' : defaultCancelLabel;
+            modal.dataset.preferGroupNumberPrompt = preferGroupNumber ? '1' : '0';
             setTimeout(() => {
                 input.focus();
                 input.select();
@@ -1998,6 +2003,8 @@ function bindRenameChatModal() {
 
         submit.disabled = false;
         submit.textContent = 'Save';
+        cancel.textContent = defaultCancelLabel;
+        modal.dataset.preferGroupNumberPrompt = '0';
     };
 
     const closeModal = () => {
@@ -2024,6 +2031,14 @@ function bindRenameChatModal() {
         event.preventDefault();
         if (submit.disabled) return;
 
+        const isInitialGroupNumberPrompt = modal.dataset.preferGroupNumberPrompt === '1';
+        const safeTitle = String(input.value || '').trim();
+        const groupNumberLabel = currentChat ? String(formatNumber(currentChat.chat_number)) : '';
+        if (isInitialGroupNumberPrompt && groupNumberLabel !== '' && safeTitle === groupNumberLabel) {
+            closeModal();
+            return;
+        }
+
         submit.disabled = true;
         submit.textContent = 'Saving...';
 
@@ -2035,7 +2050,7 @@ function bindRenameChatModal() {
         }
     });
 
-    window.openRenameChatModal = () => setOpenState(true);
+    window.openRenameChatModal = (options = {}) => setOpenState(true, options);
 }
 
 async function pollMessages(options = {}) {

@@ -541,8 +541,7 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
 <div id="rename-chat-modal" class="hidden fixed inset-0 bg-black/70 z-50 p-4 md:p-6" aria-hidden="true">
     <div class="h-full w-full flex items-center justify-center">
         <div class="w-full max-w-md bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl p-6" role="dialog" aria-modal="true" aria-labelledby="rename-chat-modal-title">
-            <h2 id="rename-chat-modal-title" class="text-lg font-semibold text-zinc-100">Rename chat</h2>
-            <p class="mt-2 text-sm text-zinc-400">Choose a new chat name. Leave empty to reset to chat number.</p>
+            <h2 id="rename-chat-modal-title" class="text-lg font-semibold text-zinc-100">Would you like to name this chat?</h2>
             <form id="rename-chat-form" class="mt-4 space-y-4">
                 <label for="rename-chat-input" class="block text-sm text-zinc-300">Chat name</label>
                 <input type="text" id="rename-chat-input" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-zinc-100" placeholder="Enter chat name">

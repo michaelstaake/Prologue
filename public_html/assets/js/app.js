@@ -470,6 +470,31 @@ function renderAvatarMarkup(user, sizeClasses = 'w-10 h-10', textSizeClass = 'te
     return `<div class="${sizeClasses} rounded-full border border-zinc-700 flex items-center justify-center font-semibold ${textSizeClass} ${avatarColorClasses(stableValue)}">${escapeHtml(avatarInitial(username))}</div>`;
 }
 
+function maybePromptForNewGroupName() {
+    if (!currentChat) return;
+    if (normalizeChatType(currentChat.type) !== 'group') return;
+
+    const ownerUserId = Number(currentChat.owner_user_id || 0);
+    const me = Number(currentUserId || 0);
+    if (ownerUserId <= 0 || ownerUserId !== me) {
+        return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('prompt_group_name') !== '1') {
+        return;
+    }
+
+    params.delete('prompt_group_name');
+    const nextQuery = params.toString();
+    const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash || ''}`;
+    window.history.replaceState({}, '', nextUrl);
+
+    if (typeof window.openRenameChatModal === 'function') {
+        window.openRenameChatModal({ preferGroupNumber: true });
+    }
+}
+
 async function init() {
     bindGlobalCallBarInteractions();
 
@@ -510,6 +535,7 @@ async function init() {
         bindTakeOwnershipModal();
         bindChatHeaderMenu();
         bindMessageQuotesAndReactions();
+        maybePromptForNewGroupName();
         setChatComposerEnabled(currentChat.can_send_messages !== false, currentChat.message_restriction_reason || '');
         setChatCallEnabled(currentChat.can_start_calls !== false);
         refreshChatCallStatusBar({ force: true });
