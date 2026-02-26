@@ -3,6 +3,63 @@ class ChatController extends Controller {
     private const GROUP_CHAT_USER_LIMIT = 200;
     private const USER_LIMIT_REACHED_MESSAGE = 'User limit reached. Please try again later.';
 
+    private function getPinnedMessageSettingKey(int $chatId): string {
+        return 'pinned_message_chat_' . $chatId;
+    }
+
+    private function clearPinnedMessageForChat(int $chatId): void {
+        Database::query("DELETE FROM settings WHERE `key` = ?", [$this->getPinnedMessageSettingKey($chatId)]);
+    }
+
+    private function getPinnedMessageForChat(int $chatId) {
+        if ($chatId <= 0) {
+            return null;
+        }
+
+        $rawPinnedMessageId = (string)(Setting::get($this->getPinnedMessageSettingKey($chatId)) ?? '');
+        $pinnedMessageId = (int)$rawPinnedMessageId;
+        if ($pinnedMessageId <= 0) {
+            return null;
+        }
+
+        try {
+            $message = Database::query(
+                "SELECT m.id, m.chat_id, m.user_id, m.content, m.created_at,
+                        u.username, u.user_number, u.avatar_filename
+                 FROM messages m
+                 JOIN users u ON u.id = m.user_id
+                 WHERE m.id = ? AND m.chat_id = ?
+                 LIMIT 1",
+                [$pinnedMessageId, $chatId]
+            )->fetch();
+        } catch (Throwable $e) {
+            if (stripos($e->getMessage(), 'avatar_filename') === false) {
+                throw $e;
+            }
+
+            $message = Database::query(
+                "SELECT m.id, m.chat_id, m.user_id, m.content, m.created_at,
+                        u.username, u.user_number
+                 FROM messages m
+                 JOIN users u ON u.id = m.user_id
+                 WHERE m.id = ? AND m.chat_id = ?
+                 LIMIT 1",
+                [$pinnedMessageId, $chatId]
+            )->fetch();
+        }
+
+        if (!$message) {
+            $this->clearPinnedMessageForChat($chatId);
+            return null;
+        }
+
+        $message->avatar_url = User::avatarUrl($message);
+        $messages = [$message];
+        Message::attachMentionMaps($messages);
+
+        return $message;
+    }
+
     private function isAcceptedFriendship(int $userId, int $otherUserId): bool {
         if ($userId <= 0 || $otherUserId <= 0 || $userId === $otherUserId) {
             return false;
@@ -318,6 +375,7 @@ class ChatController extends Controller {
         }
 
         $pendingAttachments = Attachment::listPendingForChatUser((int)$chat->id, (int)$currentUserId);
+        $pinnedMessage = $this->getPinnedMessageForChat((int)$chat->id);
 
         $this->view('chat', [
             'chat' => $chat,
@@ -330,6 +388,7 @@ class ChatController extends Controller {
             'canSendMessages' => $canSendMessages,
             'messageRestrictionReason' => $messageRestrictionReason,
             'canStartCalls' => $canStartCalls,
+            'pinnedMessage' => $pinnedMessage,
             'csrf' => $this->csrfToken()
         ]);
     }

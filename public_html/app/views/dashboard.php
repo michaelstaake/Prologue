@@ -229,7 +229,7 @@
                         $postAuthorUrl = base_url('/u/' . User::formatUserNumber($postAuthorNumber));
                         $postCreatedAtRaw = trim((string)($post->created_at ?? ''));
                         $postCreatedAtTs = $postCreatedAtRaw !== '' ? strtotime($postCreatedAtRaw) : false;
-                        $postCreatedAtLabel = $postCreatedAtTs !== false ? date('Y-m-d H:i', $postCreatedAtTs) : 'Unknown';
+                        $postCreatedAtLabel = $postCreatedAtTs !== false ? date('M j, Y H:i', $postCreatedAtTs) : 'Unknown';
                         $postAvatar = User::avatarUrl($post);
                     ?>
                     <article class="<?= htmlspecialchars($postContainerClass, ENT_QUOTES, 'UTF-8') ?> rounded-xl p-3">

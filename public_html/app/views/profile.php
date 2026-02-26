@@ -120,7 +120,7 @@ $renderPostReactionPicker = static function (int $postId) use ($postReactionCode
         <?php
             $lastActiveRaw = trim((string)($profile->last_active_at ?? ''));
             $lastActiveTs = $lastActiveRaw !== '' ? strtotime($lastActiveRaw) : false;
-            $lastActiveLabel = $lastActiveTs !== false ? date('Y-m-d H:i', $lastActiveTs) : 'Never';
+            $lastActiveLabel = $lastActiveTs !== false ? date('M j, Y H:i', $lastActiveTs) : 'Never';
 
             $joinedAtRaw = trim((string)($profile->created_at ?? ''));
             $joinedAtTs = $joinedAtRaw !== '' ? strtotime($joinedAtRaw) : false;
@@ -212,7 +212,7 @@ $renderPostReactionPicker = static function (int $postId) use ($postReactionCode
 
                 $postCreatedAtRaw = trim((string)($post->created_at ?? ''));
                 $postCreatedAtTs = $postCreatedAtRaw !== '' ? strtotime($postCreatedAtRaw) : false;
-                $postCreatedAtLabel = $postCreatedAtTs !== false ? date('Y-m-d H:i', $postCreatedAtTs) : 'Unknown';
+                $postCreatedAtLabel = $postCreatedAtTs !== false ? date('M j, Y H:i', $postCreatedAtTs) : 'Unknown';
                 $postReactions = (isset($post->reactions) && is_array($post->reactions)) ? $post->reactions : [];
                 $postOwnerId = (int)($post->user_id ?? (int)$profile->id);
                 $canDeletePost = Post::canUserDeletePost($currentUser, $post);

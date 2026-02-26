@@ -26,6 +26,7 @@ $messageDisabledNoticeText = $messageRestrictionReason === 'banned_user'
 $canReportChat = ((int)$chat->created_by !== (int)$currentUserId);
 $isGroupOwner = $isGroupChat && ((int)$chat->created_by === (int)$currentUserId);
 $hasChatActions = $isGroupChat || $canReportChat;
+$pinnedMessage = $pinnedMessage ?? null;
 $personalChatUserId = 0;
 $personalChatUserNumber = '';
 $personalChatStatusDotClass = null;
@@ -180,6 +181,38 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
         </div>
     </div>
     <?php endif; ?>
+    <?php
+        $initialPinnedMessageId = (int)($pinnedMessage->id ?? 0);
+        $initialPinnedMessageUsername = (string)($pinnedMessage->username ?? 'Unknown user');
+        $initialPinnedMessageContent = (string)($pinnedMessage->content ?? '');
+        $initialPinnedMessageCreatedAt = (string)($pinnedMessage->created_at ?? '');
+        $initialPinnedMessageMentionMap = json_encode((object)($pinnedMessage->mention_map ?? []), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}';
+    ?>
+    <div id="pinned-message-banner" class="<?= $initialPinnedMessageId > 0 ? '' : 'hidden' ?> px-6 py-3 border-b border-zinc-800 bg-zinc-900/70 transition-all duration-200 ease-out" data-pinned-message-id="<?= $initialPinnedMessageId ?>">
+        <div class="flex items-start justify-between gap-4 group">
+            <div class="min-w-0">
+                <div class="text-xs uppercase tracking-wide text-zinc-400">Pinned message</div>
+                <div class="mt-1 text-sm text-zinc-300">
+                    <span id="pinned-message-username" class="font-semibold"><?= htmlspecialchars($initialPinnedMessageUsername, ENT_QUOTES, 'UTF-8') ?></span>
+                    <span class="text-zinc-500">·</span>
+                    <span id="pinned-message-time" class="text-zinc-500"><?= htmlspecialchars(preg_replace('/:(\d{2})(?!.*:\d{2})/', '', $initialPinnedMessageCreatedAt), ENT_QUOTES, 'UTF-8') ?></span>
+                </div>
+                <div id="pinned-message-content" class="text-sm text-zinc-200 leading-6 line-clamp-2" data-raw-content="<?= htmlspecialchars($initialPinnedMessageContent, ENT_QUOTES, 'UTF-8') ?>" data-mention-map="<?= htmlspecialchars($initialPinnedMessageMentionMap, ENT_QUOTES, 'UTF-8') ?>">
+                    <?= nl2br(htmlspecialchars($renderStoredMentionsToPlain($initialPinnedMessageContent, $pinnedMessage->mention_map ?? []), ENT_QUOTES, 'UTF-8')) ?>
+                </div>
+            </div>
+            <div class="flex items-center gap-4 md:opacity-0 md:group-hover:opacity-100 md:pointer-events-none md:group-hover:pointer-events-auto md:transition-opacity md:duration-150 md:ease-out">
+                <button type="button" id="pinned-message-goto" class="inline-flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-200" title="Go to message" aria-label="Go to message">
+                    <i class="fa-solid fa-highlighter" aria-hidden="true"></i>
+                    <span class="hidden md:inline">Go to Message</span>
+                </button>
+                <button type="button" id="pinned-message-unpin" class="inline-flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-200" title="Unpin" aria-label="Unpin">
+                    <i class="fa-solid fa-thumbtack-slash" aria-hidden="true"></i>
+                    <span class="hidden md:inline">Unpin</span>
+                </button>
+            </div>
+        </div>
+    </div>
     <div id="messages" class="flex-1 p-6 overflow-y-auto">
         <?php
             $previousUserId = null;
@@ -258,7 +291,7 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                 $quotedMentionMap = $message->quote_mention_map ?? (object)[];
                 $quotedDisplayContent = $renderStoredMentionsToPlain($quotedContent, $quotedMentionMap);
             ?>
-            <div class="flex gap-3 <?= $isNewGroup ? 'mt-4' : 'mt-1' ?>" data-message-id="<?= (int)$message->id ?>">
+            <div class="flex gap-3 <?= $isNewGroup ? 'mt-4' : 'mt-1' ?> group" data-message-id="<?= (int)$message->id ?>">
                 <div class="w-10 shrink-0">
                     <?php if ($isNewGroup): ?>
                         <?php if ($avatarUrl): ?>
@@ -368,8 +401,11 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
 
                         <div class="text-xs flex items-center gap-3">
                             <span class="text-zinc-500" data-utc="<?= htmlspecialchars($fullTimestamp, ENT_QUOTES, 'UTF-8') ?>" title="<?= htmlspecialchars($fullTimestamp, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($compactTimestamp, ENT_QUOTES, 'UTF-8') ?></span>
-                            <button type="button" class="text-zinc-400 hover:text-zinc-300 js-quote-link" data-quote-message-id="<?= (int)$message->id ?>" data-quote-username="<?= htmlspecialchars((string)$message->username, ENT_QUOTES, 'UTF-8') ?>" data-quote-user-number="<?= htmlspecialchars((string)$message->user_number, ENT_QUOTES, 'UTF-8') ?>" data-quote-content="<?= htmlspecialchars((string)$message->content, ENT_QUOTES, 'UTF-8') ?>" data-quote-mention-map="<?= htmlspecialchars($mentionMapJson, ENT_QUOTES, 'UTF-8') ?>">Quote</button>
-                            <button type="button" class="text-zinc-400 hover:text-zinc-300 js-react-link" data-react-message-id="<?= (int)$message->id ?>">React</button>
+                            <div class="flex items-center gap-3 md:opacity-0 md:group-hover:opacity-100 md:pointer-events-none md:group-hover:pointer-events-auto md:transition-opacity md:duration-150 md:ease-out">
+                                <button type="button" class="text-zinc-400 hover:text-zinc-300 js-quote-link" title="Quote" aria-label="Quote" data-quote-message-id="<?= (int)$message->id ?>" data-quote-username="<?= htmlspecialchars((string)$message->username, ENT_QUOTES, 'UTF-8') ?>" data-quote-user-number="<?= htmlspecialchars((string)$message->user_number, ENT_QUOTES, 'UTF-8') ?>" data-quote-content="<?= htmlspecialchars((string)$message->content, ENT_QUOTES, 'UTF-8') ?>" data-quote-mention-map="<?= htmlspecialchars($mentionMapJson, ENT_QUOTES, 'UTF-8') ?>"><i class="fa-solid fa-reply" aria-hidden="true"></i></button>
+                                <button type="button" class="text-zinc-400 hover:text-zinc-300 js-pin-link" title="Pin" aria-label="Pin" data-pin-message-id="<?= (int)$message->id ?>"><i class="fa-solid fa-thumbtack" aria-hidden="true"></i></button>
+                                <button type="button" class="text-zinc-400 hover:text-zinc-300 js-react-link" title="React" aria-label="React" data-react-message-id="<?= (int)$message->id ?>"><i class="fa-solid fa-thumbs-up" aria-hidden="true"></i></button>
+                            </div>
                             <?php $messageReactions = is_array($message->reactions ?? null) ? $message->reactions : []; ?>
                             <?php if (!empty($messageReactions)): ?>
                                 <div class="flex items-center gap-1.5">
@@ -461,7 +497,23 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
 
 <script>
     window.PENDING_ATTACHMENTS = <?= json_encode($pendingAttachments ?? [], JSON_UNESCAPED_SLASHES) ?>;
+    window.INITIAL_PINNED_MESSAGE = <?= json_encode($pinnedMessage, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
 </script>
+
+<div id="pin-replace-modal" class="hidden fixed inset-0 bg-black/70 z-50 p-4 md:p-6" aria-hidden="true">
+    <div class="h-full w-full flex items-center justify-center">
+        <div class="w-full max-w-md bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl p-6" role="dialog" aria-modal="true" aria-labelledby="pin-replace-modal-title">
+            <h2 id="pin-replace-modal-title" class="text-lg font-semibold text-zinc-100">Replace pinned message?</h2>
+            <p id="pin-replace-modal-description" class="mt-2 text-sm text-zinc-400">This chat already has a pinned message. Do you want to replace it?</p>
+            <form id="pin-replace-form" class="mt-4">
+                <div class="flex items-center justify-end gap-3">
+                    <button type="button" id="pin-replace-cancel" class="px-4 py-2 rounded-xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-zinc-200">Cancel</button>
+                    <button type="submit" id="pin-replace-submit" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white">Replace</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
 <?php if ($isGroupChat): ?>
 <div id="add-user-modal" class="hidden fixed inset-0 bg-black/70 z-50 p-4 md:p-6" aria-hidden="true">

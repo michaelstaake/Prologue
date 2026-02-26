@@ -819,8 +819,13 @@ function bindPageToast() {
 }
 
 function formatToastTime(timestamp) {
+    if (typeof formatCompactMessageTimestamp === 'function') {
+        return formatCompactMessageTimestamp(timestamp);
+    }
+
     try {
-        return new Date(timestamp).toLocaleString();
+        const parsed = new Date(timestamp);
+        return isNaN(parsed.getTime()) ? '' : parsed.toLocaleString();
     } catch {
         return '';
     }
@@ -880,14 +885,19 @@ function renderToastHistory() {
         const expiryBorder = isTemporary
             ? `<div class="absolute bottom-0 left-0 h-0.5 bg-zinc-500 origin-left" style="width:100%; animation: notification-expire-bar ${remainingMs}ms linear forwards;"></div>`
             : '';
+        const createdAt = String(toast.createdAt || '');
         return `
             <div class="relative px-4 py-3 border-b border-zinc-800 ${isClickable ? 'hover:bg-zinc-800 cursor-pointer' : ''}" data-toast-id="${toast.id}" ${isClickable ? `data-toast-link="${escapeHtml(action.href)}"` : ''}>
                 <div class="text-sm ${color}">${renderTextWithOpenMojiMarkup(toast.message)}</div>
-                <div class="text-xs text-zinc-500 mt-1">${escapeHtml(formatToastTime(toast.createdAt))}</div>
+                <div class="text-xs text-zinc-500 mt-1" data-utc="${escapeHtml(createdAt)}" title="${escapeHtml(createdAt)}">${escapeHtml(formatToastTime(createdAt))}</div>
                 ${expiryBorder}
             </div>
         `;
     }).join('') || '<div class="px-4 py-3 text-zinc-400 text-sm">No notifications yet</div>';
+
+    if (typeof window.refreshUtcTimestamps === 'function') {
+        window.refreshUtcTimestamps(list);
+    }
 
     scheduleToastExpirySweep();
 }

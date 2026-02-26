@@ -1,5 +1,62 @@
 <?php
 class ApiController extends Controller {
+    private function getPinnedMessageSettingKey(int $chatId): string {
+        return 'pinned_message_chat_' . $chatId;
+    }
+
+    private function clearPinnedMessageForChat(int $chatId): void {
+        Database::query("DELETE FROM settings WHERE `key` = ?", [$this->getPinnedMessageSettingKey($chatId)]);
+    }
+
+    private function getPinnedMessageForChat(int $chatId) {
+        if ($chatId <= 0) {
+            return null;
+        }
+
+        $rawPinnedMessageId = (string)(Setting::get($this->getPinnedMessageSettingKey($chatId)) ?? '');
+        $pinnedMessageId = (int)$rawPinnedMessageId;
+        if ($pinnedMessageId <= 0) {
+            return null;
+        }
+
+        try {
+            $message = Database::query(
+                "SELECT m.id, m.chat_id, m.user_id, m.content, m.created_at,
+                        u.username, u.user_number, u.avatar_filename
+                 FROM messages m
+                 JOIN users u ON u.id = m.user_id
+                 WHERE m.id = ? AND m.chat_id = ?
+                 LIMIT 1",
+                [$pinnedMessageId, $chatId]
+            )->fetch();
+        } catch (Throwable $e) {
+            if (stripos($e->getMessage(), 'avatar_filename') === false) {
+                throw $e;
+            }
+
+            $message = Database::query(
+                "SELECT m.id, m.chat_id, m.user_id, m.content, m.created_at,
+                        u.username, u.user_number
+                 FROM messages m
+                 JOIN users u ON u.id = m.user_id
+                 WHERE m.id = ? AND m.chat_id = ?
+                 LIMIT 1",
+                [$pinnedMessageId, $chatId]
+            )->fetch();
+        }
+
+        if (!$message) {
+            $this->clearPinnedMessageForChat($chatId);
+            return null;
+        }
+
+        $message->avatar_url = User::avatarUrl($message);
+        $messages = [$message];
+        Message::attachMentionMaps($messages);
+
+        return $message;
+    }
+
     private function supportsChatSoftDelete(): bool {
         return Chat::supportsSoftDelete();
     }
@@ -520,7 +577,92 @@ class ApiController extends Controller {
             }
         }
 
-        $this->json(['messages' => $messages, 'typing_users' => $typingUsers]);
+        $pinnedMessage = $this->getPinnedMessageForChat($chatId);
+
+        $this->json(['messages' => $messages, 'typing_users' => $typingUsers, 'pinned_message' => $pinnedMessage]);
+    }
+
+    public function pinMessage() {
+        Auth::requireAuth();
+        Auth::csrfValidate();
+
+        $chatId = (int)($_POST['chat_id'] ?? 0);
+        $messageId = (int)($_POST['message_id'] ?? 0);
+        $forceReplace = (int)($_POST['force_replace'] ?? 0) === 1;
+        $userId = (int)Auth::user()->id;
+
+        if ($chatId <= 0 || $messageId <= 0) {
+            $this->json(['error' => 'Invalid payload'], 400);
+        }
+
+        $member = Database::query("SELECT id FROM chat_members WHERE chat_id = ? AND user_id = ?", [$chatId, $userId])->fetch();
+        if (!$member) {
+            $this->json(['error' => 'Access denied'], 403);
+        }
+
+        if ($this->supportsChatSoftDelete()) {
+            $chat = Database::query("SELECT id, deleted_at FROM chats WHERE id = ?", [$chatId])->fetch();
+            if (!$chat || $this->chatIsSoftDeleted($chat)) {
+                $this->json(['error' => 'Chat not found'], 404);
+            }
+        }
+
+        $message = Database::query(
+            "SELECT id FROM messages WHERE id = ? AND chat_id = ? LIMIT 1",
+            [$messageId, $chatId]
+        )->fetch();
+        if (!$message) {
+            $this->json(['error' => 'Message not found'], 404);
+        }
+
+        $settingKey = $this->getPinnedMessageSettingKey($chatId);
+        $currentPinnedMessageId = (int)((string)(Setting::get($settingKey) ?? '0'));
+        if ($currentPinnedMessageId > 0 && $currentPinnedMessageId !== $messageId && !$forceReplace) {
+            $this->json([
+                'success' => false,
+                'requires_confirm' => true,
+                'pinned_message' => $this->getPinnedMessageForChat($chatId)
+            ], 409);
+        }
+
+        Setting::set($settingKey, (string)$messageId);
+
+        $this->json([
+            'success' => true,
+            'replaced' => $currentPinnedMessageId > 0 && $currentPinnedMessageId !== $messageId,
+            'pinned_message' => $this->getPinnedMessageForChat($chatId)
+        ]);
+    }
+
+    public function unpinMessage() {
+        Auth::requireAuth();
+        Auth::csrfValidate();
+
+        $chatId = (int)($_POST['chat_id'] ?? 0);
+        $userId = (int)Auth::user()->id;
+
+        if ($chatId <= 0) {
+            $this->json(['error' => 'Invalid payload'], 400);
+        }
+
+        $member = Database::query("SELECT id FROM chat_members WHERE chat_id = ? AND user_id = ?", [$chatId, $userId])->fetch();
+        if (!$member) {
+            $this->json(['error' => 'Access denied'], 403);
+        }
+
+        if ($this->supportsChatSoftDelete()) {
+            $chat = Database::query("SELECT id, deleted_at FROM chats WHERE id = ?", [$chatId])->fetch();
+            if (!$chat || $this->chatIsSoftDeleted($chat)) {
+                $this->json(['error' => 'Chat not found'], 404);
+            }
+        }
+
+        $this->clearPinnedMessageForChat($chatId);
+
+        $this->json([
+            'success' => true,
+            'pinned_message' => null
+        ]);
     }
 
     public function updateTyping() {

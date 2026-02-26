@@ -163,13 +163,79 @@ function escapeHtml(value) {
         .replaceAll("'", '&#039;');
 }
 
+const JUST_A_MOMENT_AGO_LABEL = 'Just a moment ago';
+const ONE_MINUTE_IN_MS = 60 * 1000;
+let utcTimestampRefreshTimeoutId = null;
+
+function parseUtcTimestamp(value) {
+    const fullTimestamp = String(value ?? '').trim();
+    if (!fullTimestamp) return null;
+
+    const numericTimestampPattern = /^\d{10,13}$/;
+    if (numericTimestampPattern.test(fullTimestamp)) {
+        const numericTimestamp = Number(fullTimestamp);
+        if (Number.isFinite(numericTimestamp)) {
+            const normalizedMs = fullTimestamp.length <= 10 ? numericTimestamp * 1000 : numericTimestamp;
+            const numericDate = new Date(normalizedMs);
+            if (!isNaN(numericDate.getTime())) {
+                return numericDate;
+            }
+        }
+    }
+
+    const directlyParsedDate = new Date(fullTimestamp);
+    if (!isNaN(directlyParsedDate.getTime())) {
+        return directlyParsedDate;
+    }
+
+    const parsedDate = new Date(fullTimestamp.replace(' ', 'T') + 'Z');
+    if (!isNaN(parsedDate.getTime())) {
+        return parsedDate;
+    }
+
+    const fallbackMatch = fullTimestamp.match(/^([0-9]{4})-([0-9]{2})-([0-9]{2})(?:[ T]([0-9]{2}):([0-9]{2})(?::([0-9]{2}))?)?$/);
+    if (!fallbackMatch) {
+        return null;
+    }
+
+    const year = Number(fallbackMatch[1]);
+    const month = Number(fallbackMatch[2]);
+    const day = Number(fallbackMatch[3]);
+    const hours = Number(fallbackMatch[4] || 0);
+    const minutes = Number(fallbackMatch[5] || 0);
+    const seconds = Number(fallbackMatch[6] || 0);
+
+    if (
+        !Number.isFinite(year)
+        || month < 1
+        || month > 12
+        || day < 1
+        || day > 31
+        || hours < 0
+        || hours > 23
+        || minutes < 0
+        || minutes > 59
+        || seconds < 0
+        || seconds > 59
+    ) {
+        return null;
+    }
+
+    return new Date(Date.UTC(year, month - 1, day, hours, minutes, seconds));
+}
+
 function formatCompactMessageTimestamp(value) {
     const fullTimestamp = String(value || '').trim();
     if (!fullTimestamp) return '';
 
-    const date = new Date(fullTimestamp.replace(' ', 'T') + 'Z');
-    if (isNaN(date.getTime())) {
-        return fullTimestamp.replace(/:(\d{2})(?!.*:\d{2})/, '');
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    const date = parseUtcTimestamp(fullTimestamp);
+    if (!date) return fullTimestamp;
+
+    const diffFromNowMs = Date.now() - date.getTime();
+    if (diffFromNowMs >= 0 && diffFromNowMs < ONE_MINUTE_IN_MS) {
+        return JUST_A_MOMENT_AGO_LABEL;
     }
 
     const tz = String(window.USER_TIMEZONE || 'UTC+0');
@@ -179,19 +245,73 @@ function formatCompactMessageTimestamp(value) {
         : 0;
 
     const local = new Date(date.getTime() + offsetMins * 60 * 1000);
-    const year  = local.getUTCFullYear();
-    const month = String(local.getUTCMonth() + 1).padStart(2, '0');
-    const day   = String(local.getUTCDate()).padStart(2, '0');
+    const year = local.getUTCFullYear();
+    const monthIndex = local.getUTCMonth();
+    const day = local.getUTCDate();
     const hours = String(local.getUTCHours()).padStart(2, '0');
-    const mins  = String(local.getUTCMinutes()).padStart(2, '0');
-    return `${year}-${month}-${day} ${hours}:${mins}`;
+    const mins = String(local.getUTCMinutes()).padStart(2, '0');
+    return `${monthNames[monthIndex]} ${day}, ${year} ${hours}:${mins}`;
 }
 
-document.addEventListener('DOMContentLoaded', function () {
-    document.querySelectorAll('[data-utc]').forEach(function (el) {
-        const converted = formatCompactMessageTimestamp(el.dataset.utc);
-        if (converted) el.textContent = converted;
+function getUtcTimestampTargets(root = document) {
+    if (!(root instanceof Element || root instanceof Document)) {
+        return [];
+    }
+
+    const directMatch = root instanceof Element && root.matches('[data-utc]') ? [root] : [];
+    return [...directMatch, ...root.querySelectorAll('[data-utc]')];
+}
+
+function scheduleUtcTimestampRefresh() {
+    if (utcTimestampRefreshTimeoutId) {
+        clearTimeout(utcTimestampRefreshTimeoutId);
+        utcTimestampRefreshTimeoutId = null;
+    }
+
+    const now = Date.now();
+    let nextRefreshDelay = Infinity;
+
+    document.querySelectorAll('[data-utc]').forEach((el) => {
+        const date = parseUtcTimestamp(el.dataset.utc);
+        if (!date) return;
+
+        const elapsedMs = now - date.getTime();
+        if (elapsedMs < 0 || elapsedMs >= ONE_MINUTE_IN_MS) {
+            return;
+        }
+
+        const remainingMs = ONE_MINUTE_IN_MS - elapsedMs;
+        if (remainingMs < nextRefreshDelay) {
+            nextRefreshDelay = remainingMs;
+        }
     });
+
+    if (!Number.isFinite(nextRefreshDelay)) {
+        return;
+    }
+
+    const timeoutMs = Math.max(250, Math.ceil(nextRefreshDelay) + 50);
+    utcTimestampRefreshTimeoutId = setTimeout(() => {
+        refreshUtcTimestamps(document);
+    }, timeoutMs);
+}
+
+function refreshUtcTimestamps(root = document) {
+    const targets = getUtcTimestampTargets(root);
+    targets.forEach((el) => {
+        const converted = formatCompactMessageTimestamp(el.dataset.utc);
+        if (converted) {
+            el.textContent = converted;
+        }
+    });
+
+    scheduleUtcTimestampRefresh();
+}
+
+window.refreshUtcTimestamps = refreshUtcTimestamps;
+
+document.addEventListener('DOMContentLoaded', function () {
+    refreshUtcTimestamps(document);
 });
 
 function formatFileSize(bytes) {

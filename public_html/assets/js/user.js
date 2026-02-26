@@ -1432,7 +1432,8 @@ async function searchPostsPage(query, page) {
             const profileUrl = `/u/${authorNumFormatted}?post=${postId}`;
             const rawContent = String(post.content || '');
             const highlightedContent = highlightSearchTerm(rawContent, query);
-            const timestamp = formatCompactMessageTimestamp(String(post.created_at || ''));
+            const createdAtRaw = String(post.created_at || '');
+            const timestamp = formatCompactMessageTimestamp(createdAtRaw);
             const authorObj = {
                 avatar_url: String(post.author_avatar_url || ''),
                 username: String(post.author_username || ''),
@@ -1447,7 +1448,7 @@ async function searchPostsPage(query, page) {
                         ${renderAvatarMarkup(authorObj, 'w-7 h-7', 'text-xs')}
                         <span class="font-medium text-zinc-100 truncate">${authorUsername}</span>
                         <span class="shrink-0 text-xs text-zinc-500 bg-zinc-900 border border-zinc-700 px-1.5 py-0.5 rounded">${friendLabel}</span>
-                        <span class="ml-auto shrink-0 text-xs text-zinc-500">${escapeHtml(timestamp)}</span>
+                        <span class="ml-auto shrink-0 text-xs text-zinc-500" data-utc="${escapeHtml(createdAtRaw)}" title="${escapeHtml(createdAtRaw)}">${escapeHtml(timestamp)}</span>
                     </div>
                     <div class="text-sm text-zinc-300 leading-5 overflow-hidden" style="display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;">${highlightedContent}</div>
                 </a>
@@ -1474,6 +1475,9 @@ async function searchPostsPage(query, page) {
         }
 
         results.innerHTML = `<div class="space-y-2">${postItems}</div>${paginationHtml}`;
+        if (typeof window.refreshUtcTimestamps === 'function') {
+            window.refreshUtcTimestamps(results);
+        }
 
         results.querySelectorAll('.js-post-search-page').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -1541,14 +1545,15 @@ async function searchMessagesPage(query, page) {
             const rawContent = stripMessageMentions(String(msg.content || ''));
             const highlightedContent = highlightSearchTerm(rawContent, query);
             const senderUsername = escapeHtml(String(msg.sender_username || ''));
-            const timestamp = formatCompactMessageTimestamp(String(msg.created_at || ''));
+            const createdAtRaw = String(msg.created_at || '');
+            const timestamp = formatCompactMessageTimestamp(createdAtRaw);
 
             return `
                 <a href="${chatUrl}" class="block bg-zinc-800 hover:bg-zinc-700/80 rounded-xl p-4 transition border border-zinc-700 hover:border-zinc-600">
                     <div class="flex items-center gap-2 mb-2 min-w-0">
                         <span class="font-medium text-zinc-100 truncate">${chatTitle}</span>
                         <span class="shrink-0 text-xs text-zinc-500 bg-zinc-900 border border-zinc-700 px-1.5 py-0.5 rounded">${chatTypeLabel}</span>
-                        <span class="ml-auto shrink-0 text-xs text-zinc-500">${escapeHtml(timestamp)}</span>
+                        <span class="ml-auto shrink-0 text-xs text-zinc-500" data-utc="${escapeHtml(createdAtRaw)}" title="${escapeHtml(createdAtRaw)}">${escapeHtml(timestamp)}</span>
                     </div>
                     <div class="text-sm text-zinc-300 leading-5 overflow-hidden" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${highlightedContent}</div>
                     <div class="mt-2 text-xs text-zinc-500">Sent by <span class="text-zinc-400">${senderUsername}</span></div>
@@ -1576,6 +1581,9 @@ async function searchMessagesPage(query, page) {
         }
 
         results.innerHTML = `<div class="space-y-2">${messageItems}</div>${paginationHtml}`;
+        if (typeof window.refreshUtcTimestamps === 'function') {
+            window.refreshUtcTimestamps(results);
+        }
 
         results.querySelectorAll('.js-msg-search-page').forEach(btn => {
             btn.addEventListener('click', () => {

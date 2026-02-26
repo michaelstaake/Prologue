@@ -4,6 +4,77 @@ let messageInteractionHandlersBound = false;
 let openReactionPickerMessageId = 0;
 let lastRenderedChatId = 0;
 let lastRenderedMessagesSignature = '';
+let pendingPinReplaceMessageId = 0;
+let pinnedBannerLastScrollTop = 0;
+let pinnedBannerHiddenByScroll = false;
+
+const PINNED_BANNER_MOBILE_BREAKPOINT_QUERY = '(max-width: 767.98px)';
+const PINNED_BANNER_SCROLL_DELTA_PX = 6;
+
+function isPinnedBannerMobileViewport() {
+    if (typeof window.matchMedia !== 'function') return false;
+    return window.matchMedia(PINNED_BANNER_MOBILE_BREAKPOINT_QUERY).matches;
+}
+
+function setPinnedBannerScrollVisibility(isVisible) {
+    const banner = document.getElementById('pinned-message-banner');
+    if (!banner) return;
+
+    const hasPinnedMessage = Number(banner.dataset.pinnedMessageId || 0) > 0;
+    if (!hasPinnedMessage || !isPinnedBannerMobileViewport()) {
+        banner.classList.remove('-translate-y-full', 'opacity-0', 'pointer-events-none', 'max-h-0', 'py-0', 'border-b-0', 'overflow-hidden');
+        if (!banner.classList.contains('py-3')) {
+            banner.classList.add('py-3');
+        }
+        if (!banner.classList.contains('border-b')) {
+            banner.classList.add('border-b');
+        }
+        if (!hasPinnedMessage) {
+            pinnedBannerHiddenByScroll = false;
+        }
+        return;
+    }
+
+    pinnedBannerHiddenByScroll = !isVisible;
+    banner.classList.toggle('-translate-y-full', !isVisible);
+    banner.classList.toggle('opacity-0', !isVisible);
+    banner.classList.toggle('pointer-events-none', !isVisible);
+    banner.classList.toggle('max-h-0', !isVisible);
+    banner.classList.toggle('py-0', !isVisible);
+    banner.classList.toggle('border-b-0', !isVisible);
+    banner.classList.toggle('overflow-hidden', !isVisible);
+
+    banner.classList.toggle('py-3', isVisible);
+    banner.classList.toggle('border-b', isVisible);
+}
+
+function bindPinnedBannerScrollBehavior(messagesBox) {
+    if (!messagesBox || messagesBox.dataset.pinnedScrollBound === '1') return;
+
+    messagesBox.dataset.pinnedScrollBound = '1';
+    pinnedBannerLastScrollTop = Math.max(0, messagesBox.scrollTop || 0);
+
+    messagesBox.addEventListener('scroll', () => {
+        const currentScrollTop = Math.max(0, messagesBox.scrollTop || 0);
+        const delta = currentScrollTop - pinnedBannerLastScrollTop;
+
+        if (Math.abs(delta) < PINNED_BANNER_SCROLL_DELTA_PX) {
+            return;
+        }
+
+        if (delta < 0) {
+            setPinnedBannerScrollVisibility(false);
+        } else {
+            setPinnedBannerScrollVisibility(true);
+        }
+
+        pinnedBannerLastScrollTop = currentScrollTop;
+    }, { passive: true });
+
+    window.addEventListener('resize', () => {
+        setPinnedBannerScrollVisibility(true);
+    });
+}
 
 const MESSAGE_REACTION_OPTIONS = [
     { code: '1F44D', label: 'Like' },
@@ -322,13 +393,19 @@ function renderQuotedMessageBlock(msg) {
         return '';
     }
 
+    const quotedMessageId = Number(msg?.quoted_message_id || 0);
+    const hasQuotedMessageTarget = Number.isFinite(quotedMessageId) && quotedMessageId > 0;
     const quotedMentionMap = normalizeMentionMap(msg?.quote_mention_map || {});
     const quotedUserNumber = String(msg?.quoted_user_number || '').replace(/\D/g, '').slice(0, 16);
     const quotedUsername = String(msg?.quoted_username || 'Unknown user').trim() || 'Unknown user';
     const quotedProfileUrl = quotedUserNumber ? getProfileUrlByUserNumber(quotedUserNumber) : '';
 
+    const blockAttributes = hasQuotedMessageTarget
+        ? ` class="js-quoted-message-link mt-1.5 mb-2 p-2 rounded-lg border border-zinc-700 bg-zinc-900/70 text-sm hover:bg-zinc-800/70 transition-colors cursor-pointer" data-quoted-message-id="${quotedMessageId}" title="Go to quoted message"`
+        : ' class="mt-1.5 mb-2 p-2 rounded-lg border border-zinc-700 bg-zinc-900/70 text-sm"';
+
     return `
-        <div class="mt-1.5 mb-2 p-2 rounded-lg border border-zinc-700 bg-zinc-900/70 text-sm">
+        <div${blockAttributes}>
             <div class="text-zinc-400 text-xs mb-1">${quotedProfileUrl ? `<a href="${escapeHtml(quotedProfileUrl)}" class="hover:underline underline-offset-2">${escapeHtml(quotedUsername)}</a>` : escapeHtml(quotedUsername)}</div>
             <div class="text-zinc-300 leading-5 line-clamp-3">${renderMessageContent(quotedContentRaw, quotedMentionMap)}</div>
         </div>
@@ -463,6 +540,267 @@ async function reactToMessage(messageId, reactionCode) {
     await pollMessages({ scrollMode: 'preserve' });
 }
 
+function normalizePinnedMessage(pinnedMessage) {
+    if (!pinnedMessage || typeof pinnedMessage !== 'object') {
+        return null;
+    }
+
+    const id = Number(pinnedMessage.id || 0);
+    if (!Number.isFinite(id) || id <= 0) {
+        return null;
+    }
+
+    return {
+        id,
+        chat_id: Number(pinnedMessage.chat_id || 0),
+        user_id: Number(pinnedMessage.user_id || 0),
+        username: String(pinnedMessage.username || 'Unknown user').trim() || 'Unknown user',
+        user_number: String(pinnedMessage.user_number || ''),
+        created_at: String(pinnedMessage.created_at || ''),
+        content: String(pinnedMessage.content || ''),
+        mention_map: normalizeMentionMap(pinnedMessage.mention_map || {})
+    };
+}
+
+function renderPinnedMessageBanner(pinnedMessage) {
+    const banner = document.getElementById('pinned-message-banner');
+    const usernameNode = document.getElementById('pinned-message-username');
+    const timeNode = document.getElementById('pinned-message-time');
+    const contentNode = document.getElementById('pinned-message-content');
+    const goToButton = document.getElementById('pinned-message-goto');
+    const unpinButton = document.getElementById('pinned-message-unpin');
+    if (!banner || !usernameNode || !timeNode || !contentNode) return;
+
+    const safePinnedMessage = normalizePinnedMessage(pinnedMessage);
+    if (!safePinnedMessage) {
+        banner.classList.add('hidden');
+        banner.classList.remove('-translate-y-full', 'opacity-0', 'pointer-events-none');
+        banner.dataset.pinnedMessageId = '0';
+        pinnedBannerHiddenByScroll = false;
+        usernameNode.textContent = '';
+        delete timeNode.dataset.utc;
+        timeNode.removeAttribute('title');
+        timeNode.textContent = '';
+        contentNode.innerHTML = '';
+        contentNode.dataset.rawContent = '';
+        contentNode.dataset.mentionMap = '{}';
+        if (unpinButton) {
+            unpinButton.disabled = true;
+            unpinButton.classList.add('opacity-50', 'cursor-not-allowed');
+        }
+        if (goToButton) {
+            goToButton.disabled = true;
+            goToButton.classList.add('opacity-50', 'cursor-not-allowed');
+        }
+        return;
+    }
+
+    banner.classList.remove('hidden');
+    banner.dataset.pinnedMessageId = String(safePinnedMessage.id);
+    setPinnedBannerScrollVisibility(!pinnedBannerHiddenByScroll);
+    usernameNode.textContent = safePinnedMessage.username;
+    timeNode.dataset.utc = safePinnedMessage.created_at;
+    timeNode.title = safePinnedMessage.created_at;
+    timeNode.textContent = formatCompactMessageTimestamp(safePinnedMessage.created_at);
+    contentNode.dataset.rawContent = safePinnedMessage.content;
+    contentNode.dataset.mentionMap = JSON.stringify(safePinnedMessage.mention_map || {});
+    contentNode.innerHTML = renderMessageContent(safePinnedMessage.content, safePinnedMessage.mention_map || {});
+    if (typeof window.refreshUtcTimestamps === 'function') {
+        window.refreshUtcTimestamps(timeNode);
+    }
+    if (unpinButton) {
+        unpinButton.disabled = false;
+        unpinButton.classList.remove('opacity-50', 'cursor-not-allowed');
+    }
+    if (goToButton) {
+        goToButton.disabled = false;
+        goToButton.classList.remove('opacity-50', 'cursor-not-allowed');
+    }
+}
+
+async function unpinCurrentChatMessage() {
+    if (!currentChat) {
+        return;
+    }
+
+    const result = await postForm('/api/messages/unpin', {
+        csrf_token: getCsrfToken(),
+        chat_id: String(currentChat.id)
+    });
+
+    if (!result.success) {
+        showToast(result.error || 'Unable to unpin message', 'error');
+        return;
+    }
+
+    currentChat.pinned_message = null;
+    renderPinnedMessageBanner(null);
+    showToast('Pinned message removed', 'success');
+}
+
+function bindPinnedMessageBannerActions() {
+    const goToButton = document.getElementById('pinned-message-goto');
+    const unpinButton = document.getElementById('pinned-message-unpin');
+    if (!goToButton && !unpinButton) {
+        return;
+    }
+
+    if (goToButton && goToButton.dataset.bound !== '1') {
+        goToButton.dataset.bound = '1';
+        goToButton.addEventListener('click', (event) => {
+            event.preventDefault();
+            if (goToButton.disabled) {
+                return;
+            }
+
+            const box = document.getElementById('messages');
+            const pinnedMessageId = Number(currentChat?.pinned_message?.id || 0);
+            if (!box || !Number.isFinite(pinnedMessageId) || pinnedMessageId <= 0) {
+                showToast('Pinned message not available', 'error');
+                return;
+            }
+
+            const focused = focusMessageById(pinnedMessageId);
+            if (!focused) {
+                showToast('Pinned message is not in the loaded history', 'error');
+                return;
+            }
+        });
+    }
+
+    if (!unpinButton || unpinButton.dataset.bound === '1') {
+        return;
+    }
+    unpinButton.dataset.bound = '1';
+
+    unpinButton.addEventListener('click', (event) => {
+        event.preventDefault();
+        if (unpinButton.disabled) {
+            return;
+        }
+
+        unpinButton.disabled = true;
+        unpinCurrentChatMessage()
+            .catch(() => {
+                showToast('Unable to unpin message', 'error');
+            })
+            .finally(() => {
+                const hasPinnedMessage = Number(currentChat?.pinned_message?.id || 0) > 0;
+                unpinButton.disabled = !hasPinnedMessage;
+                unpinButton.classList.toggle('opacity-50', !hasPinnedMessage);
+                unpinButton.classList.toggle('cursor-not-allowed', !hasPinnedMessage);
+                if (goToButton) {
+                    goToButton.disabled = !hasPinnedMessage;
+                    goToButton.classList.toggle('opacity-50', !hasPinnedMessage);
+                    goToButton.classList.toggle('cursor-not-allowed', !hasPinnedMessage);
+                }
+            });
+    });
+}
+
+function bindPinReplaceModal() {
+    const modal = document.getElementById('pin-replace-modal');
+    const form = document.getElementById('pin-replace-form');
+    const cancel = document.getElementById('pin-replace-cancel');
+    const submit = document.getElementById('pin-replace-submit');
+    if (!modal || !form || !cancel || !submit) return;
+
+    if (modal.dataset.bound === '1') {
+        return;
+    }
+    modal.dataset.bound = '1';
+
+    const setOpenState = (isOpen) => {
+        modal.classList.toggle('hidden', !isOpen);
+        if (!isOpen) {
+            pendingPinReplaceMessageId = 0;
+            submit.disabled = false;
+            submit.textContent = 'Replace';
+        }
+    };
+
+    const closeModal = () => {
+        setOpenState(false);
+    };
+
+    cancel.addEventListener('click', (event) => {
+        event.preventDefault();
+        closeModal();
+    });
+
+    modal.addEventListener('click', (event) => {
+        if (event.target !== modal) return;
+        closeModal();
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return;
+        if (modal.classList.contains('hidden')) return;
+        closeModal();
+    });
+
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (submit.disabled) return;
+
+        const messageId = Number(pendingPinReplaceMessageId || 0);
+        if (!Number.isFinite(messageId) || messageId <= 0) {
+            closeModal();
+            return;
+        }
+
+        submit.disabled = true;
+        submit.textContent = 'Replacing...';
+
+        try {
+            await pinMessageInCurrentChat(messageId, true);
+        } finally {
+            closeModal();
+        }
+    });
+
+    window.openPinReplaceModal = (messageId) => {
+        pendingPinReplaceMessageId = Number(messageId || 0);
+        if (!Number.isFinite(pendingPinReplaceMessageId) || pendingPinReplaceMessageId <= 0) {
+            pendingPinReplaceMessageId = 0;
+            return;
+        }
+
+        setOpenState(true);
+    };
+}
+
+async function pinMessageInCurrentChat(messageId, forceReplace = false) {
+    const safeMessageId = Number(messageId || 0);
+    if (!currentChat || !Number.isFinite(safeMessageId) || safeMessageId <= 0) {
+        return;
+    }
+
+    const result = await postForm('/api/messages/pin', {
+        csrf_token: getCsrfToken(),
+        chat_id: String(currentChat.id),
+        message_id: String(safeMessageId),
+        force_replace: forceReplace ? '1' : '0'
+    });
+
+    if (result.success) {
+        const pinnedMessage = normalizePinnedMessage(result.pinned_message);
+        currentChat.pinned_message = pinnedMessage;
+        renderPinnedMessageBanner(pinnedMessage);
+        showToast(result.replaced ? 'Pinned message replaced' : 'Message pinned', 'success');
+        return;
+    }
+
+    if (result.requires_confirm) {
+        if (typeof window.openPinReplaceModal === 'function') {
+            window.openPinReplaceModal(safeMessageId);
+        }
+        return;
+    }
+
+    showToast(result.error || 'Unable to pin message', 'error');
+}
+
 function bindMessageQuotesAndReactions() {
     if (messageInteractionHandlersBound) return;
 
@@ -470,8 +808,32 @@ function bindMessageQuotesAndReactions() {
     if (!messagesBox) return;
 
     messageInteractionHandlersBound = true;
+    bindPinReplaceModal();
+    bindPinnedMessageBannerActions();
+
+    const initialPinnedMessage = normalizePinnedMessage(window.INITIAL_PINNED_MESSAGE || null);
+    if (currentChat) {
+        currentChat.pinned_message = initialPinnedMessage;
+    }
+    renderPinnedMessageBanner(initialPinnedMessage);
+    bindPinnedBannerScrollBehavior(messagesBox);
 
     messagesBox.addEventListener('click', (event) => {
+        const quotedMessageLink = event.target.closest('.js-quoted-message-link');
+        if (quotedMessageLink) {
+            if (event.target.closest('a')) {
+                return;
+            }
+            event.preventDefault();
+            const quotedMessageId = Number(quotedMessageLink.getAttribute('data-quoted-message-id') || 0);
+            const focused = focusMessageById(quotedMessageId);
+            if (!focused) {
+                showToast('Quoted message is not in the loaded history', 'error');
+            }
+            closeAllReactionPickers();
+            return;
+        }
+
         const quoteButton = event.target.closest('.js-quote-link');
         if (quoteButton) {
             event.preventDefault();
@@ -501,6 +863,30 @@ function bindMessageQuotesAndReactions() {
             event.preventDefault();
             const messageId = Number(reactLink.getAttribute('data-react-message-id') || 0);
             toggleReactionPicker(messageId);
+            return;
+        }
+
+        const pinLink = event.target.closest('.js-pin-link');
+        if (pinLink) {
+            event.preventDefault();
+            const messageId = Number(pinLink.getAttribute('data-pin-message-id') || 0);
+            const activePinnedMessageId = Number(currentChat?.pinned_message?.id || 0);
+
+            if (activePinnedMessageId > 0 && activePinnedMessageId !== messageId) {
+                if (typeof window.openPinReplaceModal === 'function') {
+                    window.openPinReplaceModal(messageId);
+                }
+                return;
+            }
+
+            if (activePinnedMessageId === messageId) {
+                showToast('That message is already pinned', 'success');
+                return;
+            }
+
+            pinMessageInCurrentChat(messageId).catch(() => {
+                showToast('Unable to pin message', 'error');
+            });
             return;
         }
 
@@ -1554,6 +1940,7 @@ async function pollMessages(options = {}) {
     const data = await res.json();
     const messages = data.messages || [];
     const typingUsers = data.typing_users || [];
+    const pinnedMessage = normalizePinnedMessage(data.pinned_message);
     const forceRender = options.forceRender === true;
     const activeChatId = Number(currentChat.id || 0);
     const nextMessagesSignature = buildMessagesSignature(messages);
@@ -1571,6 +1958,10 @@ async function pollMessages(options = {}) {
 
     updatePersonalChatHeaderStatusFromMessages(messages);
     renderTypingIndicator(typingUsers);
+    if (currentChat) {
+        currentChat.pinned_message = pinnedMessage;
+    }
+    renderPinnedMessageBanner(pinnedMessage);
     refreshChatCallStatusBar();
 
     const restrictionReason = Object.prototype.hasOwnProperty.call(data, 'can_send_message_reason')
@@ -1785,6 +2176,27 @@ function getMessageScrollAnchor(messageId) {
     return Math.max(0, target.offsetTop - box.offsetTop - 16);
 }
 
+function focusMessageById(messageId) {
+    const box = document.getElementById('messages');
+    if (!box) return false;
+
+    const safeMessageId = Number(messageId || 0);
+    if (!Number.isFinite(safeMessageId) || safeMessageId <= 0) return false;
+
+    const anchor = getMessageScrollAnchor(safeMessageId);
+    if (anchor === null) return false;
+
+    box.scrollTop = anchor;
+    const target = box.querySelector(`[data-message-id="${safeMessageId}"]`);
+    if (!target) return false;
+
+    target.style.backgroundColor = 'rgba(52, 211, 153, 0.08)';
+    target.style.borderRadius = '0.5rem';
+    target.style.transition = 'background-color 1.5s ease';
+    setTimeout(() => { target.style.backgroundColor = ''; }, 2500);
+    return true;
+}
+
 function applyInitialChatScrollPosition() {
     const chatView = document.getElementById('chat-view');
     const box = document.getElementById('messages');
@@ -1793,16 +2205,7 @@ function applyInitialChatScrollPosition() {
     const urlParams = new URLSearchParams(window.location.search);
     const targetMsgId = Number(urlParams.get('msg') || 0);
     if (targetMsgId > 0) {
-        const anchor = getMessageScrollAnchor(targetMsgId);
-        if (anchor !== null) {
-            box.scrollTop = anchor;
-            const target = box.querySelector(`[data-message-id="${targetMsgId}"]`);
-            if (target) {
-                target.style.backgroundColor = 'rgba(52, 211, 153, 0.08)';
-                target.style.borderRadius = '0.5rem';
-                target.style.transition = 'background-color 1.5s ease';
-                setTimeout(() => { target.style.backgroundColor = ''; }, 2500);
-            }
+        if (focusMessageById(targetMsgId)) {
             return;
         }
     }
@@ -1972,7 +2375,7 @@ function renderMessages(messages, options = {}) {
         const reactionBadgesMarkup = renderReactionBadgesMarkup(msg.id, Array.isArray(msg?.reactions) ? msg.reactions : []);
 
         chunks.push(`
-            <div class="flex gap-3 ${isNewGroup ? 'mt-4' : 'mt-1'}" data-message-id="${Number(msg.id)}">
+            <div class="flex gap-3 ${isNewGroup ? 'mt-4' : 'mt-1'} group" data-message-id="${Number(msg.id)}">
                 <div class="w-10 shrink-0">
                     ${isNewGroup ? renderAvatarMarkup(msg, 'w-10 h-10 mt-0.5', 'text-sm') : '<div class="w-10 h-10"></div>'}
                 </div>
@@ -1984,9 +2387,12 @@ function renderMessages(messages, options = {}) {
                     <div class="relative mt-0.5">
                         ${renderReactionPickerMarkup(msg.id)}
                         <div class="text-xs flex items-center gap-3">
-                            <span class="text-zinc-500" title="${escapeHtml(fullTimestamp)}">${escapeHtml(compactTimestamp)}</span>
-                            <button type="button" class="text-zinc-400 hover:text-zinc-300 js-quote-link" data-quote-message-id="${Number(msg.id)}" data-quote-username="${escapeHtml(String(msg.username || ''))}" data-quote-user-number="${escapeHtml(String(msg.user_number || ''))}" data-quote-content="${escapeHtml(String(msg.content || ''))}" data-quote-mention-map="${mentionMapJson}">Quote</button>
-                            <button type="button" class="text-zinc-400 hover:text-zinc-300 js-react-link" data-react-message-id="${Number(msg.id)}">React</button>
+                            <span class="text-zinc-500" data-utc="${escapeHtml(fullTimestamp)}" title="${escapeHtml(fullTimestamp)}">${escapeHtml(compactTimestamp)}</span>
+                            <div class="flex items-center gap-3 md:opacity-0 md:group-hover:opacity-100 md:pointer-events-none md:group-hover:pointer-events-auto md:transition-opacity md:duration-150 md:ease-out">
+                                <button type="button" class="text-zinc-400 hover:text-zinc-300 js-quote-link" title="Quote" aria-label="Quote" data-quote-message-id="${Number(msg.id)}" data-quote-username="${escapeHtml(String(msg.username || ''))}" data-quote-user-number="${escapeHtml(String(msg.user_number || ''))}" data-quote-content="${escapeHtml(String(msg.content || ''))}" data-quote-mention-map="${mentionMapJson}"><i class="fa-solid fa-reply" aria-hidden="true"></i></button>
+                                <button type="button" class="text-zinc-400 hover:text-zinc-300 js-pin-link" title="Pin" aria-label="Pin" data-pin-message-id="${Number(msg.id)}"><i class="fa-solid fa-thumbtack" aria-hidden="true"></i></button>
+                                <button type="button" class="text-zinc-400 hover:text-zinc-300 js-react-link" title="React" aria-label="React" data-react-message-id="${Number(msg.id)}"><i class="fa-solid fa-thumbs-up" aria-hidden="true"></i></button>
+                            </div>
                             ${reactionBadgesMarkup}
                         </div>
                     </div>
@@ -1999,6 +2405,9 @@ function renderMessages(messages, options = {}) {
     });
 
     box.innerHTML = chunks.join('');
+    if (typeof window.refreshUtcTimestamps === 'function') {
+        window.refreshUtcTimestamps(box);
+    }
 
     if (openReactionPickerMessageId > 0) {
         const picker = box.querySelector(`.js-reaction-picker[data-reaction-picker-for="${openReactionPickerMessageId}"]`);
