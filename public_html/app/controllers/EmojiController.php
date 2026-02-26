@@ -9,13 +9,30 @@ class EmojiController extends Controller {
             ErrorHandler::abort(404, 'Not found');
         }
 
-        $storageBase = defined('STORAGE_FILESYSTEM_ROOT')
-            ? rtrim((string)STORAGE_FILESYSTEM_ROOT, '/')
-            : dirname(__DIR__, 3) . '/storage';
+        $safeFilename = basename($filename);
+        $emojiDirs = [];
 
-        $filePath = $storageBase . '/emojis/' . basename($filename);
+        if (defined('STORAGE_FILESYSTEM_ROOT')) {
+            $configuredStorageRoot = trim((string)STORAGE_FILESYSTEM_ROOT);
+            if ($configuredStorageRoot !== '') {
+                $emojiDirs[] = rtrim($configuredStorageRoot, '/') . '/emojis';
+            }
+        }
 
-        if (!is_file($filePath)) {
+        $emojiDirs[] = dirname(__DIR__, 3) . '/storage/emojis';
+        $emojiDirs[] = dirname(__DIR__, 2) . '/assets/emojis';
+        $emojiDirs = array_values(array_unique($emojiDirs));
+
+        $filePath = '';
+        foreach ($emojiDirs as $emojiDir) {
+            $candidate = rtrim($emojiDir, '/') . '/' . $safeFilename;
+            if (is_file($candidate)) {
+                $filePath = $candidate;
+                break;
+            }
+        }
+
+        if ($filePath === '') {
             ErrorHandler::abort(404, 'Not found');
         }
 

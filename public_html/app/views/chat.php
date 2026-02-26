@@ -1,6 +1,30 @@
 <?php
-$emojiDir = (defined('STORAGE_FILESYSTEM_ROOT') ? rtrim((string)STORAGE_FILESYSTEM_ROOT, '/') : dirname(__DIR__, 3) . '/storage') . '/emojis';
-$emojiFiles = glob($emojiDir . '/*.svg') ?: [];
+$emojiDirs = [];
+if (defined('STORAGE_FILESYSTEM_ROOT')) {
+    $configuredStorageRoot = trim((string)STORAGE_FILESYSTEM_ROOT);
+    if ($configuredStorageRoot !== '') {
+        $emojiDirs[] = rtrim($configuredStorageRoot, '/') . '/emojis';
+    }
+}
+$emojiDirs[] = dirname(__DIR__, 3) . '/storage/emojis';
+$emojiDirs[] = dirname(__DIR__, 2) . '/assets/emojis';
+$emojiDirs = array_values(array_unique($emojiDirs));
+
+$emojiDir = '';
+$emojiFiles = [];
+foreach ($emojiDirs as $candidateDir) {
+    $candidateFiles = glob(rtrim($candidateDir, '/') . '/*.svg') ?: [];
+    if (count($candidateFiles) > 0) {
+        $emojiDir = $candidateDir;
+        $emojiFiles = $candidateFiles;
+        break;
+    }
+}
+
+if ($emojiDir === '' && count($emojiDirs) > 0) {
+    $emojiDir = $emojiDirs[0];
+}
+
 $emojiFileNames = array_map(static fn($path) => basename($path), $emojiFiles);
 sort($emojiFileNames, SORT_STRING);
 

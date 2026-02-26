@@ -100,8 +100,32 @@
             }
         }
 
-        $openMojiDir = (defined('STORAGE_FILESYSTEM_ROOT') ? rtrim((string)STORAGE_FILESYSTEM_ROOT, '/') : dirname(__DIR__, 4) . '/storage') . '/emojis';
-        $openMojiFiles = glob($openMojiDir . '/*.svg') ?: [];
+        $openMojiDirs = [];
+        if (defined('STORAGE_FILESYSTEM_ROOT')) {
+            $configuredStorageRoot = trim((string)STORAGE_FILESYSTEM_ROOT);
+            if ($configuredStorageRoot !== '') {
+                $openMojiDirs[] = rtrim($configuredStorageRoot, '/') . '/emojis';
+            }
+        }
+        $openMojiDirs[] = dirname(__DIR__, 4) . '/storage/emojis';
+        $openMojiDirs[] = dirname(__DIR__, 3) . '/assets/emojis';
+        $openMojiDirs = array_values(array_unique($openMojiDirs));
+
+        $openMojiDir = '';
+        $openMojiFiles = [];
+        foreach ($openMojiDirs as $candidateDir) {
+            $candidateFiles = glob(rtrim($candidateDir, '/') . '/*.svg') ?: [];
+            if (count($candidateFiles) > 0) {
+                $openMojiDir = $candidateDir;
+                $openMojiFiles = $candidateFiles;
+                break;
+            }
+        }
+
+        if ($openMojiDir === '' && count($openMojiDirs) > 0) {
+            $openMojiDir = $openMojiDirs[0];
+        }
+
         $openMojiFileNames = array_map(static fn($path) => basename($path), $openMojiFiles);
         sort($openMojiFileNames, SORT_STRING);
 
