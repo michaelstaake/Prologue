@@ -9,6 +9,22 @@ class Database {
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_OBJ
         ]);
+
+        $charsetStatements = [
+            "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci",
+            "SET NAMES utf8mb4",
+            "SET character_set_connection = utf8mb4",
+            "SET character_set_client = utf8mb4",
+            "SET character_set_results = utf8mb4"
+        ];
+
+        foreach ($charsetStatements as $statement) {
+            try {
+                $this->pdo->exec($statement);
+            } catch (Throwable $e) {
+            }
+        }
+
         $this->pdo->exec("SET time_zone = '+00:00'");
     }
 

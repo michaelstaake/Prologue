@@ -207,7 +207,7 @@ CREATE TABLE messages (
     FOREIGN KEY (user_id) REFERENCES users(id),
     FOREIGN KEY (quoted_message_id) REFERENCES messages(id) ON DELETE SET NULL,
     FOREIGN KEY (quoted_user_id) REFERENCES users(id) ON DELETE SET NULL
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Message reactions
 CREATE TABLE message_reactions (
@@ -233,7 +233,7 @@ CREATE TABLE posts (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     KEY idx_posts_user_created (user_id, created_at),
     CONSTRAINT chk_posts_content_length CHECK (CHAR_LENGTH(content) BETWEEN 1 AND 500)
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Profile post reactions
 CREATE TABLE post_reactions (
@@ -351,7 +351,7 @@ CREATE TABLE notifications (
     `read` TINYINT(1) DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Reports
 CREATE TABLE reports (
