@@ -276,6 +276,13 @@
 
     <!-- Call overlay -->
     <div id="call-overlay" class="hidden fixed bg-black/95 z-40 flex flex-col" style="inset:0">
+        <div id="call-connecting-overlay" class="hidden absolute inset-0 z-20 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+            <div class="text-center">
+                <div id="call-connecting-overlay-title" class="text-lg md:text-xl font-semibold text-zinc-100">Connecting call</div>
+                <div id="call-connecting-overlay-subtitle" class="text-sm md:text-base text-zinc-300 mt-1">Please wait...</div>
+            </div>
+        </div>
+
         <div class="flex items-center justify-between px-5 py-3 border-b border-zinc-800/60 shrink-0">
             <div class="flex items-center gap-2">
                 <div class="text-sm font-medium text-zinc-400">Call in progress</div>

@@ -8,6 +8,53 @@ const remoteAnalysers = new Map();
 const CALL_SESSION_STORAGE_KEY = 'prologue.activeCallSession';
 const CALL_OVERLAY_STORAGE_KEY = 'prologue.activeCallOverlayMode';
 const CALL_SELF_FOCUS_PEER_ID = -1;
+let callParticipantsRenderSignature = '';
+let callConnectingOverlayTimeout = null;
+
+function hideCallConnectingOverlay() {
+    if (callConnectingOverlayTimeout) {
+        clearTimeout(callConnectingOverlayTimeout);
+        callConnectingOverlayTimeout = null;
+    }
+
+    const overlay = document.getElementById('call-connecting-overlay');
+    const title = document.getElementById('call-connecting-overlay-title');
+    const subtitle = document.getElementById('call-connecting-overlay-subtitle');
+    if (overlay) {
+        overlay.classList.add('hidden');
+    }
+    if (title) {
+        title.textContent = 'Connecting call';
+    }
+    if (subtitle) {
+        subtitle.textContent = 'Please wait...';
+    }
+}
+
+function showCallConnectingOverlay(options = {}) {
+    const overlay = document.getElementById('call-connecting-overlay');
+    const title = document.getElementById('call-connecting-overlay-title');
+    const subtitle = document.getElementById('call-connecting-overlay-subtitle');
+    if (!overlay) return;
+
+    hideCallConnectingOverlay();
+
+    const mode = String(options.mode || 'connecting').toLowerCase();
+    const overlayTitle = mode === 'reconnecting' ? 'Reconnecting call' : 'Connecting call';
+    if (title) {
+        title.textContent = overlayTitle;
+    }
+    if (subtitle) {
+        subtitle.textContent = 'Please wait...';
+    }
+
+    overlay.classList.remove('hidden');
+
+    const safeDuration = Math.max(0, Number(options.durationMs || 3000));
+    callConnectingOverlayTimeout = setTimeout(() => {
+        hideCallConnectingOverlay();
+    }, safeDuration);
+}
 
 function normalizeCallOverlayMode(mode) {
     return mode === 'hidden' || mode === 'half' || mode === 'full' ? mode : 'full';
@@ -466,6 +513,7 @@ function stopCallRingingAudio() {
 
 async function cleanupLocalCallSession(options = {}) {
     const restorePresence = options.restorePresence !== false;
+    hideCallConnectingOverlay();
 
     if (screenStream) {
         screenStream.getTracks().forEach(track => track.stop());
@@ -535,6 +583,7 @@ async function cleanupLocalCallSession(options = {}) {
     document.querySelectorAll('.js-call-participant-tile').forEach((tile) => tile.remove());
     const participantsList = document.getElementById('call-participants-list');
     participantsList?.replaceChildren();
+    callParticipantsRenderSignature = '';
     isCallOfferer = false;
     appliedPeerIceCandidatesCount = 0;
     peerAnswerApplied = false;
@@ -719,7 +768,12 @@ async function restoreCallSession(activeCall) {
     try {
         ensureCurrentChatContext(safeCall);
         const restoredOverlayMode = readPersistedCallOverlayMode(Number(safeCall?.id || safeCall?.call_id || 0)) || 'full';
-        await startVoiceCall({ silentStart: true, initialOverlayMode: restoredOverlayMode });
+        await startVoiceCall({
+            silentStart: true,
+            initialOverlayMode: restoredOverlayMode,
+            showJoinConnectingOverlay: true,
+            joiningOverlayMode: 'reconnecting'
+        });
         setChatCallStatusBar(isMuted ? 'muted' : 'active');
     } catch {
     } finally {
@@ -825,6 +879,12 @@ async function startVoiceCall(options = {}) {
     updateCallParticipantsPanelVisibility();
 
     setCallOverlayMode(normalizeCallOverlayMode(options.initialOverlayMode || 'full'));
+    if (start.joined_existing && (!options.silentStart || options.showJoinConnectingOverlay)) {
+        showCallConnectingOverlay({
+            durationMs: 3000,
+            mode: options.joiningOverlayMode || 'connecting'
+        });
+    }
     applySidebarStatus({
         effective_status: 'busy',
         effective_status_label: 'Busy',
@@ -1702,6 +1762,44 @@ function updateDynamicRemotePeerTiles(primaryPeerId = 0) {
             };
         })
     ];
+
+    const renderSignature = participants
+        .map((participant) => {
+            const liveVideoTrackIds = participant.stream
+                && typeof participant.stream.getVideoTracks === 'function'
+                ? participant.stream
+                    .getVideoTracks()
+                    .filter((track) => track.readyState === 'live')
+                    .map((track) => String(track.id || ''))
+                    .sort()
+                    .join(',')
+                : '';
+
+            return [
+                Number(participant.peerId || 0),
+                participant.username,
+                participant.isSelf ? '1' : '0',
+                participant.screenSharing ? '1' : '0',
+                liveVideoTrackIds
+            ].join('|');
+        })
+        .join('||');
+
+    if (callParticipantsRenderSignature === renderSignature) {
+        participants.forEach((participant) => {
+            const tile = participantsList.querySelector(`.js-call-participant-tile[data-peer-id="${Number(participant.peerId || 0)}"]`);
+            if (!tile) {
+                return;
+            }
+            const isSelected = Number(activeRemotePeerId || 0) === participant.peerId;
+            const isSpeaking = isParticipantSpeaking(participant.peerId);
+            applyParticipantTileVisualState(tile, { isSelected, isSpeaking });
+        });
+        updateCallParticipantsPanelVisibility();
+        return;
+    }
+
+    callParticipantsRenderSignature = renderSignature;
 
     participantsList.replaceChildren();
 
