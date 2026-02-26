@@ -184,9 +184,12 @@ function parseUtcTimestamp(value) {
         }
     }
 
-    const directlyParsedDate = new Date(fullTimestamp);
-    if (!isNaN(directlyParsedDate.getTime())) {
-        return directlyParsedDate;
+    const hasExplicitTimezone = /(?:[zZ]|[+-]\d{2}:?\d{2})$/.test(fullTimestamp) || /\b(?:UTC|GMT)\b/i.test(fullTimestamp);
+    if (hasExplicitTimezone) {
+        const directlyParsedDate = new Date(fullTimestamp);
+        if (!isNaN(directlyParsedDate.getTime())) {
+            return directlyParsedDate;
+        }
     }
 
     const parsedDate = new Date(fullTimestamp.replace(' ', 'T') + 'Z');
