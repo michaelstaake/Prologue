@@ -804,6 +804,7 @@ async function startVoiceCall(options = {}) {
         syncCallRingingState({ state: 'ringing', callId: Number(currentCallId || 0), ringingDirection: 'outgoing', incomingAlert: false });
     }
     localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    bindCallAudioUnlockHandlers();
     startLocalSpeakingDetection();
     const localVideo = document.getElementById('local-video');
     if (localVideo) localVideo.srcObject = localStream;
@@ -1412,7 +1413,35 @@ function setupPeerConnection() {
 function shouldInitiatePeerOffer(peerId) {
     const me = Number(currentUserId || 0);
     const other = Number(peerId || 0);
-    return me > 0 && other > 0;
+    if (!(me > 0 && other > 0) || me === other) {
+        return false;
+    }
+    return me < other;
+}
+
+function getLiveLocalAudioTrack() {
+    if (!localStream) return null;
+    return localStream.getAudioTracks().find((track) => track.readyState === 'live') || null;
+}
+
+function ensureOutgoingAudioTrackOnPeerConnection(pc) {
+    if (!pc || !localStream) return;
+
+    const audioTrack = getLiveLocalAudioTrack();
+    if (!audioTrack) return;
+
+    const audioSenders = pc.getSenders().filter((sender) => sender.track && sender.track.kind === 'audio');
+    if (audioSenders.length === 0) {
+        pc.addTrack(audioTrack, localStream);
+        return;
+    }
+
+    audioSenders.forEach((sender) => {
+        if (!sender.track || sender.track.id === audioTrack.id) {
+            return;
+        }
+        sender.replaceTrack(audioTrack).catch(() => {});
+    });
 }
 
 function parseSignalPayload(rawPayload) {
@@ -1432,11 +1461,47 @@ function ensureRemoteAudioElement(peerId) {
     audioElement = document.createElement('audio');
     audioElement.autoplay = true;
     audioElement.playsInline = true;
+    audioElement.controls = false;
+    audioElement.muted = false;
+    audioElement.volume = 1;
     audioElement.dataset.peerId = String(peerId);
-    audioElement.className = 'hidden';
+    audioElement.className = 'fixed w-px h-px opacity-0 pointer-events-none -z-10';
     document.body.appendChild(audioElement);
     remoteAudioElements.set(peerId, audioElement);
     return audioElement;
+}
+
+function requestRemoteAudioPlayback(peerId = 0) {
+    if (!remoteAudioElements.size) return;
+
+    if (peerId) {
+        const audioElement = remoteAudioElements.get(Number(peerId));
+        audioElement?.play?.().catch(() => {});
+        return;
+    }
+
+    remoteAudioElements.forEach((audioElement) => {
+        audioElement?.play?.().catch(() => {});
+    });
+}
+
+function bindCallAudioUnlockHandlers() {
+    if (document.body.dataset.callAudioUnlockBound === '1') {
+        return;
+    }
+    document.body.dataset.callAudioUnlockBound = '1';
+
+    const unlockPlayback = () => {
+        requestRemoteAudioPlayback();
+        if (speakingAudioCtx && speakingAudioCtx.state === 'suspended') {
+            speakingAudioCtx.resume().catch(() => {});
+        }
+    };
+
+    const listenerOptions = { passive: true };
+    ['pointerdown', 'touchstart', 'keydown'].forEach((eventName) => {
+        window.addEventListener(eventName, unlockPlayback, listenerOptions);
+    });
 }
 
 function getOrCreatePeerState(peerId) {
@@ -1746,6 +1811,8 @@ function refreshActiveRemoteTile() {
     if (isSelfFocused && remoteCameraVideo && remoteScreenVideo) {
         peerUsername = localUsername ? `${localUsername} (You)` : 'You';
         remoteIsScreenSharing = Boolean(isScreenSharing);
+        remoteCameraVideo.muted = true;
+        remoteScreenVideo.muted = true;
 
         if (remoteCameraVideo.srcObject !== localStream) {
             remoteCameraVideo.srcObject = localStream;
@@ -1816,6 +1883,8 @@ function refreshActiveRemoteTile() {
 
     peerUsername = state.username || 'Participant';
     remoteIsScreenSharing = Boolean(state.screenSharing);
+    remoteCameraVideo.muted = false;
+    remoteScreenVideo.muted = false;
 
     if (remoteCameraVideo.srcObject !== state.remoteCameraStream) {
         remoteCameraVideo.srcObject = state.remoteCameraStream;
@@ -1905,6 +1974,7 @@ function ensurePeerConnection(peerId, username = '') {
     if (existing) {
         const existingState = getOrCreatePeerState(numericPeerId);
         if (username) existingState.username = username;
+        ensureOutgoingAudioTrackOnPeerConnection(existing);
         return existing;
     }
 
@@ -1918,6 +1988,7 @@ function ensurePeerConnection(peerId, username = '') {
     if (localStream) {
         localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
     }
+    ensureOutgoingAudioTrackOnPeerConnection(pc);
 
     pc.ontrack = (event) => {
         const stream = (event.streams && event.streams[0]) ? event.streams[0] : null;
@@ -1932,7 +2003,7 @@ function ensurePeerConnection(peerId, username = '') {
             if (audioEl.srcObject !== peerState.remoteStream) {
                 audioEl.srcObject = peerState.remoteStream;
             }
-            audioEl.play().catch(() => {});
+            requestRemoteAudioPlayback(numericPeerId);
             startRemoteSpeakingDetection(numericPeerId);
         }
 
