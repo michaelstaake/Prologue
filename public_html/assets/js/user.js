@@ -47,6 +47,89 @@ async function cancelFriendRequest(targetUserId) {
     showToast(result.error || 'Unable to cancel request', 'error');
 }
 
+function openInviteReferralModal() {
+    const modal = document.getElementById('invite-referral-modal');
+    if (!modal) return;
+
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+}
+
+function closeInviteReferralModal() {
+    const modal = document.getElementById('invite-referral-modal');
+    if (!modal) return;
+
+    modal.classList.add('hidden');
+    modal.setAttribute('aria-hidden', 'true');
+}
+
+async function sendInviteReferralFriendRequest() {
+    const modal = document.getElementById('invite-referral-modal');
+    const submitButton = document.getElementById('invite-referral-modal-send');
+    if (!modal || !submitButton || submitButton.disabled) return;
+
+    const userNumber = String(modal.getAttribute('data-referrer-user-number') || '').trim();
+    const username = String(modal.getAttribute('data-referrer-username') || '').trim();
+    if (!userNumber) {
+        closeInviteReferralModal();
+        return;
+    }
+
+    submitButton.disabled = true;
+    const previousLabel = submitButton.textContent;
+    submitButton.textContent = 'Sending...';
+
+    try {
+        const result = await postForm('/friends/request', {
+            csrf_token: getCsrfToken(),
+            user_number: userNumber
+        });
+
+        if (result.success) {
+            showToast(username ? `Friend request sent to ${username}` : 'Friend request sent', 'success');
+        } else {
+            showToast(result.error || 'Unable to send friend request', 'error');
+        }
+
+        closeInviteReferralModal();
+    } finally {
+        submitButton.disabled = false;
+        submitButton.textContent = previousLabel;
+    }
+}
+
+function bindInviteReferralModal() {
+    const modal = document.getElementById('invite-referral-modal');
+    const skipButton = document.getElementById('invite-referral-modal-skip');
+    const sendButton = document.getElementById('invite-referral-modal-send');
+    if (!modal || !skipButton || !sendButton) return;
+
+    skipButton.addEventListener('click', (event) => {
+        event.preventDefault();
+        closeInviteReferralModal();
+    });
+
+    sendButton.addEventListener('click', (event) => {
+        event.preventDefault();
+        sendInviteReferralFriendRequest();
+    });
+
+    modal.addEventListener('click', (event) => {
+        if (event.target !== modal) return;
+        closeInviteReferralModal();
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return;
+        if (modal.classList.contains('hidden')) return;
+        closeInviteReferralModal();
+    });
+
+    if (String(modal.getAttribute('data-auto-open') || '') === '1') {
+        openInviteReferralModal();
+    }
+}
+
 async function unfriendUser(userId) {
     const result = await postForm('/friends/unfriend', {
         csrf_token: getCsrfToken(),

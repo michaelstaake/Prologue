@@ -1,4 +1,29 @@
 <div class="p-8 overflow-auto">
+    <?php $inviteReferralPromptData = is_array($inviteReferralPrompt ?? null) ? $inviteReferralPrompt : null; ?>
+
+    <?php if ($inviteReferralPromptData): ?>
+        <div
+            id="invite-referral-modal"
+            class="hidden fixed inset-0 bg-black/70 z-50 p-4 md:p-6"
+            aria-hidden="true"
+            data-referrer-id="<?= (int)$inviteReferralPromptData['user_id'] ?>"
+            data-referrer-username="<?= htmlspecialchars((string)$inviteReferralPromptData['username'], ENT_QUOTES, 'UTF-8') ?>"
+            data-referrer-user-number="<?= htmlspecialchars((string)$inviteReferralPromptData['user_number'], ENT_QUOTES, 'UTF-8') ?>"
+            data-auto-open="1"
+        >
+            <div class="h-full w-full flex items-center justify-center">
+                <div class="w-full max-w-md bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl p-6" role="dialog" aria-modal="true" aria-labelledby="invite-referral-modal-title">
+                    <h2 id="invite-referral-modal-title" class="text-lg font-semibold text-zinc-100">You were referred by <?= htmlspecialchars((string)$inviteReferralPromptData['username'], ENT_QUOTES, 'UTF-8') ?></h2>
+                    <p class="mt-2 text-sm text-zinc-400">Would you like to send them a friend request now?</p>
+                    <div class="mt-5 flex items-center justify-end gap-3">
+                        <button type="button" id="invite-referral-modal-skip" class="px-4 py-2 rounded-xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-zinc-200">Not now</button>
+                        <button type="button" id="invite-referral-modal-send" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white">Send Request</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    <?php endif; ?>
+
     <div class="mb-6 flex items-center justify-between gap-3">
         <h1 class="text-3xl font-bold">Dashboard</h1>
         <a href="<?= htmlspecialchars(base_url('/search'), ENT_QUOTES, 'UTF-8') ?>" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-zinc-700 text-zinc-300 hover:bg-zinc-800 transition">

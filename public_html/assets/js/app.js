@@ -640,6 +640,7 @@ async function init() {
     }
 
     bindInviteCopyButtons();
+    bindInviteReferralModal();
     bindUnfriendModal();
     bindNewPostModal();
     bindProfilePostDeleteModal();

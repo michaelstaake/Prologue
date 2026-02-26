@@ -101,6 +101,7 @@ class HomeController extends Controller {
         }
 
         $invitesEnabled = (string)(Setting::get('invites_enabled') ?? '1') === '1';
+        $inviteReferralPrompt = $this->getInviteReferralPrompt((int)$userId);
 
         $recentFriendPosts = Post::getFriendsFeed((int)$userId, 3);
 
@@ -114,9 +115,69 @@ class HomeController extends Controller {
             'selectedTab' => $selectedTab,
             'selectedRequestsTab' => $selectedRequestsTab,
             'invitesEnabled' => $invitesEnabled,
+            'inviteReferralPrompt' => $inviteReferralPrompt,
             'recentFriendPosts' => $recentFriendPosts,
             'csrf' => $this->csrfToken()
         ]);
+    }
+
+    private function getInviteReferralPrompt($userId) {
+        $userId = (int)$userId;
+        if ($userId <= 0) {
+            return null;
+        }
+
+        $sessionKey = 'invite_referral_prompt_seen_' . $userId;
+        if (!empty($_SESSION[$sessionKey])) {
+            return null;
+        }
+
+        $sessionCount = (int)Database::query(
+            "SELECT COUNT(*) FROM user_sessions WHERE user_id = ?",
+            [$userId]
+        )->fetchColumn();
+
+        if ($sessionCount !== 1) {
+            $_SESSION[$sessionKey] = 1;
+            return null;
+        }
+
+        $referrer = Database::query(
+            "SELECT inviter.id, inviter.username, inviter.user_number
+             FROM invite_codes ic
+             JOIN users inviter ON inviter.id = ic.creator_id
+             WHERE ic.used_by = ?
+             ORDER BY ic.used_at ASC, ic.id ASC
+             LIMIT 1",
+            [$userId]
+        )->fetch();
+
+        if (!$referrer) {
+            $_SESSION[$sessionKey] = 1;
+            return null;
+        }
+
+        $friendship = Database::query(
+            "SELECT status
+             FROM friends
+             WHERE (user_id = ? AND friend_id = ?)
+                OR (user_id = ? AND friend_id = ?)
+             LIMIT 1",
+            [$userId, (int)$referrer->id, (int)$referrer->id, $userId]
+        )->fetch();
+
+        if ($friendship && in_array((string)($friendship->status ?? ''), ['pending', 'accepted'], true)) {
+            $_SESSION[$sessionKey] = 1;
+            return null;
+        }
+
+        $_SESSION[$sessionKey] = 1;
+
+        return [
+            'user_id' => (int)$referrer->id,
+            'username' => (string)$referrer->username,
+            'user_number' => User::formatUserNumber((string)$referrer->user_number),
+        ];
     }
 
     public function posts() {
