@@ -130,6 +130,17 @@ try {
     $dbVersion = Setting::get('database_version');
     if ($dbVersion !== null && version_compare((string)$dbVersion, APP_VERSION, '<')) {
         if ($requestPath !== '/update' && $requestPath !== '/install') {
+            $showUpdateButton = false;
+            try {
+                $clientIp = $_SERVER['REMOTE_ADDR'] ?? '';
+                if ($clientIp !== '') {
+                    $adminIpRow = Database::query(
+                        "SELECT us.id FROM user_sessions us JOIN users u ON u.id = us.user_id WHERE u.role = 'admin' AND us.ip_address = ? AND us.last_seen_at > NOW() - INTERVAL 24 HOUR AND us.revoked_at IS NULL LIMIT 1",
+                        [$clientIp]
+                    )->fetch();
+                    $showUpdateButton = (bool)$adminIpRow;
+                }
+            } catch (Throwable $ipCheckException) {}
             http_response_code(503);
             require __DIR__ . '/app/views/update-required.php';
             exit;
