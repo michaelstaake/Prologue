@@ -25,7 +25,7 @@ class ChatController extends Controller {
         try {
             $message = Database::query(
                 "SELECT m.id, m.chat_id, m.user_id, m.content, m.created_at,
-                        u.username, u.user_number, u.avatar_filename
+                        u.username, u.email AS user_email, u.user_number, u.avatar_filename
                  FROM messages m
                  JOIN users u ON u.id = m.user_id
                  WHERE m.id = ? AND m.chat_id = ?
@@ -39,7 +39,7 @@ class ChatController extends Controller {
 
             $message = Database::query(
                 "SELECT m.id, m.chat_id, m.user_id, m.content, m.created_at,
-                        u.username, u.user_number
+                        u.username, u.email AS user_email, u.user_number
                  FROM messages m
                  JOIN users u ON u.id = m.user_id
                  WHERE m.id = ? AND m.chat_id = ?
@@ -52,6 +52,8 @@ class ChatController extends Controller {
             $this->clearPinnedMessageForChat($chatId);
             return null;
         }
+
+        $message->username = User::decorateDeletedRetainedUsername($message->username ?? '', $message->user_email ?? null);
 
         $message->avatar_url = User::avatarUrl($message);
         $messages = [$message];
@@ -296,6 +298,11 @@ class ChatController extends Controller {
 
         $chatTitle = 'Chat #' . User::formatUserNumber($chat->chat_number);
         if ($chat->type === 'personal') {
+            $customTitle = $supportsChatTitle ? trim((string)($chat->title ?? '')) : '';
+            if ($customTitle !== '') {
+                $chatTitle = $customTitle;
+            }
+
             $other = Database::query(
                 "SELECT u.username
                  FROM chat_members cm
@@ -304,7 +311,7 @@ class ChatController extends Controller {
                  LIMIT 1",
                 [$chat->id, $currentUserId]
             )->fetch();
-            if ($other && isset($other->username)) {
+            if ($customTitle === '' && $other && isset($other->username)) {
                 $chatTitle = $other->username;
             }
         } elseif ($chat->type === 'group') {
@@ -318,7 +325,7 @@ class ChatController extends Controller {
 
         try {
             $messages = Database::query(
-                "SELECT m.*, u.username, u.user_number, u.avatar_filename, u.presence_status, u.last_active_at,
+                "SELECT m.*, u.username, u.email AS user_email, u.user_number, u.avatar_filename, u.presence_status, u.last_active_at,
                         qu.username AS quoted_username, qu.user_number AS quoted_user_number
                  FROM messages m
                  JOIN users u ON m.user_id = u.id
@@ -334,7 +341,7 @@ class ChatController extends Controller {
             }
 
             $messages = Database::query(
-                "SELECT m.*, u.username, u.user_number, u.presence_status, u.last_active_at,
+                "SELECT m.*, u.username, u.email AS user_email, u.user_number, u.presence_status, u.last_active_at,
                         qu.username AS quoted_username, qu.user_number AS quoted_user_number
                  FROM messages m
                  JOIN users u ON m.user_id = u.id
@@ -346,6 +353,7 @@ class ChatController extends Controller {
             )->fetchAll();
         }
         foreach ($messages as $message) {
+            $message->username = User::decorateDeletedRetainedUsername($message->username ?? '', $message->user_email ?? null);
             $message->avatar_url = User::avatarUrl($message);
             User::attachEffectiveStatus($message);
         }
@@ -354,7 +362,7 @@ class ChatController extends Controller {
         Message::attachReactions($messages, (int)$currentUserId);
         Attachment::attachSubmittedToMessages($messages);
 
-        if ($this->supportsSystemEvents() && Chat::isGroupType($chat->type ?? null)) {
+        if ($this->supportsSystemEvents()) {
             $systemEvents = Database::query(
                 "SELECT id, chat_id, event_type, content, created_at, 1 AS is_system_event FROM chat_system_events WHERE chat_id = ?",
                 [(int)$chat->id]
@@ -578,7 +586,7 @@ class ChatController extends Controller {
             $messages = Database::query(
                 "SELECT m.id, m.chat_id, m.user_id, m.content, m.created_at,
                         m.quoted_message_id, m.quoted_user_id, m.quoted_content,
-                        u.username, u.user_number, u.avatar_filename, u.presence_status, u.last_active_at,
+                        u.username, u.email AS user_email, u.user_number, u.avatar_filename, u.presence_status, u.last_active_at,
                         qu.username AS quoted_username, qu.user_number AS quoted_user_number
                  FROM messages m
                  JOIN users u ON m.user_id = u.id
@@ -596,7 +604,7 @@ class ChatController extends Controller {
             $messages = Database::query(
                 "SELECT m.id, m.chat_id, m.user_id, m.content, m.created_at,
                         m.quoted_message_id, m.quoted_user_id, m.quoted_content,
-                        u.username, u.user_number, u.presence_status, u.last_active_at,
+                        u.username, u.email AS user_email, u.user_number, u.presence_status, u.last_active_at,
                         qu.username AS quoted_username, qu.user_number AS quoted_user_number
                  FROM messages m
                  JOIN users u ON m.user_id = u.id
@@ -608,6 +616,7 @@ class ChatController extends Controller {
             )->fetchAll();
         }
         foreach ($messages as $message) {
+            $message->username = User::decorateDeletedRetainedUsername($message->username ?? '', $message->user_email ?? null);
             $message->avatar_url = User::avatarUrl($message);
             User::attachEffectiveStatus($message);
         }
@@ -1112,6 +1121,121 @@ class ChatController extends Controller {
         }
 
         $this->json(['success' => true, 'redirect' => '/']);
+    }
+
+    public function deletePersonalByNumber($params) {
+        Auth::requireAuth();
+
+        $chat = $this->findAccessiblePersonalChatByNumber((string)($params['chat_number'] ?? ''), (int)Auth::user()->id);
+        if (!$chat) {
+            $this->redirect('/');
+        }
+
+        $chatNumberFormatted = User::formatUserNumber((string)$chat->chat_number);
+        $supportsChatTitle = $this->supportsChatTitle();
+        $chatTitle = 'Personal Chat ' . $chatNumberFormatted;
+        $customTitle = $supportsChatTitle ? trim((string)($chat->title ?? '')) : '';
+        if ($customTitle !== '') {
+            $chatTitle = $customTitle;
+        } else {
+            $otherUsername = (string)Database::query(
+                "SELECT u.username
+                 FROM chat_members cm
+                 JOIN users u ON u.id = cm.user_id
+                 WHERE cm.chat_id = ? AND cm.user_id != ?
+                 ORDER BY cm.joined_at ASC
+                 LIMIT 1",
+                [(int)$chat->id, (int)Auth::user()->id]
+            )->fetchColumn();
+            $normalizedOtherUsername = trim($otherUsername);
+            if ($normalizedOtherUsername !== '') {
+                $chatTitle = $normalizedOtherUsername;
+            }
+        }
+
+        $this->view('chat_delete_confirm', [
+            'chat' => $chat,
+            'chatNumberFormatted' => $chatNumberFormatted,
+            'chatTitle' => $chatTitle,
+            'csrf' => $this->csrfToken()
+        ]);
+    }
+
+    public function deletePersonalByNumberConfirm($params) {
+        Auth::requireAuth();
+        Auth::csrfValidate();
+
+        $chat = $this->findAccessiblePersonalChatByNumber((string)($params['chat_number'] ?? ''), (int)Auth::user()->id);
+        if (!$chat) {
+            $this->redirect('/');
+        }
+
+        $this->permanentlyDeletePersonalChat((int)$chat->id);
+        $this->redirect('/');
+    }
+
+    private function findAccessiblePersonalChatByNumber(string $chatNumber, int $currentUserId) {
+        if (!preg_match('/^\d{4}-\d{4}-\d{4}-\d{4}$/', $chatNumber) || $currentUserId <= 0) {
+            return null;
+        }
+
+        $rawChatNumber = str_replace('-', '', $chatNumber);
+
+        $chatSelect = $this->supportsChatSoftDelete()
+            ? "SELECT id, chat_number, type, title, deleted_at FROM chats WHERE chat_number = ? LIMIT 1"
+            : "SELECT id, chat_number, type, title FROM chats WHERE chat_number = ? LIMIT 1";
+        $chat = Database::query($chatSelect, [$rawChatNumber])->fetch();
+        if (!$chat || $this->chatIsSoftDeleted($chat) || Chat::isGroupType($chat->type ?? null)) {
+            return null;
+        }
+
+        $member = Database::query(
+            "SELECT id FROM chat_members WHERE chat_id = ? AND user_id = ? LIMIT 1",
+            [(int)$chat->id, $currentUserId]
+        )->fetch();
+        if (!$member) {
+            return null;
+        }
+
+        return $chat;
+    }
+
+    private function permanentlyDeletePersonalChat(int $chatId): void {
+        if ($chatId <= 0) {
+            return;
+        }
+
+        Attachment::deleteFilesForChatId($chatId);
+
+        $pdo = Database::getInstance();
+        try {
+            $pdo->beginTransaction();
+
+            Database::query(
+                "DELETE FROM call_participants
+                 WHERE call_id IN (SELECT id FROM calls WHERE chat_id = ?)",
+                [$chatId]
+            );
+            try {
+                Database::query(
+                    "DELETE FROM call_signals
+                     WHERE call_id IN (SELECT id FROM calls WHERE chat_id = ?)",
+                    [$chatId]
+                );
+            } catch (Throwable $e) {
+                if (stripos($e->getMessage(), 'call_signals') === false) {
+                    throw $e;
+                }
+            }
+            Database::query("DELETE FROM calls WHERE chat_id = ?", [$chatId]);
+            Database::query("DELETE FROM chats WHERE id = ?", [$chatId]);
+
+            $pdo->commit();
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+        }
     }
 
     public function takeGroupOwnership() {

@@ -819,6 +819,8 @@ function openAdminUserActionModal(config) {
     const title = document.getElementById('admin-user-action-modal-title');
     const description = document.getElementById('admin-user-action-modal-description');
     const submit = document.getElementById('admin-user-action-modal-submit');
+    const retainMessagesWrap = document.getElementById('admin-user-retain-messages-wrap');
+    const retainMessagesInput = document.getElementById('admin-user-retain-messages');
     if (!modal || !title || !description || !submit) return false;
 
     const submitLabel = String(config?.submitLabel || 'Confirm').trim() || 'Confirm';
@@ -835,6 +837,13 @@ function openAdminUserActionModal(config) {
         submit.classList.add('bg-amber-700', 'hover:bg-amber-600');
     } else {
         submit.classList.add('bg-emerald-700', 'hover:bg-emerald-600');
+    }
+
+    const showRetainMessages = Boolean(config?.showRetainMessages);
+    if (retainMessagesWrap && retainMessagesInput) {
+        retainMessagesWrap.classList.toggle('hidden', !showRetainMessages);
+        retainMessagesWrap.classList.toggle('flex', showRetainMessages);
+        retainMessagesInput.checked = showRetainMessages ? Boolean(config?.retainMessagesDefault) : false;
     }
 
     pendingAdminUserAction = config;
@@ -897,7 +906,7 @@ async function performAdminUserBanAction(userId) {
     closeAdminUserMenus();
 }
 
-async function performDeleteAdminUser(userId) {
+async function performDeleteAdminUser(userId, retainMessages = false) {
     const safeUserId = Number(userId || 0);
     if (!Number.isFinite(safeUserId) || safeUserId <= 0) {
         showToast('Invalid user', 'error');
@@ -906,7 +915,8 @@ async function performDeleteAdminUser(userId) {
 
     const result = await postForm('/users/delete', {
         csrf_token: getCsrfToken(),
-        user_id: String(safeUserId)
+        user_id: String(safeUserId),
+        retain_messages: retainMessages ? '1' : '0'
     });
 
     if (!result.success) {
@@ -919,7 +929,7 @@ async function performDeleteAdminUser(userId) {
         card.remove();
     }
 
-    showToast('User deleted and sessions removed', 'success');
+    showToast(retainMessages ? 'User deleted and messages retained' : 'User deleted and sessions removed', 'success');
     closeAdminUserMenus();
 }
 
@@ -990,11 +1000,13 @@ function deleteAdminUser(userId) {
         title: 'Delete user',
         description: `Are you sure you want to delete ${usernamePrefix}? This cannot be undone.`,
         submitLabel: 'Delete',
-        submitTone: 'red'
+        submitTone: 'red',
+        showRetainMessages: true,
+        retainMessagesDefault: false
     });
 
     if (!opened) {
-        performDeleteAdminUser(safeUserId);
+        performDeleteAdminUser(safeUserId, false);
     }
 }
 
@@ -1031,6 +1043,7 @@ function bindAdminUserActionModal() {
     submit.addEventListener('click', async (event) => {
         event.preventDefault();
         if (submit.disabled) return;
+        const retainMessagesInput = document.getElementById('admin-user-retain-messages');
 
         const action = pendingAdminUserAction;
         if (!action || !Number.isFinite(Number(action.userId || 0)) || Number(action.userId || 0) <= 0) {
@@ -1049,7 +1062,8 @@ function bindAdminUserActionModal() {
             } else if (action.type === 'ban') {
                 await performAdminUserBanAction(safeUserId);
             } else if (action.type === 'delete') {
-                await performDeleteAdminUser(safeUserId);
+                const retainMessages = Boolean(retainMessagesInput?.checked);
+                await performDeleteAdminUser(safeUserId, retainMessages);
             }
         } finally {
             submit.disabled = false;

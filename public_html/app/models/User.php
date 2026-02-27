@@ -4,6 +4,24 @@ class User extends Model {
         return strtolower(trim((string)$username));
     }
 
+    public static function isDeletedRetainedEmail($email): bool {
+        $normalized = strtolower(trim((string)$email));
+        return preg_match('/^deleted-retained-\d+@prologue\.local\.invalid$/', $normalized) === 1;
+    }
+
+    public static function decorateDeletedRetainedUsername($username, $email): string {
+        $base = trim((string)$username);
+        if ($base === '') {
+            return 'Unknown user';
+        }
+
+        if (!self::isDeletedRetainedEmail($email)) {
+            return $base;
+        }
+
+        return $base . ' (deleted user)';
+    }
+
     public static function isUsernameFormatValid($username) {
         $normalized = self::normalizeUsername($username);
         if (!preg_match('/^[a-z][a-z0-9]{3,31}$/', $normalized)) {

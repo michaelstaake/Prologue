@@ -197,6 +197,8 @@ $router->get('/avatars/{filename}', 'AvatarController@serve');
 $router->get('/emojis/{filename}', 'EmojiController@serve');
 
 // Chat
+$router->get('/c/{chat_number}/delete', 'ChatController@deletePersonalByNumber');
+$router->post('/c/{chat_number}/delete', 'ChatController@deletePersonalByNumberConfirm');
 $router->get('/c/{chat_number}', 'ChatController@show');
 $router->post('/api/messages', 'ChatController@sendMessage'); // also used by web
 $router->post('/api/messages/react', 'ChatController@reactMessage');

@@ -83,6 +83,10 @@
         <div class="w-full max-w-md bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl p-6" role="dialog" aria-modal="true" aria-labelledby="admin-user-action-modal-title">
             <h2 id="admin-user-action-modal-title" class="text-lg font-semibold text-zinc-100">Confirm action</h2>
             <p id="admin-user-action-modal-description" class="mt-2 text-sm text-zinc-400">Are you sure?</p>
+            <label id="admin-user-retain-messages-wrap" class="mt-4 hidden items-start gap-2 text-sm text-zinc-300">
+                <input id="admin-user-retain-messages" type="checkbox" class="mt-0.5 rounded border-zinc-600 bg-zinc-800 text-emerald-600 focus:ring-emerald-500" value="1">
+                <span>Retain this user's messages in all chats</span>
+            </label>
             <div class="mt-5 flex items-center justify-end gap-3">
                 <button type="button" id="admin-user-action-modal-cancel" class="px-4 py-2 rounded-xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-zinc-200">Cancel</button>
                 <button type="button" id="admin-user-action-modal-submit" class="px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white">Confirm</button>

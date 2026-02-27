@@ -280,6 +280,19 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                     $isNewPrologueCluster = !$previousWasSystemEvent;
                     $sysFullTimestamp = (string)($message->created_at ?? '');
                     $sysCompactTimestamp = preg_replace('/:(\d{2})(?!.*:\d{2})/', '', $sysFullTimestamp);
+                    $systemContentRaw = (string)($message->content ?? '');
+                    $systemContentEscaped = htmlspecialchars($systemContentRaw, ENT_QUOTES, 'UTF-8');
+                    $systemContentHtml = preg_replace_callback(
+                        '#/c/\d{4}-\d{4}-\d{4}-\d{4}/delete#',
+                        static function ($matches) {
+                            $path = (string)($matches[0] ?? '');
+                            return '<a href="' . htmlspecialchars($path, ENT_QUOTES, 'UTF-8') . '" class="text-red-400 hover:text-red-300 hover:underline underline-offset-2">Delete chat</a>';
+                        },
+                        $systemContentEscaped
+                    );
+                    if (!is_string($systemContentHtml) || $systemContentHtml === '') {
+                        $systemContentHtml = $systemContentEscaped;
+                    }
                 ?>
                 <div class="flex gap-3 <?= $isNewPrologueCluster ? 'mt-4' : 'mt-1' ?>">
                     <div class="w-10 shrink-0">
@@ -295,7 +308,7 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                                 <span class="text-sm font-semibold leading-5 prologue-accent">Prologue</span>
                             </div>
                         <?php endif; ?>
-                        <div class="text-zinc-200 text-[17px] leading-6"><?= htmlspecialchars($message->content, ENT_QUOTES, 'UTF-8') ?></div>
+                        <div class="text-zinc-200 text-[17px] leading-6"><?= $systemContentHtml ?></div>
                         <div class="relative mt-0.5">
                             <div class="text-xs flex items-center gap-3">
                                 <span class="text-zinc-500" data-utc="<?= htmlspecialchars($sysFullTimestamp, ENT_QUOTES, 'UTF-8') ?>" title="<?= htmlspecialchars($sysFullTimestamp, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($sysCompactTimestamp, ENT_QUOTES, 'UTF-8') ?></span>

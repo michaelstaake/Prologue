@@ -102,7 +102,7 @@ class TrashController extends Controller {
             $messages = Database::query(
                 "SELECT m.id, m.chat_id, m.user_id, m.content, m.created_at,
                         m.quoted_message_id, m.quoted_user_id, m.quoted_content,
-                        u.username, u.user_number, u.avatar_filename, u.presence_status, u.last_active_at,
+                        u.username, u.email AS user_email, u.user_number, u.avatar_filename, u.presence_status, u.last_active_at,
                         qu.username AS quoted_username, qu.user_number AS quoted_user_number
                  FROM messages m
                  JOIN users u ON u.id = m.user_id
@@ -120,7 +120,7 @@ class TrashController extends Controller {
             $messages = Database::query(
                 "SELECT m.id, m.chat_id, m.user_id, m.content, m.created_at,
                         m.quoted_message_id, m.quoted_user_id, m.quoted_content,
-                        u.username, u.user_number, u.presence_status, u.last_active_at,
+                        u.username, u.email AS user_email, u.user_number, u.presence_status, u.last_active_at,
                         qu.username AS quoted_username, qu.user_number AS quoted_user_number
                  FROM messages m
                  JOIN users u ON u.id = m.user_id
@@ -133,6 +133,7 @@ class TrashController extends Controller {
         }
 
         foreach ($messages as $message) {
+            $message->username = User::decorateDeletedRetainedUsername($message->username ?? '', $message->user_email ?? null);
             $message->avatar_url = User::avatarUrl($message);
             User::attachEffectiveStatus($message);
         }

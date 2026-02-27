@@ -246,7 +246,7 @@ function findOpenMojiForGrapheme(grapheme) {
     return null;
 }
 
-function renderPlainTextWithEmoji(content) {
+function renderTextWithEmojiOnly(content) {
     const graphemes = getGraphemeClusters(String(content ?? ''));
     let html = '';
 
@@ -263,6 +263,37 @@ function renderPlainTextWithEmoji(content) {
         }
 
         html += escapeHtml(grapheme);
+    }
+
+    return html;
+}
+
+function renderPlainTextWithEmoji(content) {
+    const source = String(content ?? '');
+    const linkPattern = /(https?:\/\/[^\s<]+|\/c\/\d{4}-\d{4}-\d{4}-\d{4}\/delete)/gi;
+    let html = '';
+    let cursor = 0;
+    let match = linkPattern.exec(source);
+
+    while (match) {
+        const tokenStart = match.index;
+        if (tokenStart > cursor) {
+            html += renderTextWithEmojiOnly(source.slice(cursor, tokenStart));
+        }
+
+        const matchedUrl = String(match[0] || '');
+        if (/^\/c\/\d{4}-\d{4}-\d{4}-\d{4}\/delete$/i.test(matchedUrl)) {
+            html += `<a href="${escapeHtml(matchedUrl)}" class="text-red-400 hover:text-red-300 hover:underline underline-offset-2">Delete chat</a>`;
+        } else {
+            html += `<a href="${escapeHtml(matchedUrl)}" target="_blank" rel="noopener noreferrer" class="prologue-accent hover:text-emerald-300 hover:underline underline-offset-2">${escapeHtml(matchedUrl)}</a>`;
+        }
+
+        cursor = linkPattern.lastIndex;
+        match = linkPattern.exec(source);
+    }
+
+    if (cursor < source.length) {
+        html += renderTextWithEmojiOnly(source.slice(cursor));
     }
 
     return html;
@@ -2464,7 +2495,7 @@ function renderMessages(messages, options = {}) {
                     </div>
                     <div class="min-w-0 flex-1">
                         ${isNewPrologueCluster ? '<div class="flex items-center gap-2 mb-0.5"><span class="text-sm font-semibold leading-5 prologue-accent">Prologue</span></div>' : ''}
-                        <div class="text-zinc-200 text-[17px] leading-6">${escapeHtml(msg.content)}</div>
+                        <div class="text-zinc-200 text-[17px] leading-6">${renderPlainTextWithEmoji(String(msg.content || ''))}</div>
                         <div class="relative mt-0.5">
                             <div class="text-xs flex items-center gap-3">
                                 <span class="text-zinc-500" data-utc="${escapeHtml(sysFullTimestamp)}" title="${escapeHtml(sysFullTimestamp)}">${escapeHtml(sysCompactTimestamp)}</span>

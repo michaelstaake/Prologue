@@ -22,7 +22,7 @@ class ApiController extends Controller {
         try {
             $message = Database::query(
                 "SELECT m.id, m.chat_id, m.user_id, m.content, m.created_at,
-                        u.username, u.user_number, u.avatar_filename
+                        u.username, u.email AS user_email, u.user_number, u.avatar_filename
                  FROM messages m
                  JOIN users u ON u.id = m.user_id
                  WHERE m.id = ? AND m.chat_id = ?
@@ -36,7 +36,7 @@ class ApiController extends Controller {
 
             $message = Database::query(
                 "SELECT m.id, m.chat_id, m.user_id, m.content, m.created_at,
-                        u.username, u.user_number
+                        u.username, u.email AS user_email, u.user_number
                  FROM messages m
                  JOIN users u ON u.id = m.user_id
                  WHERE m.id = ? AND m.chat_id = ?
@@ -49,6 +49,8 @@ class ApiController extends Controller {
             $this->clearPinnedMessageForChat($chatId);
             return null;
         }
+
+        $message->username = User::decorateDeletedRetainedUsername($message->username ?? '', $message->user_email ?? null);
 
         $message->avatar_url = User::avatarUrl($message);
         $messages = [$message];
@@ -224,6 +226,7 @@ class ApiController extends Controller {
                     m.created_at,
                     m.user_id AS sender_id,
                     u.username AS sender_username,
+                    u.email AS sender_email,
                     u.user_number AS sender_user_number,
                     u.avatar_filename AS sender_avatar_filename,
                     c.id AS chat_id,
@@ -250,6 +253,7 @@ class ApiController extends Controller {
         $results = Database::query($query, [$userId, $userId, $search])->fetchAll();
 
         foreach ($results as $r) {
+            $r->sender_username = User::decorateDeletedRetainedUsername($r->sender_username ?? '', $r->sender_email ?? null);
             $chatType = Chat::normalizeType($r->chat_type ?? null);
             $r->chat_number_formatted = User::formatUserNumber($r->chat_number);
             $r->chat_type_normalized = $chatType;
@@ -258,8 +262,13 @@ class ApiController extends Controller {
                 $customTitle = trim((string)($r->chat_custom_title ?? ''));
                 $r->chat_title = $customTitle !== '' ? $customTitle : $r->chat_number_formatted;
             } else {
+                $customTitle = trim((string)($r->chat_custom_title ?? ''));
                 $otherUsername = trim((string)($r->other_username ?? ''));
-                $r->chat_title = $otherUsername !== '' ? $otherUsername : ('Chat ' . $r->chat_number_formatted);
+                if ($customTitle !== '') {
+                    $r->chat_title = $customTitle;
+                } else {
+                    $r->chat_title = $otherUsername !== '' ? $otherUsername : ('Personal Chat ' . $r->chat_number_formatted);
+                }
             }
 
             $r->sender_avatar_url = User::avatarUrl((object)[
@@ -359,7 +368,8 @@ class ApiController extends Controller {
                          (SELECT m.content FROM messages m WHERE m.chat_id = c.id ORDER BY m.created_at DESC LIMIT 1) AS last_message,
                          (SELECT m.created_at FROM messages m WHERE m.chat_id = c.id ORDER BY m.created_at DESC LIMIT 1) AS last_message_at,
                          (SELECT m.user_id FROM messages m WHERE m.chat_id = c.id ORDER BY m.created_at DESC LIMIT 1) AS last_message_user_id,
-                         (SELECT u.username FROM messages m JOIN users u ON u.id = m.user_id WHERE m.chat_id = c.id ORDER BY m.created_at DESC LIMIT 1) AS last_message_sender_username,";
+                 (SELECT u.username FROM messages m JOIN users u ON u.id = m.user_id WHERE m.chat_id = c.id ORDER BY m.created_at DESC LIMIT 1) AS last_message_sender_username,
+                         (SELECT u.email FROM messages m JOIN users u ON u.id = m.user_id WHERE m.chat_id = c.id ORDER BY m.created_at DESC LIMIT 1) AS last_message_sender_email,";
 
         if ($supportsLastSeen) {
             $query .= "
@@ -417,6 +427,10 @@ class ApiController extends Controller {
 
         foreach ($chats as $chat) {
             $chat->type = Chat::normalizeType($chat->type ?? null);
+            $chat->last_message_sender_username = User::decorateDeletedRetainedUsername(
+                $chat->last_message_sender_username ?? '',
+                $chat->last_message_sender_email ?? null
+            );
             $chat->is_favorite = false;
             $chat->unread_count = max(0, (int)($chat->unread_count ?? 0));
             $chat->chat_number_formatted = User::formatUserNumber($chat->chat_number);
@@ -453,7 +467,10 @@ class ApiController extends Controller {
                 $chat->effective_status_dot_class = $otherUser->effective_status_dot_class;
             }
 
-            if (!empty($chat->other_username)) {
+            $customTitle = trim((string)($chat->custom_title ?? ''));
+            if ($customTitle !== '') {
+                $chat->chat_title = $customTitle;
+            } elseif (!empty($chat->other_username)) {
                 $chat->chat_title = $chat->other_username;
             } else {
                 $chat->chat_title = 'Personal Chat ' . User::formatUserNumber($chat->chat_number);
@@ -485,7 +502,7 @@ class ApiController extends Controller {
             $messages = Database::query(
                 "SELECT m.id, m.chat_id, m.user_id, m.content, m.created_at,
                         m.quoted_message_id, m.quoted_user_id, m.quoted_content,
-                        u.username, u.user_number, u.avatar_filename, u.presence_status, u.last_active_at,
+                        u.username, u.email AS user_email, u.user_number, u.avatar_filename, u.presence_status, u.last_active_at,
                         qu.username AS quoted_username, qu.user_number AS quoted_user_number
                  FROM messages m
                  JOIN users u ON u.id = m.user_id
@@ -503,7 +520,7 @@ class ApiController extends Controller {
             $messages = Database::query(
                 "SELECT m.id, m.chat_id, m.user_id, m.content, m.created_at,
                         m.quoted_message_id, m.quoted_user_id, m.quoted_content,
-                        u.username, u.user_number, u.presence_status, u.last_active_at,
+                        u.username, u.email AS user_email, u.user_number, u.presence_status, u.last_active_at,
                         qu.username AS quoted_username, qu.user_number AS quoted_user_number
                  FROM messages m
                  JOIN users u ON u.id = m.user_id
@@ -515,6 +532,7 @@ class ApiController extends Controller {
             )->fetchAll();
         }
         foreach ($messages as $message) {
+            $message->username = User::decorateDeletedRetainedUsername($message->username ?? '', $message->user_email ?? null);
             $message->avatar_url = User::avatarUrl($message);
             User::attachEffectiveStatus($message);
         }
@@ -524,19 +542,16 @@ class ApiController extends Controller {
         Attachment::attachSubmittedToMessages($messages);
 
         if ($this->supportsSystemEvents()) {
-            $chatRow = Database::query("SELECT type FROM chats WHERE id = ?", [$chatId])->fetch();
-            if ($chatRow && Chat::isGroupType($chatRow->type ?? null)) {
-                $systemEvents = Database::query(
-                    "SELECT id, chat_id, event_type, content, created_at, 1 AS is_system_event FROM chat_system_events WHERE chat_id = ?",
-                    [$chatId]
-                )->fetchAll();
+            $systemEvents = Database::query(
+                "SELECT id, chat_id, event_type, content, created_at, 1 AS is_system_event FROM chat_system_events WHERE chat_id = ?",
+                [$chatId]
+            )->fetchAll();
 
-                $combined = array_merge($messages, $systemEvents);
-                usort($combined, function ($a, $b) {
-                    return strcmp($a->created_at, $b->created_at);
-                });
-                $messages = array_values(array_slice($combined, -200));
-            }
+            $combined = array_merge($messages, $systemEvents);
+            usort($combined, function ($a, $b) {
+                return strcmp($a->created_at, $b->created_at);
+            });
+            $messages = array_values(array_slice($combined, -200));
         }
 
         try {
