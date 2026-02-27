@@ -333,13 +333,13 @@
 
             <div>
                 <div class="mb-1 flex items-center justify-between gap-3">
-                    <label for="announcement_message" class="block text-sm text-zinc-400">Message (max 200 characters)</label>
-                    <span id="announcement_message_counter" class="text-xs text-zinc-500">0/200</span>
+                    <label for="announcement_message" class="block text-sm text-zinc-400">Message (max 1000 characters)</label>
+                    <span id="announcement_message_counter" class="text-xs text-zinc-500">0/1000</span>
                 </div>
                 <textarea
                     id="announcement_message"
                     name="announcement_message"
-                    maxlength="200"
+                    maxlength="1000"
                     rows="3"
                     class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-zinc-100"
                     placeholder="Scheduled maintenance tonight at 10:00 PM UTC."

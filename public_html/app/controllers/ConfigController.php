@@ -95,9 +95,9 @@ class ConfigController extends Controller {
         $rawAnnouncement = (string)($_POST['announcement_message'] ?? '');
         $announcement = strip_tags(trim($rawAnnouncement));
         if (function_exists('mb_substr')) {
-            $announcement = mb_substr($announcement, 0, 200);
+            $announcement = mb_substr($announcement, 0, 1000);
         } else {
-            $announcement = substr($announcement, 0, 200);
+            $announcement = substr($announcement, 0, 1000);
         }
 
         Setting::set('announcement_message', $announcement);
