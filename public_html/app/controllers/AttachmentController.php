@@ -49,8 +49,15 @@ class AttachmentController extends Controller {
         header('Cache-Control: private, max-age=31536000, immutable');
 
         if (in_array($ext, self::DOWNLOAD_EXTENSIONS, true)) {
-            $safeFilename = preg_replace('/[^A-Za-z0-9 _.-]/', '_', $filename);
-            header('Content-Disposition: attachment; filename="' . $safeFilename . '"');
+            $fileBase = substr($filename, 0, strlen($filename) - strlen($ext) - 1);
+            $record = Database::query(
+                "SELECT original_name FROM attachments WHERE file_name = ? AND file_extension = ? LIMIT 1",
+                [$fileBase, $ext]
+            )->fetch();
+            $downloadName = ($record && (string)$record->original_name !== '')
+                ? preg_replace('/[^A-Za-z0-9 _.-]/', '_', (string)$record->original_name)
+                : preg_replace('/[^A-Za-z0-9 _.-]/', '_', $filename);
+            header('Content-Disposition: attachment; filename="' . $downloadName . '"');
         }
 
         readfile($filePath);

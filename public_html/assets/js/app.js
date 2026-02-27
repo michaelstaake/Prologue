@@ -362,7 +362,7 @@ function renderMessageAttachments(attachments) {
         .filter(Boolean)
         .map((attachment) => {
             const category = getAttachmentCategory(attachment.file_extension);
-            const downloadAttr = escapeHtml(`${attachment.file_name}.${attachment.file_extension}`);
+            const downloadAttr = escapeHtml(attachment.original_name || `${attachment.file_name}.${attachment.file_extension}`);
 
             if (category === 'image') {
                 return `
