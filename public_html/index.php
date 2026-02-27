@@ -120,17 +120,23 @@ ErrorHandler::register();
 send_security_headers();
 
 try {
-    $databaseVersion = Setting::get('database_version');
-    if ($databaseVersion === null || (string)$databaseVersion !== APP_VERSION) {
-        Setting::set('database_version', APP_VERSION);
-    }
     ErrorHandler::setDebugMode(Setting::get('error_display') === '1');
-
-
 } catch (Throwable $exception) {
 }
 
 $requestPath = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+
+try {
+    $dbVersion = Setting::get('database_version');
+    if ($dbVersion !== null && version_compare((string)$dbVersion, APP_VERSION, '<')) {
+        if ($requestPath !== '/update' && $requestPath !== '/install') {
+            http_response_code(503);
+            require __DIR__ . '/app/views/update-required.php';
+            exit;
+        }
+    }
+} catch (Throwable $exception) {
+}
 if (strpos($requestPath, '/api') === 0) {
     RateLimiter::enforceApiLimit($requestPath, $_SERVER['REQUEST_METHOD'] ?? 'GET');
 }
@@ -140,6 +146,9 @@ $router = new Router();
 // Auth
 $router->get('/install', 'InstallController@showInstall');
 $router->post('/install', 'InstallController@install');
+
+$router->get('/update', 'UpdateController@showUpdate');
+$router->post('/update', 'UpdateController@runUpdate');
 
 $router->get('/login', 'AuthController@showLogin');
 $router->post('/login', 'AuthController@login');

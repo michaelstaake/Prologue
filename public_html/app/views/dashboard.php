@@ -39,10 +39,14 @@
         $toastMessage = '';
         $toastKind = 'error';
         $flashError = flash_get('error');
+        $flashSuccess = flash_get('success');
         if ($flashError === 'invalid_chat') {
             $toastMessage = 'That chat was not found.';
         } elseif ($flashError === 'user_not_found') {
             $toastMessage = 'That user was not found.';
+        } elseif ($flashSuccess === 'update_complete') {
+            $toastMessage = 'Database updated successfully.';
+            $toastKind = 'success';
         }
     ?>
     <?php if ($toastMessage !== ''): ?>

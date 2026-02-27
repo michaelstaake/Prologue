@@ -23,6 +23,9 @@
         } elseif ($flashSuccess === 'session_exited') {
             $toastMessage = 'Session ended successfully.';
             $toastKind = 'success';
+        } elseif ($flashSuccess === 'update_complete') {
+            $toastMessage = 'Database updated successfully.';
+            $toastKind = 'success';
         }
     ?>
     <?php if ($toastMessage !== ''): ?>
