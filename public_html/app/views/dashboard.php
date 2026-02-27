@@ -224,7 +224,7 @@
         <section class="mt-8">
             <h2 class="text-xl font-semibold text-zinc-300 mb-2">Invites</h2>
             <p class="text-zinc-400 text-sm mb-4 leading-relaxed">
-                Invite your friends, family, or teammates to join you on this Prologue Server. Each user will need an invite code to create an account. If they don't receive the verification email after creating an account using the invite code you provided them, remind them to check their spam folder. Once their account is set up, they can use the Search function to add you as a friend. Enjoy!
+                Invite your friends, family, or teammates to join you on this Prologue Server. Each user will need an invite code to create an account. If they don't receive the verification email after creating an account using the invite code you provided them, remind them to check their spam folder.
             </p>
 
             <a href="<?= htmlspecialchars(base_url('/settings'), ENT_QUOTES, 'UTF-8') ?>"
