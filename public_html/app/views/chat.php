@@ -190,6 +190,7 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
         </div>
     </div>
     <?php if ($isGroupChat): ?>
+    <?php $otherMembersCount = count(array_filter($members ?? [], fn($m) => (int)$m->id !== (int)$currentUserId)); ?>
     <div class="px-6 py-3 border-b border-zinc-800 text-sm">
         <div class="text-xs uppercase tracking-wide text-zinc-400 mb-2">Users in Group</div>
         <div class="flex flex-wrap items-center gap-2">
@@ -207,6 +208,11 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                     <?php endif; ?>
                 </span>
             <?php endforeach; ?>
+            <?php if ($otherMembersCount === 0): ?>
+                <button type="button" onclick="openAddUserModal()" class="inline-flex items-center gap-1.5 bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 rounded-full px-3 py-1 text-zinc-300 hover:text-zinc-100">
+                    <i class="fa-solid fa-plus text-xs"></i> Add User
+                </button>
+            <?php endif; ?>
         </div>
     </div>
     <?php endif; ?>
@@ -565,7 +571,10 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
             <p class="mt-2 text-sm text-zinc-400">Enter the username you want to add to this group chat.</p>
             <form id="add-user-form" class="mt-4 space-y-4">
                 <label for="add-user-input" class="block text-sm text-zinc-300">Username</label>
-                <input type="text" id="add-user-input" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-zinc-100" placeholder="Enter username" required>
+                <div class="relative">
+                    <input type="text" id="add-user-input" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-zinc-100" placeholder="Enter username" autocomplete="off" required>
+                    <div id="add-user-typeahead" class="hidden absolute z-20 mt-2 w-full bg-zinc-900 border border-zinc-700 rounded-xl overflow-hidden"></div>
+                </div>
                 <div class="flex items-center justify-end gap-3">
                     <button type="button" id="add-user-cancel" class="px-4 py-2 rounded-xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-zinc-200">Cancel</button>
                     <button type="submit" id="add-user-submit" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white">Add user</button>

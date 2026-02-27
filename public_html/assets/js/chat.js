@@ -1548,15 +1548,79 @@ function bindAddUserModal() {
     const modal = document.getElementById('add-user-modal');
     const form = document.getElementById('add-user-form');
     const input = document.getElementById('add-user-input');
+    const typeahead = document.getElementById('add-user-typeahead');
     const cancel = document.getElementById('add-user-cancel');
     const submit = document.getElementById('add-user-submit');
     if (!modal || !form || !input || !cancel || !submit) return;
+
+    let friendsCache = null;
+
+    async function loadFriends() {
+        if (friendsCache) return friendsCache;
+        try {
+            const res = await fetch('/api/friends');
+            const data = await res.json();
+            friendsCache = Array.isArray(data.friends) ? data.friends : [];
+        } catch {
+            friendsCache = [];
+        }
+        return friendsCache;
+    }
+
+    function getCurrentMemberUsernames() {
+        const chips = document.querySelectorAll('[data-group-member-username]');
+        const names = new Set();
+        chips.forEach((el) => {
+            const name = String(el.dataset.groupMemberUsername || '').trim().toLowerCase();
+            if (name) names.add(name);
+        });
+        return names;
+    }
+
+    function renderTypeahead(query) {
+        if (!typeahead) return;
+        const normalizedQuery = String(query || '').trim().toLowerCase();
+        if (!normalizedQuery || !friendsCache) {
+            typeahead.innerHTML = '';
+            typeahead.classList.add('hidden');
+            return;
+        }
+
+        const currentMembers = getCurrentMemberUsernames();
+        const matches = friendsCache
+            .filter((f) => {
+                const username = String(f.username || '').toLowerCase();
+                return username.includes(normalizedQuery) && !currentMembers.has(username);
+            })
+            .slice(0, 8);
+
+        if (matches.length === 0) {
+            typeahead.innerHTML = '';
+            typeahead.classList.add('hidden');
+            return;
+        }
+
+        typeahead.innerHTML = matches.map((f) => `
+            <button type="button" class="w-full text-left px-4 py-2.5 hover:bg-zinc-800 text-sm" data-add-user-typeahead="${escapeHtml(f.username)}">${escapeHtml(f.username)}</button>
+        `).join('');
+        typeahead.classList.remove('hidden');
+    }
+
+    function hideTypeahead() {
+        if (typeahead) {
+            typeahead.innerHTML = '';
+            typeahead.classList.add('hidden');
+        }
+    }
 
     const setOpenState = (isOpen) => {
         modal.classList.toggle('hidden', !isOpen);
 
         if (isOpen) {
             input.value = '';
+            hideTypeahead();
+            friendsCache = null;
+            loadFriends();
             setTimeout(() => {
                 input.focus();
             }, 0);
@@ -1565,11 +1629,43 @@ function bindAddUserModal() {
 
         submit.disabled = false;
         submit.textContent = 'Add user';
+        hideTypeahead();
     };
 
     const closeModal = () => {
         setOpenState(false);
     };
+
+    input.addEventListener('input', () => {
+        renderTypeahead(input.value);
+    });
+
+    input.addEventListener('focus', () => {
+        if (input.value.trim()) {
+            renderTypeahead(input.value);
+        }
+    });
+
+    input.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter') return;
+        if (!typeahead || typeahead.classList.contains('hidden')) return;
+        const buttons = typeahead.querySelectorAll('[data-add-user-typeahead]');
+        if (buttons.length !== 1) return;
+        event.preventDefault();
+        const username = String(buttons[0].dataset.addUserTypeahead || '').trim();
+        input.value = username;
+        hideTypeahead();
+    });
+
+    if (typeahead) {
+        typeahead.addEventListener('click', (event) => {
+            const btn = event.target.closest('[data-add-user-typeahead]');
+            if (!(btn instanceof HTMLElement)) return;
+            const username = String(btn.dataset.addUserTypeahead || '').trim();
+            input.value = username;
+            hideTypeahead();
+        });
+    }
 
     cancel.addEventListener('click', (event) => {
         event.preventDefault();
@@ -1581,9 +1677,20 @@ function bindAddUserModal() {
         closeModal();
     });
 
+    document.addEventListener('click', (event) => {
+        if (!typeahead || typeahead.classList.contains('hidden')) return;
+        if (!input.contains(event.target) && !typeahead.contains(event.target)) {
+            hideTypeahead();
+        }
+    });
+
     document.addEventListener('keydown', (event) => {
         if (event.key !== 'Escape') return;
         if (modal.classList.contains('hidden')) return;
+        if (typeahead && !typeahead.classList.contains('hidden')) {
+            hideTypeahead();
+            return;
+        }
         closeModal();
     });
 
@@ -1593,6 +1700,7 @@ function bindAddUserModal() {
 
         submit.disabled = true;
         submit.textContent = 'Adding...';
+        hideTypeahead();
 
         try {
             await addGroupMemberByUsername(null, input.value);
