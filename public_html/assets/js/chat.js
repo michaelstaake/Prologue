@@ -1430,7 +1430,8 @@ function bindAttachmentLightbox() {
 
     close.addEventListener('click', closeOverlay);
     overlay.addEventListener('click', (event) => {
-        if (event.target !== overlay) return;
+        const image = document.getElementById('attachment-lightbox-image');
+        if (event.target === image) return;
         closeOverlay();
     });
 
