@@ -67,6 +67,17 @@ class ErrorHandler {
     public static function abort($status, $message = 'Unexpected error', $debug = []) {
         $status = (int) $status;
 
+        $uri = $_SERVER['REQUEST_URI'] ?? '';
+        $silentPrefixes = ['/.well-known/'];
+        foreach ($silentPrefixes as $prefix) {
+            if (strncmp($uri, $prefix, strlen($prefix)) === 0) {
+                if (!headers_sent()) {
+                    @http_response_code($status);
+                }
+                exit;
+            }
+        }
+
         self::logError("HTTP {$status}", [
             'message' => $message,
             'debug' => $debug,
