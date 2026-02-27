@@ -1,6 +1,8 @@
 <?php
 class Controller {
     protected function view($view, $data = []) {
+        header('X-App-Version: ' . APP_VERSION);
+
         if (!isset($data['csrf'])) {
             $data['csrf'] = $this->csrfToken();
         }
@@ -50,6 +52,7 @@ class Controller {
     protected function json($data, $status = 200) {
         http_response_code($status);
         header('Content-Type: application/json');
+        header('X-App-Version: ' . APP_VERSION);
         echo json_encode($data);
         exit;
     }

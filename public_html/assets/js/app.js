@@ -112,6 +112,31 @@ function getCsrfToken() {
     return window.CSRF_TOKEN || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 }
 
+let versionUpdateDetected = false;
+
+function showVersionUpdateOverlay() {
+    if (versionUpdateDetected) return;
+    versionUpdateDetected = true;
+    const overlay = document.getElementById('version-update-overlay');
+    if (overlay) {
+        overlay.classList.remove('hidden');
+    }
+}
+
+(function() {
+    const _fetch = window.fetch;
+    window.fetch = async function(...args) {
+        const response = await _fetch.apply(this, args);
+        if (!versionUpdateDetected) {
+            const serverVersion = response.headers.get('X-App-Version');
+            if (serverVersion && window.APP_VERSION && serverVersion !== window.APP_VERSION) {
+                showVersionUpdateOverlay();
+            }
+        }
+        return response;
+    };
+})();
+
 function normalizeChatType(type) {
     const value = String(type || '').trim().toLowerCase();
     if (value === 'dm') return 'personal';
@@ -119,6 +144,8 @@ function normalizeChatType(type) {
 }
 
 async function postForm(url, data) {
+    if (versionUpdateDetected) return { success: false };
+
     const formData = new URLSearchParams();
     Object.entries(data).forEach(([k, v]) => formData.append(k, v));
 

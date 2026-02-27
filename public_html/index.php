@@ -141,6 +141,7 @@ try {
                     $showUpdateButton = (bool)$adminIpRow;
                 }
             } catch (Throwable $ipCheckException) {}
+            header('X-App-Version: ' . APP_VERSION);
             http_response_code(503);
             require __DIR__ . '/app/views/update-required.php';
             exit;

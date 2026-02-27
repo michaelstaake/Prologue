@@ -466,8 +466,17 @@
             </div>
         </div>
     </div>
+    <div id="version-update-overlay" class="hidden fixed inset-0 bg-black/90 z-[9999] flex items-center justify-center p-6">
+        <div class="text-center">
+            <div class="mb-5 text-5xl text-emerald-400"><i class="fa-solid fa-rotate"></i></div>
+            <h2 class="text-xl font-semibold text-zinc-100 mb-2">System Update Installed</h2>
+            <p class="text-zinc-400 mb-6">Please refresh the page to continue.</p>
+            <button onclick="location.reload()" class="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-medium transition">Refresh Page</button>
+        </div>
+    </div>
 </body>
 <script>
+    window.APP_VERSION = <?= json_encode(APP_VERSION) ?>;
     window.CSRF_TOKEN = <?= json_encode($csrf) ?>;
     window.BROWSER_NOTIFICATIONS_ENABLED = <?= $browserNotificationsEnabled ? 'true' : 'false' ?>;
     window.NOTIFICATION_SOUND_FRIEND_REQUEST_ENABLED = <?= $friendRequestSoundEnabled ? 'true' : 'false' ?>;
