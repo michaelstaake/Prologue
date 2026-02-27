@@ -67,7 +67,8 @@ class NotificationController extends Controller {
         $this->json([
             'notifications' => $notifs,
             'seen_ids' => $seenIds,
-            'incoming_friend_request_count' => $incomingFriendRequestCount
+            'incoming_friend_request_count' => $incomingFriendRequestCount,
+            'csrf_token' => $this->csrfToken()
         ]);
     }
 

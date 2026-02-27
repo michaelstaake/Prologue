@@ -768,6 +768,11 @@ function bindBrowserPermissionChecks() {
 async function fetchNotifications() {
     const res = await fetch('/notifications');
     const data = await res.json();
+    if (data.csrf_token) {
+        window.CSRF_TOKEN = data.csrf_token;
+        const meta = document.querySelector('meta[name="csrf-token"]');
+        if (meta) meta.setAttribute('content', data.csrf_token);
+    }
     const notifications = data.notifications || [];
     const serverSeenIds = new Set(normalizeNotificationIds(data.seen_ids || []));
     unreadNotificationCount = notifications.reduce((total, notification) => {
