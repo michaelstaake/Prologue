@@ -248,6 +248,7 @@ $router->post('/config/mail/test', 'ConfigController@sendTestMail');
 $router->post('/config/check-updates', 'ConfigController@checkForUpdatesNow');
 $router->post('/config/accounts', 'ConfigController@saveAccountSettings');
 $router->post('/config/attachments', 'ConfigController@saveAttachmentSettings');
+$router->post('/config/announcement', 'ConfigController@saveAnnouncementSettings');
 $router->post('/config/more', 'ConfigController@saveMoreSettings');
 
 // Settings

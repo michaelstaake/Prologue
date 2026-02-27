@@ -25,6 +25,7 @@ class ConfigController extends Controller {
         $this->view('config', [
             'user' => $user,
             'csrf' => $this->csrfToken(),
+            'announcement_message' => (string)(Setting::get('announcement_message') ?? ''),
             'mail_host' => Setting::get('mail_host') ?? '',
             'mail_port' => Setting::get('mail_port') ?? '587',
             'mail_user' => Setting::get('mail_user') ?? '',
@@ -65,6 +66,24 @@ class ConfigController extends Controller {
         Setting::set('new_user_notification', isset($_POST['new_user_notification']) ? '1' : '0');
 
         $this->flash('success', 'accounts_saved');
+        $this->redirect('/config');
+    }
+
+    public function saveAnnouncementSettings() {
+        $this->requireAdminUser();
+        Auth::csrfValidate();
+
+        $rawAnnouncement = (string)($_POST['announcement_message'] ?? '');
+        $announcement = strip_tags(trim($rawAnnouncement));
+        if (function_exists('mb_substr')) {
+            $announcement = mb_substr($announcement, 0, 200);
+        } else {
+            $announcement = substr($announcement, 0, 200);
+        }
+
+        Setting::set('announcement_message', $announcement);
+
+        $this->flash('success', 'announcement_saved');
         $this->redirect('/config');
     }
 

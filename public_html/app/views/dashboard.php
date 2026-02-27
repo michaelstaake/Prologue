@@ -32,6 +32,14 @@
         </a>
     </div>
 
+    <?php $dashboardAnnouncement = trim((string)($announcementMessage ?? '')); ?>
+    <?php if ($dashboardAnnouncement !== ''): ?>
+        <div class="mb-6 rounded-xl border border-amber-700 bg-amber-950/60 px-5 py-4">
+            <p class="text-sm font-semibold text-amber-300 mb-1">Announcement</p>
+            <p class="text-sm text-amber-200 whitespace-pre-wrap break-words"><?= htmlspecialchars($dashboardAnnouncement, ENT_QUOTES, 'UTF-8') ?></p>
+        </div>
+    <?php endif; ?>
+
     <section class="mb-8">
     <h2 class="text-xl font-semibold text-zinc-300 mb-4">Friends</h2>
 

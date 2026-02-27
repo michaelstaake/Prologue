@@ -33,6 +33,9 @@
         } elseif ($flashSuccess === 'attachments_saved') {
             $toastMessage = 'Attachment settings saved.';
             $toastKind = 'success';
+        } elseif ($flashSuccess === 'announcement_saved') {
+            $toastMessage = 'Announcement saved.';
+            $toastKind = 'success';
         } elseif ($flashError === 'update_check_failed') {
             $toastMessage = 'Could not check for updates right now.';
             $toastKind = 'error';
@@ -311,6 +314,50 @@
                 });
 
                 form.addEventListener('change', update);
+            })();
+        </script>
+    </section>
+
+    <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-2xl">
+        <h2 class="text-xl font-semibold mb-1">Announcement</h2>
+        <p class="text-sm text-zinc-400 mb-5">Show a plain text alert on the dashboard for all users. Leave blank to hide it.</p>
+
+        <form method="POST" action="<?= htmlspecialchars(base_url('/config/announcement'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-4">
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
+
+            <div>
+                <div class="mb-1 flex items-center justify-between gap-3">
+                    <label for="announcement_message" class="block text-sm text-zinc-400">Message (max 200 characters)</label>
+                    <span id="announcement_message_counter" class="text-xs text-zinc-500">0/200</span>
+                </div>
+                <textarea
+                    id="announcement_message"
+                    name="announcement_message"
+                    maxlength="200"
+                    rows="3"
+                    class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-zinc-100"
+                    placeholder="Scheduled maintenance tonight at 10:00 PM UTC."
+                ><?= htmlspecialchars((string)($announcement_message ?? ''), ENT_QUOTES, 'UTF-8') ?></textarea>
+            </div>
+
+            <div class="pt-2">
+                <button type="submit" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-medium transition">Save announcement</button>
+            </div>
+        </form>
+
+        <script>
+            (function () {
+                const input = document.getElementById('announcement_message');
+                const counter = document.getElementById('announcement_message_counter');
+                if (!input || !counter) return;
+
+                const max = Number(input.getAttribute('maxlength') || 200);
+                const update = () => {
+                    counter.textContent = String(input.value.length) + '/' + String(max);
+                };
+
+                input.addEventListener('input', update);
+                update();
             })();
         </script>
     </section>

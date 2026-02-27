@@ -25,6 +25,7 @@ INSERT INTO settings (`key`, `value`) VALUES ('email_verification_required', '1'
 INSERT INTO settings (`key`, `value`) VALUES ('error_display', '0');
 INSERT INTO settings (`key`, `value`) VALUES ('new_user_notification', '0');
 INSERT INTO settings (`key`, `value`) VALUES ('check_for_updates', '0');
+INSERT INTO settings (`key`, `value`) VALUES ('announcement_message', 'Welcome to Prologue! Be sure to configure SMTP in Settings > Config > Mail and then remove this announcement in Settings > Config > Announcement. Enjoy!');
 
 -- Users
 CREATE TABLE users (

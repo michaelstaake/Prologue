@@ -101,6 +101,7 @@ class HomeController extends Controller {
         }
 
         $invitesEnabled = (string)(Setting::get('invites_enabled') ?? '1') === '1';
+        $announcementMessage = trim((string)(Setting::get('announcement_message') ?? ''));
         $inviteReferralPrompt = $this->getInviteReferralPrompt((int)$userId);
 
         $recentFriendPosts = Post::getFriendsFeed((int)$userId, 3);
@@ -115,6 +116,7 @@ class HomeController extends Controller {
             'selectedTab' => $selectedTab,
             'selectedRequestsTab' => $selectedRequestsTab,
             'invitesEnabled' => $invitesEnabled,
+            'announcementMessage' => $announcementMessage,
             'inviteReferralPrompt' => $inviteReferralPrompt,
             'recentFriendPosts' => $recentFriendPosts,
             'csrf' => $this->csrfToken()
