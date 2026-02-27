@@ -1,4 +1,8 @@
-<div class="bg-zinc-900 p-8 rounded-3xl border border-zinc-700">
+<?php
+$title = 'Update Prologue';
+ob_start();
+?>
+<div class="w-full max-w-md bg-zinc-900 p-8 rounded-3xl border border-zinc-700">
     <h1 class="text-3xl font-bold text-center mb-2">Update Prologue</h1>
     <p class="text-center text-zinc-400 mb-6">Run database migrations to bring your installation up to date.</p>
 
@@ -24,3 +28,6 @@
         <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 py-4 rounded-2xl font-semibold transition">Run Update</button>
     </form>
 </div>
+<?php
+$content = ob_get_clean();
+require __DIR__ . '/layouts/standalone.php';

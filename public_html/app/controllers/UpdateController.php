@@ -23,7 +23,7 @@ class UpdateController extends Controller {
             ErrorHandler::abort(404);
         }
 
-        $this->view('update', [
+        $this->viewRaw('update', [
             'csrf'       => $this->csrfToken(),
             'dbVersion'  => $dbVersion,
             'appVersion' => APP_VERSION,
@@ -75,7 +75,7 @@ class UpdateController extends Controller {
                 $pdo->rollBack();
             }
 
-            $this->view('update', [
+            $this->viewRaw('update', [
                 'csrf'         => $this->csrfToken(),
                 'dbVersion'    => $dbVersion,
                 'appVersion'   => APP_VERSION,

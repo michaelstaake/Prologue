@@ -21,6 +21,23 @@ class Controller {
         require __DIR__ . '/../views/layouts/main.php';
     }
 
+    protected function viewRaw($view, $data = []) {
+        if (!isset($data['csrf'])) {
+            $data['csrf'] = $this->csrfToken();
+        }
+
+        extract($data);
+        $viewFile = __DIR__ . "/../views/{$view}.php";
+        if (!file_exists($viewFile)) {
+            ErrorHandler::abort(500, 'View not found', [
+                'view' => $view,
+                'view_file' => $viewFile
+            ]);
+        }
+
+        require $viewFile;
+    }
+
     protected function flash(string $key, string $value): void {
         $_SESSION['_flash'][$key] = $value;
     }
