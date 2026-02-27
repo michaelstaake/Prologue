@@ -36,8 +36,14 @@
         } elseif ($flashSuccess === 'announcement_saved') {
             $toastMessage = 'Announcement saved.';
             $toastKind = 'success';
+        } elseif ($flashSuccess === 'storage_recalculated') {
+            $toastMessage = 'Storage size recalculated.';
+            $toastKind = 'success';
         } elseif ($flashError === 'update_check_failed') {
             $toastMessage = 'Could not check for updates right now.';
+            $toastKind = 'error';
+        } elseif ($flashError === 'storage_recalculate_failed') {
+            $toastMessage = 'Could not recalculate storage size right now.';
             $toastKind = 'error';
         }
     ?>
@@ -395,6 +401,34 @@
             <?php else: ?>
                 <p class="text-sm text-zinc-500">No IPs are currently banned.</p>
             <?php endif; ?>
+        </div>
+    </section>
+
+    <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-2xl">
+        <h2 class="text-xl font-semibold mb-1">Storage size</h2>
+        <p class="text-sm text-zinc-400 mb-5">Storage usage is calculated manually to avoid resource-intensive automatic scans.</p>
+
+        <div class="space-y-3">
+            <div class="rounded-xl border border-zinc-700 bg-zinc-800/30 px-4 py-3 flex items-center justify-between gap-4">
+                <span class="text-zinc-200">Total storage folder size</span>
+                <span class="text-zinc-100 font-semibold"><?= htmlspecialchars((string)($storage_total_size_label ?? 'N/A'), ENT_QUOTES, 'UTF-8') ?></span>
+            </div>
+
+            <div class="rounded-xl border border-zinc-700 bg-zinc-800/30 px-4 py-3 flex items-center justify-between gap-4">
+                <span class="text-zinc-200">Space saved by deduplication</span>
+                <span class="text-zinc-100 font-semibold"><?= htmlspecialchars((string)($storage_dedup_saved_label ?? 'N/A'), ENT_QUOTES, 'UTF-8') ?></span>
+            </div>
+        </div>
+
+        <div class="mt-5 pt-5 border-t border-zinc-700">
+            <form method="POST" action="<?= htmlspecialchars(base_url('/config/storage/recalculate'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-3">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
+                <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 bg-zinc-700 hover:bg-zinc-600 text-zinc-100 rounded-xl font-medium transition">
+                    <i class="fa-solid fa-rotate-right"></i>
+                    Recalculate
+                </button>
+                <p class="text-xs text-zinc-500"><?= htmlspecialchars((string)($storage_stats_last_recalculated_label ?? 'N/A'), ENT_QUOTES, 'UTF-8') ?></p>
+            </form>
         </div>
     </section>
 

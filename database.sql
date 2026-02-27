@@ -265,15 +265,19 @@ CREATE TABLE attachments (
     file_size BIGINT NOT NULL,
     width INT NULL,
     height INT NULL,
+    file_hash CHAR(64) NULL,
+    dedup_source_id BIGINT NULL,
     status ENUM('pending','submitted') NOT NULL DEFAULT 'pending',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     submitted_at TIMESTAMP NULL,
     FOREIGN KEY (chat_id) REFERENCES chats(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
+    FOREIGN KEY (dedup_source_id) REFERENCES attachments(id) ON DELETE SET NULL,
     UNIQUE KEY uniq_attachment_user_file (user_id, file_name),
     KEY idx_attachments_message (message_id),
-    KEY idx_attachments_pending (user_id, status, created_at)
+    KEY idx_attachments_pending (user_id, status, created_at),
+    KEY idx_attachments_hash (file_hash, file_extension)
 );
 
 -- Chat system events (e.g. rename announcements)

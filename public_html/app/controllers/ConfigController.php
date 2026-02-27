@@ -20,7 +20,21 @@ class ConfigController extends Controller {
     public function index() {
         $user = $this->requireAdminUser();
         $bruteForceProtection = $this->getBruteForceProtectionData();
-        $storageRoot = rtrim((string)(defined('STORAGE_FILESYSTEM_ROOT') ? STORAGE_FILESYSTEM_ROOT : (dirname(__DIR__, 3) . '/storage')), '/');
+        $storageRoot = $this->storageRoot();
+
+        $storageStatsLastRecalculatedAt = trim((string)(Setting::get('storage_stats_last_recalculated_at') ?? ''));
+        $hasStorageStats = $storageStatsLastRecalculatedAt !== '';
+
+        $storageTotalBytes = $hasStorageStats ? max(0, (int)(Setting::get('storage_total_bytes_cached') ?? 0)) : null;
+        $storageDedupSavedBytes = $hasStorageStats ? max(0, (int)(Setting::get('storage_dedup_saved_bytes_cached') ?? 0)) : null;
+
+        $storageDedupSavedPercent = null;
+        if ($hasStorageStats && $storageTotalBytes !== null && $storageDedupSavedBytes !== null) {
+            $withoutDedupBytes = $storageTotalBytes + $storageDedupSavedBytes;
+            $storageDedupSavedPercent = $withoutDedupBytes > 0
+                ? (($storageDedupSavedBytes / $withoutDedupBytes) * 100)
+                : 0.0;
+        }
 
         $this->view('config', [
             'user' => $user,
@@ -45,6 +59,11 @@ class ConfigController extends Controller {
             'failed_registration_attempts_24h' => $bruteForceProtection['failed_registration_attempts_24h'],
             'active_banned_ips' => $bruteForceProtection['active_banned_ips'],
             'storage_writable' => is_dir($storageRoot) && is_writable($storageRoot),
+            'storage_total_size_label' => $hasStorageStats && $storageTotalBytes !== null ? $this->formatBytes($storageTotalBytes) : 'N/A',
+            'storage_dedup_saved_label' => $hasStorageStats && $storageDedupSavedBytes !== null && $storageDedupSavedPercent !== null
+                ? ($this->formatBytes($storageDedupSavedBytes) . ' (' . number_format($storageDedupSavedPercent, 2) . '%)')
+                : 'N/A',
+            'storage_stats_last_recalculated_label' => $this->formatLastRecalculatedLabel($storageStatsLastRecalculatedAt),
             'php_version' => PHP_VERSION,
             'php_file_uploads' => (bool)ini_get('file_uploads'),
             'php_upload_max_filesize' => ini_get('upload_max_filesize'),
@@ -185,6 +204,25 @@ class ConfigController extends Controller {
         $this->redirect('/config');
     }
 
+        public function recalculateStorageStats() {
+            $this->requireAdminUser();
+            Auth::csrfValidate();
+
+            try {
+                $stats = $this->calculateStorageStats();
+
+                Setting::set('storage_total_bytes_cached', (string)$stats['total_storage_bytes']);
+                Setting::set('storage_dedup_saved_bytes_cached', (string)$stats['dedup_saved_bytes']);
+                Setting::set('storage_stats_last_recalculated_at', gmdate('Y-m-d H:i:s'));
+
+                $this->flash('success', 'storage_recalculated');
+            } catch (Throwable $exception) {
+                $this->flash('error', 'storage_recalculate_failed');
+            }
+
+            $this->redirect('/config');
+        }
+
     public function checkForUpdatesNow() {
         $user = $this->requireAdminUser();
         Auth::csrfValidate();
@@ -204,6 +242,86 @@ class ConfigController extends Controller {
 
         $this->flash('error', 'update_check_failed');
         $this->redirect('/config');
+    }
+
+    private function storageRoot(): string {
+        return rtrim((string)(defined('STORAGE_FILESYSTEM_ROOT') ? STORAGE_FILESYSTEM_ROOT : (dirname(__DIR__, 3) . '/storage')), '/');
+    }
+
+    private function calculateStorageStats(): array {
+        $storageSizeBytes = $this->calculateDirectorySizeBytes($this->storageRoot());
+
+        $dedupSavedBytes = (int)Database::query(
+            "SELECT COALESCE(SUM(file_size), 0) FROM attachments WHERE dedup_source_id IS NOT NULL"
+        )->fetchColumn();
+
+        if ($dedupSavedBytes < 0) {
+            $dedupSavedBytes = 0;
+        }
+
+        return [
+            'total_storage_bytes' => $storageSizeBytes,
+            'dedup_saved_bytes' => $dedupSavedBytes,
+        ];
+    }
+
+    private function calculateDirectorySizeBytes(string $path): int {
+        if (!is_dir($path)) {
+            return 0;
+        }
+
+        $size = 0;
+
+        try {
+            $iterator = new RecursiveIteratorIterator(
+                new RecursiveDirectoryIterator($path, FilesystemIterator::SKIP_DOTS)
+            );
+
+            foreach ($iterator as $fileInfo) {
+                if (!$fileInfo->isFile()) {
+                    continue;
+                }
+
+                $fileSize = (int)$fileInfo->getSize();
+                if ($fileSize > 0) {
+                    $size += $fileSize;
+                }
+            }
+        } catch (Throwable $exception) {
+            return max(0, $size);
+        }
+
+        return max(0, $size);
+    }
+
+    private function formatBytes(int $bytes): string {
+        if ($bytes < 1024) {
+            return $bytes . ' B';
+        }
+
+        $units = ['KB', 'MB', 'GB', 'TB'];
+        $value = (float)$bytes;
+        foreach ($units as $unit) {
+            $value /= 1024;
+            if ($value < 1024 || $unit === 'TB') {
+                return number_format($value, 2) . ' ' . $unit;
+            }
+        }
+
+        return number_format($bytes) . ' B';
+    }
+
+    private function formatLastRecalculatedLabel(string $raw): string {
+        if ($raw === '') {
+            return 'N/A';
+        }
+
+        try {
+            $dateTime = new DateTimeImmutable($raw, new DateTimeZone('UTC'));
+            return 'Last recalculated ' . $dateTime->format('Y-m-d H:i:s') . ' UTC';
+        } catch (Throwable $exception) {
+            return 'Last recalculated ' . $raw;
+        }
     }
 
     private function getBruteForceProtectionData() {

@@ -12,10 +12,10 @@ class UpdateController extends Controller {
      */
     private static function getMigrations(): array {
         return [
-            // Example for a future version:
-            // '0.0.4' => [
-            //     "ALTER TABLE users ADD COLUMN bio TEXT NULL AFTER email",
-            // ],
+            '0.0.6' => [
+                "ALTER TABLE attachments ADD COLUMN file_hash CHAR(64) NULL AFTER height, ADD COLUMN dedup_source_id BIGINT NULL AFTER file_hash, ADD KEY idx_attachments_hash (file_hash, file_extension)",
+                "ALTER TABLE attachments ADD CONSTRAINT fk_attachments_dedup_source FOREIGN KEY (dedup_source_id) REFERENCES attachments(id) ON DELETE SET NULL",
+            ],
         ];
     }
 

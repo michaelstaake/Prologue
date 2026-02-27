@@ -183,6 +183,72 @@ class Attachment extends Model {
             return ['error' => 'attachment_upload_failed'];
         }
 
+        // Compute SHA-256 hash of the uploaded file for deduplication
+        $fileHashResult = hash_file('sha256', $tmpPath);
+        $fileHash = ($fileHashResult !== false) ? $fileHashResult : null;
+
+        // Check whether an identical file already exists on the server
+        if ($fileHash !== null) {
+            $dedupSource = Database::query(
+                "SELECT a.id, a.file_size, a.width, a.height, a.file_name, a.file_extension, u.user_number
+                 FROM attachments a
+                 JOIN users u ON u.id = a.user_id
+                 WHERE a.file_hash = ? AND a.file_extension = ? AND a.dedup_source_id IS NULL
+                 LIMIT 1",
+                [$fileHash, $nameExt]
+            )->fetch();
+
+            if ($dedupSource) {
+                $fileBase = self::generateUniqueFileBaseForUser($userId);
+                if ($fileBase === null) {
+                    $logFailure('attachment_upload_failed', 'unique_filename_error');
+                    return ['error' => 'attachment_upload_failed'];
+                }
+
+                $dedupStoredSize = (int)$dedupSource->file_size;
+                $dedupWidth  = $dedupSource->width  !== null ? (int)$dedupSource->width  : null;
+                $dedupHeight = $dedupSource->height !== null ? (int)$dedupSource->height : null;
+
+                Database::query(
+                    "INSERT INTO attachments (chat_id, user_id, original_name, file_name, file_extension, mime_type, file_size, width, height, file_hash, dedup_source_id, status)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
+                    [$chatId, $userId, $originalName, $fileBase, $nameExt, $mime, $dedupStoredSize, $dedupWidth, $dedupHeight, $fileHash, (int)$dedupSource->id]
+                );
+
+                $id = (int)Database::getInstance()->lastInsertId();
+
+                if ($attachmentLogging) {
+                    $realUserNumber = preg_replace('/\D+/', '', (string)$dedupSource->user_number);
+                    ErrorHandler::logToDirectory('attachment.log', 'upload_success', [
+                        'chat_id' => $chatId,
+                        'user_id' => $userId,
+                        'original_name' => $originalName,
+                        'file_name' => $fileBase . '.' . $nameExt,
+                        'size' => $dedupStoredSize,
+                        'width' => $dedupWidth,
+                        'height' => $dedupHeight,
+                        'dedup' => true,
+                        'real_file' => $realUserNumber . '/' . $dedupSource->file_name . '.' . $dedupSource->file_extension,
+                    ]);
+                }
+
+                return [
+                    'success' => true,
+                    'attachment' => [
+                        'id' => $id,
+                        'original_name' => $originalName,
+                        'file_name' => $fileBase,
+                        'file_extension' => $nameExt,
+                        'mime_type' => $mime,
+                        'file_size' => $dedupStoredSize,
+                        'width' => $dedupWidth,
+                        'height' => $dedupHeight,
+                        'url' => self::publicUrl($userNumber, $fileBase, $nameExt)
+                    ]
+                ];
+            }
+        }
+
         $dir = self::directoryForUserNumber($userNumber);
         if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
             $logFailure('attachment_upload_failed', 'storage_dir_error:' . $dir);
@@ -239,9 +305,9 @@ class Attachment extends Model {
         }
 
         Database::query(
-            "INSERT INTO attachments (chat_id, user_id, original_name, file_name, file_extension, mime_type, file_size, width, height, status)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
-            [$chatId, $userId, $originalName, $fileBase, $nameExt, $mime, $storedSize, $width, $height]
+            "INSERT INTO attachments (chat_id, user_id, original_name, file_name, file_extension, mime_type, file_size, width, height, file_hash, status)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
+            [$chatId, $userId, $originalName, $fileBase, $nameExt, $mime, $storedSize, $width, $height, $fileHash]
         );
 
         $id = (int)Database::getInstance()->lastInsertId();
@@ -255,6 +321,7 @@ class Attachment extends Model {
                 'size' => $storedSize,
                 'width' => $width,
                 'height' => $height,
+                'dedup' => false,
             ]);
         }
 
@@ -276,7 +343,7 @@ class Attachment extends Model {
 
     public static function deletePendingByIdForUser(int $attachmentId, int $userId): bool {
         $attachment = Database::query(
-            "SELECT a.id, a.file_name, a.file_extension, u.user_number
+            "SELECT a.id, a.file_name, a.file_extension, a.dedup_source_id, u.user_number
              FROM attachments a
              JOIN users u ON u.id = a.user_id
              WHERE a.id = ? AND a.user_id = ? AND a.status = 'pending'
@@ -288,10 +355,19 @@ class Attachment extends Model {
             return false;
         }
 
-        $path = self::directoryForUserNumber((string)$attachment->user_number) . '/' . $attachment->file_name . '.' . $attachment->file_extension;
-        if (is_file($path)) {
-            @unlink($path);
+        if ($attachment->dedup_source_id === null) {
+            // This attachment owns a physical file; release it (promoting a referencing attachment if needed)
+            $released = self::releaseOwnedFile(
+                (string)$attachment->user_number,
+                (string)$attachment->file_name,
+                (string)$attachment->file_extension,
+                $attachmentId
+            );
+            if (!$released) {
+                return false;
+            }
         }
+        // Dedup references have no physical file of their own — nothing to delete from disk
 
         Database::query("DELETE FROM attachments WHERE id = ? AND user_id = ? AND status = 'pending'", [$attachmentId, $userId]);
         return true;
@@ -377,51 +453,191 @@ class Attachment extends Model {
 
         try {
             $pending = Database::query(
-                "SELECT file_name, file_extension FROM attachments WHERE user_id = ? AND status = 'pending'",
+                "SELECT id, file_name, file_extension, dedup_source_id FROM attachments WHERE user_id = ? AND status = 'pending'",
                 [$userId]
             )->fetchAll();
         } catch (Throwable $e) {
             return;
         }
 
+        $deletingIds = [];
         foreach ($pending as $row) {
-            $path = self::directoryForUserNumber($userNumber) . '/' . $row->file_name . '.' . $row->file_extension;
-            if (is_file($path)) {
-                @unlink($path);
+            $deletingIds[] = (int)$row->id;
+        }
+
+        $failedOwnerIds = [];
+        foreach ($pending as $row) {
+            if ($row->dedup_source_id !== null) {
+                continue; // No physical file owned by this attachment
+            }
+
+            $released = self::releaseOwnedFile(
+                $userNumber,
+                (string)$row->file_name,
+                (string)$row->file_extension,
+                (int)$row->id,
+                $deletingIds
+            );
+            if (!$released) {
+                $failedOwnerIds[] = (int)$row->id;
+                continue;
             }
         }
 
-        Database::query("DELETE FROM attachments WHERE user_id = ? AND status = 'pending'", [$userId]);
+        if (count($failedOwnerIds) === 0) {
+            Database::query("DELETE FROM attachments WHERE user_id = ? AND status = 'pending'", [$userId]);
+        } else {
+            $placeholders = implode(',', array_fill(0, count($failedOwnerIds), '?'));
+            Database::query(
+                "DELETE FROM attachments WHERE user_id = ? AND status = 'pending' AND id NOT IN ($placeholders)",
+                array_merge([$userId], $failedOwnerIds)
+            );
+        }
     }
 
-    public static function deleteFilesForChatId(int $chatId): void {
+    public static function deleteFilesForChatId(int $chatId): bool {
         if ($chatId <= 0) {
-            return;
+            return false;
         }
 
         try {
             $rows = Database::query(
-                "SELECT a.file_name, a.file_extension, u.user_number
+                "SELECT a.id, a.file_name, a.file_extension, a.dedup_source_id, u.user_number
                  FROM attachments a
                  JOIN users u ON u.id = a.user_id
                  WHERE a.chat_id = ?",
                 [$chatId]
             )->fetchAll();
         } catch (Throwable $e) {
-            return;
+            return false;
         }
 
+        $deletingIds = [];
         foreach ($rows as $row) {
+            $deletingIds[] = (int)$row->id;
+        }
+
+        $allReleased = true;
+        foreach ($rows as $row) {
+            if ($row->dedup_source_id !== null) {
+                continue; // No physical file owned by this attachment
+            }
+
             $userNumber = preg_replace('/\D+/', '', (string)($row->user_number ?? ''));
             if (!preg_match('/^\d{16}$/', $userNumber)) {
                 continue;
             }
 
-            $path = self::directoryForUserNumber($userNumber) . '/' . $row->file_name . '.' . $row->file_extension;
-            if (is_file($path)) {
-                @unlink($path);
+            $released = self::releaseOwnedFile(
+                $userNumber,
+                (string)$row->file_name,
+                (string)$row->file_extension,
+                (int)$row->id,
+                $deletingIds
+            );
+            if (!$released) {
+                $allReleased = false;
+                continue;
             }
         }
+
+        return $allReleased;
+    }
+
+    /**
+     * Release a physical file owned by an attachment being deleted.
+     * If other attachments reference this file via dedup_source_id, the file is
+     * copied to the first referencing attachment's location (promoting it to owner)
+     * before the source file is removed. Any remaining references are redirected
+     * to the new owner. Pass $excludeAttachmentIds to ignore referencing attachments
+     * that are also being deleted in the same batch.
+     */
+    private static function releaseOwnedFile(string $userNumber, string $fileName, string $ext, int $attachmentId, array $excludeAttachmentIds = []): bool {
+        $excludeClause = '';
+        $params = [$attachmentId];
+        if (count($excludeAttachmentIds) > 0) {
+            $excludeClause = ' AND a.id NOT IN (' . implode(',', array_fill(0, count($excludeAttachmentIds), '?')) . ')';
+            $params = array_merge($params, $excludeAttachmentIds);
+        }
+
+        $referencing = Database::query(
+            "SELECT a.id, a.file_name, a.file_extension, u.user_number
+             FROM attachments a
+             JOIN users u ON u.id = a.user_id
+             WHERE a.dedup_source_id = ?" . $excludeClause . "
+             LIMIT 1",
+            $params
+        )->fetch();
+
+        $physicalPath = self::directoryForUserNumber($userNumber) . '/' . $fileName . '.' . $ext;
+
+        if (!$referencing) {
+            if (is_file($physicalPath)) {
+                @unlink($physicalPath);
+            }
+            return true;
+        }
+
+        // Promote the referencing attachment: copy the file to its directory so it becomes the new owner.
+        // Keep old file intact if anything fails to avoid orphaning live references.
+        $newOwnerNumber = preg_replace('/\D+/', '', (string)$referencing->user_number);
+        if (!preg_match('/^\d{16}$/', $newOwnerNumber)) {
+            return false;
+        }
+
+        if (!is_file($physicalPath)) {
+            return false;
+        }
+
+        $newOwnerDir = self::directoryForUserNumber($newOwnerNumber);
+        if (!is_dir($newOwnerDir) && !@mkdir($newOwnerDir, 0755, true) && !is_dir($newOwnerDir)) {
+            return false;
+        }
+
+        $newOwnerPath = $newOwnerDir . '/' . $referencing->file_name . '.' . $referencing->file_extension;
+        $tmpOwnerPath = $newOwnerPath . '.tmp_' . str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+
+        if (!@copy($physicalPath, $tmpOwnerPath)) {
+            return false;
+        }
+
+        if (!@rename($tmpOwnerPath, $newOwnerPath)) {
+            @unlink($tmpOwnerPath);
+            return false;
+        }
+
+        @chmod($newOwnerPath, 0644);
+
+        $pdo = Database::getInstance();
+        try {
+            $pdo->beginTransaction();
+
+            Database::query(
+                "SELECT id FROM attachments WHERE (id = ? OR dedup_source_id = ?)" . str_replace('a.id', 'id', $excludeClause) . " FOR UPDATE",
+                array_merge([$attachmentId, $attachmentId], $excludeAttachmentIds)
+            );
+
+            Database::query(
+                "UPDATE attachments SET dedup_source_id = NULL WHERE id = ? AND dedup_source_id = ?",
+                [(int)$referencing->id, $attachmentId]
+            );
+
+            Database::query(
+                "UPDATE attachments SET dedup_source_id = ? WHERE dedup_source_id = ? AND id <> ?",
+                [(int)$referencing->id, $attachmentId, (int)$referencing->id]
+            );
+
+            $pdo->commit();
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            @unlink($newOwnerPath);
+            return false;
+        }
+
+        @unlink($physicalPath);
+        return true;
     }
 
     private static function normalizeOriginalName(string $name): ?string {

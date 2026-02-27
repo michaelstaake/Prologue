@@ -1205,7 +1205,10 @@ class ChatController extends Controller {
             return;
         }
 
-        Attachment::deleteFilesForChatId($chatId);
+        $attachmentsReleased = Attachment::deleteFilesForChatId($chatId);
+        if (!$attachmentsReleased) {
+            return;
+        }
 
         $pdo = Database::getInstance();
         try {

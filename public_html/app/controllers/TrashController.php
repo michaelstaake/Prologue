@@ -186,7 +186,10 @@ class TrashController extends Controller {
             $this->redirect('/trash?error=chat_not_found');
         }
 
-        Attachment::deleteFilesForChatId($chatId);
+        $attachmentsReleased = Attachment::deleteFilesForChatId($chatId);
+        if (!$attachmentsReleased) {
+            $this->redirect('/trash?error=chat_delete_failed');
+        }
 
         $pdo = Database::getInstance();
         try {
