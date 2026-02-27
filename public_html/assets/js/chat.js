@@ -1592,9 +1592,9 @@ function bindAddUserModal() {
                 const username = String(f.username || '').toLowerCase();
                 return username.includes(normalizedQuery) && !currentMembers.has(username);
             })
-            .slice(0, 8);
+            .slice(0, 4);
 
-        if (matches.length === 0) {
+        if (matches.length === 0 || matches.length > 3) {
             typeahead.innerHTML = '';
             typeahead.classList.add('hidden');
             return;
