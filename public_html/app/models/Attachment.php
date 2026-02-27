@@ -456,7 +456,6 @@ class Attachment extends Model {
                 return false;
             }
             $ok = @imagejpeg($resource, $targetPath, 90);
-            imagedestroy($resource);
             return (bool)$ok;
         }
 
@@ -471,7 +470,6 @@ class Attachment extends Model {
             imagealphablending($resource, false);
             imagesavealpha($resource, true);
             $ok = @imagepng($resource, $targetPath, 6);
-            imagedestroy($resource);
             return (bool)$ok;
         }
 
@@ -486,7 +484,6 @@ class Attachment extends Model {
             imagealphablending($resource, false);
             imagesavealpha($resource, true);
             $ok = @imagewebp($resource, $targetPath, 90);
-            imagedestroy($resource);
             return (bool)$ok;
         }
 
