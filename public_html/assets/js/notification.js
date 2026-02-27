@@ -943,6 +943,10 @@ function getNotificationAction(toast) {
         return { href: meta.link };
     }
 
+    if (type === 'report' && title === 'update available' && String(meta.link).includes('github.com/michaelstaake/Prologue/releases')) {
+        return { href: meta.link, openInNewTab: true };
+    }
+
     if (type === 'report' || title === 'new report') {
         return { href: meta.link };
     }
@@ -978,7 +982,11 @@ async function handleToastHistoryClick(event) {
     }
 
     if (action?.href) {
-        window.location.href = action.href;
+        if (action.openInNewTab) {
+            window.open(action.href, '_blank', 'noopener,noreferrer');
+        } else {
+            window.location.href = action.href;
+        }
     }
 }
 
