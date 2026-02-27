@@ -23,8 +23,9 @@ Chat, voice call, video call, screenshare, and more. Always free and privacy fir
 - **Mobile app** (Please help) If anyone is experienced in this realm, please feel free to post in the forum (Discussions) with any ideas or input on this. Thank you!
 
 ## Useful Links
-- [Project Home Page](https://prologue.chat/)
+- [Project Website](https://prologue.chat/)
 - [Download Latest Version](https://github.com/michaelstaake/Prologue/releases)
 - [Report Problems](https://github.com/michaelstaake/Prologue/issues)
 - [Community Forum](https://github.com/michaelstaake/Prologue/discussions)
 - [Documentation](https://github.com/michaelstaake/Prologue/wiki)
+- [Winlogue (Lightweight Desktop Client, Coming Soon)](https://github.com/michaelstaake/Prologue/wiki)
