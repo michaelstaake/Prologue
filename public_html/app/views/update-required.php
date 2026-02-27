@@ -3,7 +3,6 @@ $title = 'Update Required — Prologue';
 ob_start();
 ?>
 <div class="w-full max-w-md bg-zinc-900 p-8 rounded-3xl border border-zinc-700 text-center">
-    <div class="text-5xl mb-4">⚙️</div>
     <h1 class="text-2xl font-bold mb-2">Database Update Required</h1>
     <p class="text-zinc-400 mb-6">
         This installation has been updated to a new version. The database needs to be migrated before the app can be used.
