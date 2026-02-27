@@ -38,7 +38,7 @@ $postsUrl = base_url('/search?mode=posts');
 
     <?php if ($mode === 'users'): ?>
     <section>
-        <form id="user-search-form" class="flex items-center gap-3 w-full mb-4">
+        <form id="user-search-form" class="flex items-center gap-3 w-full max-w-lg mb-4">
             <input type="text" id="user-search-input" placeholder="Search by username or user number" class="bg-zinc-900 border border-zinc-700 rounded-xl px-5 py-2.5 w-full" pattern="[A-Za-z0-9-]+" title="Use only letters, numbers, and dashes." required>
             <button type="submit" class="bg-zinc-700 hover:bg-zinc-600 border border-zinc-700 px-5 py-2.5 rounded-xl">Search</button>
         </form>
@@ -49,7 +49,7 @@ $postsUrl = base_url('/search?mode=posts');
     </section>
     <?php elseif ($mode === 'messages'): ?>
     <section>
-        <form id="message-search-form" class="flex items-center gap-3 w-full mb-4">
+        <form id="message-search-form" class="flex items-center gap-3 w-full max-w-lg mb-4">
             <input type="text" id="message-search-input" placeholder="Search message content..." class="bg-zinc-900 border border-zinc-700 rounded-xl px-5 py-2.5 w-full" minlength="2" required>
             <button type="submit" class="bg-zinc-700 hover:bg-zinc-600 border border-zinc-700 px-5 py-2.5 rounded-xl">Search</button>
         </form>
@@ -60,7 +60,7 @@ $postsUrl = base_url('/search?mode=posts');
     </section>
     <?php else: ?>
     <section>
-        <form id="post-search-form" class="flex items-center gap-3 w-full mb-4">
+        <form id="post-search-form" class="flex items-center gap-3 w-full max-w-lg mb-4">
             <input type="text" id="post-search-input" placeholder="Search post content..." class="bg-zinc-900 border border-zinc-700 rounded-xl px-5 py-2.5 w-full" minlength="2" required>
             <button type="submit" class="bg-zinc-700 hover:bg-zinc-600 border border-zinc-700 px-5 py-2.5 rounded-xl">Search</button>
         </form>
