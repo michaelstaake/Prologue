@@ -28,4 +28,3 @@ Chat, voice call, video call, screenshare, and more. Always free and privacy fir
 - [Report Problems](https://github.com/michaelstaake/Prologue/issues)
 - [Community Forum](https://github.com/michaelstaake/Prologue/discussions)
 - [Documentation](https://github.com/michaelstaake/Prologue/wiki)
-- [Winlogue (Lightweight Desktop Client, Coming Soon)](https://github.com/michaelstaake/Prologue/wiki)
