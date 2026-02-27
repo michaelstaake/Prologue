@@ -401,6 +401,7 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                                             <img
                                                 src="<?= $attachmentUrl ?>"
                                                 alt="<?= $attachmentName ?>"
+                                                title="<?= $attachmentName ?>"
                                                 class="w-full h-24 object-cover rounded-lg border border-zinc-700"
                                                 loading="lazy"
                                                 decoding="async"

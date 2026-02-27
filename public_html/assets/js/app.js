@@ -373,7 +373,7 @@ function renderMessageAttachments(attachments) {
                             data-image-url="${escapeHtml(attachment.url)}"
                             data-image-title="${escapeHtml(attachment.original_name)}"
                         >
-                            <img src="${escapeHtml(attachment.url)}" alt="${escapeHtml(attachment.original_name)}" class="w-full h-24 object-cover rounded-lg border border-zinc-700" loading="lazy" decoding="async">
+                            <img src="${escapeHtml(attachment.url)}" alt="${escapeHtml(attachment.original_name)}" title="${escapeHtml(attachment.original_name)}" class="w-full h-24 object-cover rounded-lg border border-zinc-700" loading="lazy" decoding="async">
                         </button>
                         <div class="mt-2 text-xs text-zinc-400 flex items-center justify-between gap-2">
                             <span>${escapeHtml(formatFileSize(attachment.file_size))}</span>
