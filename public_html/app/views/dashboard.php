@@ -37,6 +37,11 @@
         <div class="mb-6 rounded-xl border border-amber-700 bg-amber-950/60 px-5 py-4">
             <p class="text-sm font-semibold text-amber-300 mb-1">Announcement</p>
             <p class="text-sm text-amber-200 whitespace-pre-wrap break-words"><?= htmlspecialchars($dashboardAnnouncement, ENT_QUOTES, 'UTF-8') ?></p>
+            <?php if (strtolower((string)(Auth::user()->role ?? '')) === 'admin'): ?>
+                <a href="<?= htmlspecialchars(base_url('/config#announcement'), ENT_QUOTES, 'UTF-8') ?>" class="mt-3 inline-flex items-center gap-2 text-xs text-amber-300 hover:text-amber-200 transition">
+                    Manage Announcement <i class="fa fa-arrow-right text-[10px]"></i>
+                </a>
+            <?php endif; ?>
         </div>
     <?php endif; ?>
 

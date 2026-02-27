@@ -318,7 +318,7 @@
         </script>
     </section>
 
-    <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-2xl">
+    <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-2xl" id="announcement">
         <h2 class="text-xl font-semibold mb-1">Announcement</h2>
         <p class="text-sm text-zinc-400 mb-5">Show a plain text alert on the dashboard for all users. Leave blank to hide it.</p>
 
