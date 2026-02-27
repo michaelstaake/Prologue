@@ -93,6 +93,7 @@ class AuthController extends Controller {
         User::markLoggedIn((int)$user->id);
         Attachment::cleanupPendingForUser($user);
         $this->createSafariDesktopLoginNotice((int)$user->id, $userAgent);
+        $this->checkForAvailableUpdateOnAdminLogin((int)$user->id);
         $_SESSION['last_activity_touch_at'] = time();
         $this->redirect('/');
     }
@@ -149,6 +150,7 @@ class AuthController extends Controller {
             Attachment::cleanupPendingForUser($authedUser);
         }
         $this->createSafariDesktopLoginNotice((int)$userId, $userAgent);
+        $this->checkForAvailableUpdateOnAdminLogin((int)$userId);
         $_SESSION['last_activity_touch_at'] = time();
         $this->redirect('/');
     }
@@ -347,6 +349,7 @@ class AuthController extends Controller {
             Attachment::cleanupPendingForUser($authedUser);
         }
         $this->createSafariDesktopLoginNotice((int)$pendingUserId, $userAgent);
+        $this->checkForAvailableUpdateOnAdminLogin((int)$pendingUserId);
         $_SESSION['last_activity_touch_at'] = time();
         $this->redirect('/');
     }
@@ -380,6 +383,7 @@ class AuthController extends Controller {
             User::markLoggedIn((int)$pendingUser->id);
             Attachment::cleanupPendingForUser($pendingUser);
             $this->createSafariDesktopLoginNotice((int)$pendingUser->id, $userAgent);
+            $this->checkForAvailableUpdateOnAdminLogin((int)$pendingUser->id);
             $_SESSION['last_activity_touch_at'] = time();
             $this->redirect('/');
         }
@@ -593,6 +597,10 @@ class AuthController extends Controller {
             'Browser Notice',
             'Safari does not follow web standards and some features may be limited or function inconsistently. Recommended browsers include Firefox, Edge, and Chrome.'
         );
+    }
+
+    private function checkForAvailableUpdateOnAdminLogin(int $userId): void {
+        UpdateChecker::checkForAdminUser($userId, false);
     }
 
     private function isSafariDesktopUserAgent(string $userAgent): bool {

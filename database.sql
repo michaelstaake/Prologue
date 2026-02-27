@@ -24,6 +24,7 @@ INSERT INTO settings (`key`, `value`) VALUES ('invite_code_required', '1');
 INSERT INTO settings (`key`, `value`) VALUES ('email_verification_required', '1');
 INSERT INTO settings (`key`, `value`) VALUES ('error_display', '0');
 INSERT INTO settings (`key`, `value`) VALUES ('new_user_notification', '0');
+INSERT INTO settings (`key`, `value`) VALUES ('check_for_updates', '0');
 
 -- Users
 CREATE TABLE users (

@@ -38,6 +38,7 @@ class ConfigController extends Controller {
             'attachments_maximum_file_size_mb' => (int)(Setting::get('attachments_maximum_file_size_mb') ?? 10),
             'error_display' => (string)(Setting::get('error_display') ?? '0') === '1',
             'attachment_logging' => (string)(Setting::get('attachment_logging') ?? '0') === '1',
+            'check_for_updates' => (string)(Setting::get('check_for_updates') ?? '0') === '1',
             'new_user_notification' => (string)(Setting::get('new_user_notification') ?? '0') === '1',
             'failed_login_attempts_24h' => $bruteForceProtection['failed_login_attempts_24h'],
             'failed_registration_attempts_24h' => $bruteForceProtection['failed_registration_attempts_24h'],
@@ -74,6 +75,7 @@ class ConfigController extends Controller {
         Setting::set('error_display', isset($_POST['error_display']) ? '1' : '0');
         ErrorHandler::setDebugMode(isset($_POST['error_display']));
         Setting::set('attachment_logging', isset($_POST['attachment_logging']) ? '1' : '0');
+        Setting::set('check_for_updates', isset($_POST['check_for_updates']) ? '1' : '0');
 
         $this->flash('success', 'more_saved');
         $this->redirect('/config');
@@ -161,6 +163,27 @@ class ConfigController extends Controller {
             $this->flash('mail_test_error', $e->getMessage());
         }
 
+        $this->redirect('/config');
+    }
+
+    public function checkForUpdatesNow() {
+        $user = $this->requireAdminUser();
+        Auth::csrfValidate();
+
+        $result = UpdateChecker::checkForAdminUser((int)$user->id, true);
+
+        if (($result['status'] ?? '') === 'update_available') {
+            $latestVersion = (string)($result['latest_version'] ?? '');
+            $this->flash('success', 'update_check_update_available:' . $latestVersion);
+            $this->redirect('/config');
+        }
+
+        if (($result['status'] ?? '') === 'up_to_date') {
+            $this->flash('success', 'update_check_up_to_date');
+            $this->redirect('/config');
+        }
+
+        $this->flash('error', 'update_check_failed');
         $this->redirect('/config');
     }
 

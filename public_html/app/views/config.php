@@ -15,6 +15,15 @@
         } elseif ($flashSuccess === 'mail_test_sent') {
             $toastMessage = 'Test email sent — check your inbox to confirm it arrived.';
             $toastKind = 'success';
+        } elseif (str_starts_with((string)$flashSuccess, 'update_check_update_available:')) {
+            $latestVersion = trim(substr((string)$flashSuccess, strlen('update_check_update_available:')));
+            $toastMessage = $latestVersion !== ''
+                ? ('Update available: ' . $latestVersion . '.')
+                : 'An update is available.';
+            $toastKind = 'success';
+        } elseif ($flashSuccess === 'update_check_up_to_date') {
+            $toastMessage = 'You are running the latest release.';
+            $toastKind = 'success';
         } elseif ($flashSuccess === 'accounts_saved') {
             $toastMessage = 'Account settings saved.';
             $toastKind = 'success';
@@ -24,6 +33,9 @@
         } elseif ($flashSuccess === 'attachments_saved') {
             $toastMessage = 'Attachment settings saved.';
             $toastKind = 'success';
+        } elseif ($flashError === 'update_check_failed') {
+            $toastMessage = 'Could not check for updates right now.';
+            $toastKind = 'error';
         }
     ?>
 
@@ -419,6 +431,26 @@
                 </div>
                 <input type="checkbox" name="attachment_logging" value="1" <?= !empty($attachment_logging) ? 'checked' : '' ?> class="w-5 h-5 accent-emerald-500 shrink-0">
             </label>
+
+            <label class="flex items-center justify-between gap-4 rounded-xl border border-zinc-700 bg-zinc-800/30 px-4 py-3 cursor-pointer">
+                <div>
+                    <span class="block text-zinc-100">Check for updates on admin login</span>
+                    <span class="block text-xs text-zinc-500 mt-0.5">When enabled, admin login checks GitHub releases and shows a notification if a newer version exists.</span>
+                </div>
+                <input type="checkbox" name="check_for_updates" value="1" <?= !empty($check_for_updates) ? 'checked' : '' ?> class="w-5 h-5 accent-emerald-500 shrink-0">
+            </label>
+
+            <div class="pt-1">
+                <p class="text-xs text-zinc-500 mb-2">Run the same update check immediately.</p>
+                <button
+                    type="submit"
+                    formaction="<?= htmlspecialchars(base_url('/config/check-updates'), ENT_QUOTES, 'UTF-8') ?>"
+                    class="w-full flex items-center justify-between gap-4 rounded-xl border border-zinc-700 bg-zinc-800/30 px-4 py-3 text-left text-zinc-100 hover:bg-zinc-800/50 transition"
+                >
+                    <span class="block">Check for updates now</span>
+                    <span class="text-xs text-zinc-400">Run</span>
+                </button>
+            </div>
 
             <div class="pt-2">
                 <button type="submit" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-medium transition">Save</button>
