@@ -56,8 +56,8 @@
         }
     </style>
 </head>
-<body class="h-screen text-gray-200 overflow-hidden">
-    <?php $currentUser = Auth::user(); ?>
+<?php $currentUser = Auth::user(); ?>
+<body class="text-gray-200 <?= $currentUser ? 'h-screen overflow-hidden' : 'min-h-screen overflow-y-auto' ?>">
     <?php
         $requestPath = (string)parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH);
         $isChatRoute = preg_match('#(?:^|/)c/[^/]+$#', $requestPath) === 1;
@@ -417,7 +417,7 @@
         </div>
     </div>
     <?php else: ?>
-    <div class="min-h-screen flex items-center justify-center px-4">
+    <div class="min-h-[100dvh] flex items-start sm:items-center justify-center px-4 py-6 sm:py-8">
         <div class="w-full max-w-md">
             <div class="text-center mb-6">
                 <div class="inline-flex items-center gap-2 text-2xl font-bold">
