@@ -451,6 +451,33 @@
             </div>
 
             <div class="flex items-center justify-between gap-4 rounded-xl border border-zinc-700 bg-zinc-800/30 px-4 py-3">
+                <span class="text-zinc-100">PHP <code class="text-xs text-zinc-400">fileinfo</code> extension</span>
+                <?php if ($php_ext_fileinfo): ?>
+                    <span class="text-xs px-2.5 py-1 rounded-full border border-green-600/50 bg-green-900/30 text-green-300">Present</span>
+                <?php else: ?>
+                    <span class="text-xs px-2.5 py-1 rounded-full border border-red-600/50 bg-red-900/30 text-red-300">Not Detected</span>
+                <?php endif; ?>
+            </div>
+
+            <div class="flex items-center justify-between gap-4 rounded-xl border border-zinc-700 bg-zinc-800/30 px-4 py-3">
+                <span class="text-zinc-100">PHP <code class="text-xs text-zinc-400">gd</code> extension</span>
+                <?php if ($php_ext_gd): ?>
+                    <span class="text-xs px-2.5 py-1 rounded-full border border-green-600/50 bg-green-900/30 text-green-300">Present</span>
+                <?php else: ?>
+                    <span class="text-xs px-2.5 py-1 rounded-full border border-red-600/50 bg-red-900/30 text-red-300">Not Detected</span>
+                <?php endif; ?>
+            </div>
+
+            <div class="flex items-center justify-between gap-4 rounded-xl border border-zinc-700 bg-zinc-800/30 px-4 py-3">
+                <span class="text-zinc-100">PHP <code class="text-xs text-zinc-400">mbstring</code> extension</span>
+                <?php if ($php_ext_mbstring): ?>
+                    <span class="text-xs px-2.5 py-1 rounded-full border border-green-600/50 bg-green-900/30 text-green-300">Present</span>
+                <?php else: ?>
+                    <span class="text-xs px-2.5 py-1 rounded-full border border-red-600/50 bg-red-900/30 text-red-300">Not Detected</span>
+                <?php endif; ?>
+            </div>
+
+            <div class="flex items-center justify-between gap-4 rounded-xl border border-zinc-700 bg-zinc-800/30 px-4 py-3">
                 <span class="text-zinc-100">PHP <code class="text-xs text-zinc-400">file_uploads</code></span>
                 <?php if ($php_file_uploads): ?>
                     <span class="text-xs px-2.5 py-1 rounded-full border border-green-600/50 bg-green-900/30 text-green-300">On</span>
