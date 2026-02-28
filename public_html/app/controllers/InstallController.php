@@ -114,11 +114,14 @@ class InstallController extends Controller {
     }
 
     private function executeDatabaseSchema() {
-        $schemaPath = defined('DATABASE_SCHEMA_FILE') ? (string)DATABASE_SCHEMA_FILE : (dirname(__DIR__, 4) . '/database.sql');
-        $sql = @file_get_contents($schemaPath);
-        if ($sql === false) {
-            throw new RuntimeException('Could not read database schema file: ' . $schemaPath);
+        $schemaSql = defined('DATABASE_SCHEMA_SQL') ? (string)DATABASE_SCHEMA_SQL : '';
+
+        if (trim($schemaSql) === '') {
+            throw new RuntimeException('Could not read database schema from DATABASE_SCHEMA_SQL.');
         }
+
+        $sql = $schemaSql;
+        $schemaSource = 'DATABASE_SCHEMA_SQL';
 
         $this->applyInstallDatabaseDefaults();
 
@@ -143,7 +146,7 @@ class InstallController extends Controller {
                 }
                 $preview = mb_substr($preview, 0, 180);
                 throw new RuntimeException(
-                    'Schema execution failed at statement #' . ($index + 1) . ' from ' . $schemaPath . ': ' . $preview . ' | ' . $exception->getMessage(),
+                    'Schema execution failed at statement #' . ($index + 1) . ' from ' . $schemaSource . ': ' . $preview . ' | ' . $exception->getMessage(),
                     0,
                     $exception
                 );

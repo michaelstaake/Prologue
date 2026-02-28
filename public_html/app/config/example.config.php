@@ -17,7 +17,10 @@ $CONFIG_APP_SUBFOLDER = ''; //leave this blank unless running in a subfolder. if
 
 $CONFIG_STORAGE_FILESYSTEM_ROOT = '/home/example/storage';
 $CONFIG_LOG_DIRECTORY = '/home/example/storage/logs';
-$CONFIG_DATABASE_SCHEMA_FILE = '/home/example/database.sql';
+$CONFIG_DATABASE_SCHEMA_SQL = <<<'SQL'
+-- Paste the schema SQL here.
+-- For example, copy the value of $CONFIG_DATABASE_SCHEMA_SQL from config.php.
+SQL;
 
 $CONFIG_CSRF_SECRET = 'change-this-to-random-64-chars';
 $CONFIG_APP_NAME = 'Prologue';
@@ -63,11 +66,9 @@ define('STORAGE_FILESYSTEM_ROOT', rtrim($storageRootFromEnv, '/'));
 $logDirFromEnv = trim((string)(getenv('LOG_DIRECTORY') ?: $CONFIG_LOG_DIRECTORY));
 define('APP_LOG_DIRECTORY', $logDirFromEnv !== '' ? $logDirFromEnv : (STORAGE_FILESYSTEM_ROOT . '/logs'));
 
-$databaseSchemaFileFromEnv = trim((string)(getenv('DATABASE_SCHEMA_FILE') ?: $CONFIG_DATABASE_SCHEMA_FILE));
-if ($databaseSchemaFileFromEnv !== '') {
-	define('DATABASE_SCHEMA_FILE', $databaseSchemaFileFromEnv);
-} else {
-	define('DATABASE_SCHEMA_FILE', dirname(__DIR__, 4) . '/database.sql');
+$databaseSchemaSqlFromEnv = (string)(getenv('DATABASE_SCHEMA_SQL') ?: $CONFIG_DATABASE_SCHEMA_SQL);
+if (trim($databaseSchemaSqlFromEnv) !== '') {
+	define('DATABASE_SCHEMA_SQL', $databaseSchemaSqlFromEnv);
 }
 
 function base_url($path = '') {

@@ -9,7 +9,6 @@ services:
     volumes:
       - ./public_html:/var/www/html
       - ./storage:/var/www/storage
-      - ./database.sql:/var/www/database.sql:ro
     depends_on:
       - chat-db
     environment:
@@ -19,7 +18,6 @@ services:
       DB_NAME: prologue
       APP_URL: http://localhost:8088
       STORAGE_FILESYSTEM_ROOT: /var/www/storage
-      DATABASE_SCHEMA_FILE: /var/www/database.sql
       LOG_DIRECTORY: /var/www/storage/logs
 
   chat-db:
@@ -36,7 +34,6 @@ services:
       MYSQL_PASSWORD: prologue
     volumes:
       - chat_mysql_data:/var/lib/mysql
-      - ./database.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
 
   phpmyadmin:
     image: phpmyadmin:latest
