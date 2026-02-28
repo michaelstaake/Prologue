@@ -627,7 +627,7 @@ async function searchUsers(event) {
     const data = await res.json();
     const users = data.users || [];
 
-    results.innerHTML = users.map(user => `
+    const usersMarkup = users.map(user => `
         <div class="bg-zinc-800 rounded-xl p-3">
             <div class="flex items-center gap-3 min-w-0">
                 ${renderAvatarMarkup(user, 'w-10 h-10', 'text-sm')}
@@ -640,6 +640,8 @@ async function searchUsers(event) {
             ${renderSearchResultAction(user)}
         </div>
     `).join('') || '<p class="text-zinc-400 text-sm sm:col-span-2">No users found.</p>';
+
+    replaceElementMarkup(results, usersMarkup);
 }
 
 function renderSearchResultAction(user) {
@@ -1503,6 +1505,12 @@ function highlightSearchTerm(text, query) {
     );
 }
 
+function replaceElementMarkup(element, markup) {
+    if (!element) return;
+    const fragment = document.createRange().createContextualFragment(String(markup || ''));
+    element.replaceChildren(fragment);
+}
+
 async function searchPostsPage(query, page) {
     const results = document.getElementById('post-search-results');
     if (!results) return;
@@ -1581,7 +1589,7 @@ async function searchPostsPage(query, page) {
             `;
         }
 
-        results.innerHTML = `<div class="space-y-2">${postItems}</div>${paginationHtml}`;
+        replaceElementMarkup(results, `<div class="space-y-2">${postItems}</div>${paginationHtml}`);
         if (typeof window.refreshUtcTimestamps === 'function') {
             window.refreshUtcTimestamps(results);
         }
@@ -1687,7 +1695,7 @@ async function searchMessagesPage(query, page) {
             `;
         }
 
-        results.innerHTML = `<div class="space-y-2">${messageItems}</div>${paginationHtml}`;
+        replaceElementMarkup(results, `<div class="space-y-2">${messageItems}</div>${paginationHtml}`);
         if (typeof window.refreshUtcTimestamps === 'function') {
             window.refreshUtcTimestamps(results);
         }

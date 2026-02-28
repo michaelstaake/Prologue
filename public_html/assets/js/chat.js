@@ -1460,8 +1460,6 @@ async function loadSidebarChats() {
         const sidebarTitle = type === 'group'
             ? (chat.chat_title || formatNumber(chat.chat_number))
             : (chat.chat_title || `Chat ${formatNumber(chat.chat_number)}`);
-        const chatNumberLabel = String(chat.chat_number_formatted || formatNumber(chat.chat_number));
-        const hasCustomTitle = type === 'group' && (Number(chat.has_custom_title) === 1 || chat.has_custom_title === true);
         const hasPersonalStatus = type === 'personal' && Boolean(chat.effective_status_label);
         const showFavoriteStar = type === 'personal' && (Number(chat.is_favorite) === 1 || chat.is_favorite === true);
         const unreadCount = Math.max(0, Number(chat.unread_count || 0));
@@ -1474,25 +1472,64 @@ async function loadSidebarChats() {
                 : (chat.last_message_sender_username || '');
             return prefix ? `${prefix}: ${rawMessage}` : rawMessage;
         })();
-        const unreadBadge = unreadCount > 0
-            ? `<span class="ml-auto min-w-[1.25rem] h-5 px-1 rounded-full bg-emerald-600 text-white text-xs inline-flex items-center justify-center">${escapeHtml(formatCountBadgeValue(unreadCount))}</span>`
-            : '';
+        const item = document.createElement('a');
+        item.href = `/c/${formatNumber(chat.chat_number)}`;
+        item.className = 'block py-2 px-3 rounded-xl hover:bg-zinc-800 mb-1';
 
-        return `
-            <a href="/c/${formatNumber(chat.chat_number)}" class="block py-2 px-3 rounded-xl hover:bg-zinc-800 mb-1">
-                <div class="font-medium flex items-center gap-2 min-w-0">
-                    <span class="truncate">${escapeHtml(sidebarTitle)}</span>
-                    ${showFavoriteStar ? '<i class="fa-solid fa-star text-amber-400 text-[11px]" title="Favorite"></i>' : ''}
-                    ${hasPersonalStatus ? `<span class="inline-block w-2 h-2 rounded-full ${escapeHtml(chat.effective_status_dot_class || 'bg-zinc-500')}" title="${escapeHtml(chat.effective_status_label || 'Offline')}"></span>` : ''}
-                    ${unreadBadge}
-                </div>
-                <div class="text-xs text-zinc-400 truncate">${escapeHtml(secondaryLine)}</div>
-            </a>
-        `;
-    }).join('');
+        const primaryLine = document.createElement('div');
+        primaryLine.className = 'font-medium flex items-center gap-2 min-w-0';
 
-    privateList.innerHTML = renderSidebarChatItems(privateChats) || '<div class="text-zinc-500 text-sm px-3 py-1">No private chats yet</div>';
-    groupList.innerHTML = renderSidebarChatItems(groupChats) || '<div class="text-zinc-500 text-sm px-3 py-1">No group chats yet</div>';
+        const title = document.createElement('span');
+        title.className = 'truncate';
+        title.textContent = String(sidebarTitle);
+        primaryLine.appendChild(title);
+
+        if (showFavoriteStar) {
+            const star = document.createElement('i');
+            star.className = 'fa-solid fa-star text-amber-400 text-[11px]';
+            star.title = 'Favorite';
+            primaryLine.appendChild(star);
+        }
+
+        if (hasPersonalStatus) {
+            const statusDot = document.createElement('span');
+            statusDot.className = `inline-block w-2 h-2 rounded-full ${String(chat.effective_status_dot_class || 'bg-zinc-500')}`;
+            statusDot.title = String(chat.effective_status_label || 'Offline');
+            primaryLine.appendChild(statusDot);
+        }
+
+        if (unreadCount > 0) {
+            const unreadBadge = document.createElement('span');
+            unreadBadge.className = 'ml-auto min-w-[1.25rem] h-5 px-1 rounded-full bg-emerald-600 text-white text-xs inline-flex items-center justify-center';
+            unreadBadge.textContent = String(formatCountBadgeValue(unreadCount));
+            primaryLine.appendChild(unreadBadge);
+        }
+
+        const secondary = document.createElement('div');
+        secondary.className = 'text-xs text-zinc-400 truncate';
+        secondary.textContent = String(secondaryLine);
+
+        item.appendChild(primaryLine);
+        item.appendChild(secondary);
+        return item;
+    });
+
+    const makeEmptyState = (text) => {
+        const empty = document.createElement('div');
+        empty.className = 'text-zinc-500 text-sm px-3 py-1';
+        empty.textContent = text;
+        return empty;
+    };
+
+    const privateNodes = renderSidebarChatItems(privateChats);
+    const groupNodes = renderSidebarChatItems(groupChats);
+
+    privateList.replaceChildren(...(privateNodes.length
+        ? privateNodes
+        : [makeEmptyState('No private chats yet')]));
+    groupList.replaceChildren(...(groupNodes.length
+        ? groupNodes
+        : [makeEmptyState('No group chats yet')]));
 
 }
 
@@ -1582,7 +1619,7 @@ function bindAddUserModal() {
         if (!typeahead) return;
         const normalizedQuery = String(query || '').trim().toLowerCase();
         if (!normalizedQuery || !friendsCache) {
-            typeahead.innerHTML = '';
+            typeahead.replaceChildren();
             typeahead.classList.add('hidden');
             return;
         }
@@ -1596,20 +1633,28 @@ function bindAddUserModal() {
             .slice(0, 4);
 
         if (matches.length === 0 || matches.length > 3) {
-            typeahead.innerHTML = '';
+            typeahead.replaceChildren();
             typeahead.classList.add('hidden');
             return;
         }
 
-        typeahead.innerHTML = matches.map((f) => `
-            <button type="button" class="w-full text-left px-4 py-2.5 hover:bg-zinc-800 text-sm" data-add-user-typeahead="${escapeHtml(f.username)}">${escapeHtml(f.username)}</button>
-        `).join('');
+        const buttons = matches.map((friend) => {
+            const username = String(friend?.username || '');
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'w-full text-left px-4 py-2.5 hover:bg-zinc-800 text-sm';
+            button.dataset.addUserTypeahead = username;
+            button.textContent = username;
+            return button;
+        });
+
+        typeahead.replaceChildren(...buttons);
         typeahead.classList.remove('hidden');
     }
 
     function hideTypeahead() {
         if (typeahead) {
-            typeahead.innerHTML = '';
+            typeahead.replaceChildren();
             typeahead.classList.add('hidden');
         }
     }
@@ -2491,16 +2536,27 @@ function renderTypingIndicator(typingUsers) {
 
     if (names.length === 0) {
         box.classList.add('hidden');
-        box.innerHTML = '';
+        box.replaceChildren();
         return;
     }
 
     const subject = names.length === 1
-        ? `${escapeHtml(names[0])} is typing`
-        : `${escapeHtml(names.join(', '))} are typing`;
+        ? `${names[0]} is typing`
+        : `${names.join(', ')} are typing`;
 
     box.classList.remove('hidden');
-    box.innerHTML = `${subject}<span class="typing-dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span>`;
+    const subjectNode = document.createTextNode(subject);
+    const dots = document.createElement('span');
+    dots.className = 'typing-dots';
+    dots.setAttribute('aria-hidden', 'true');
+
+    for (let i = 0; i < 3; i += 1) {
+        const dot = document.createElement('span');
+        dot.textContent = '.';
+        dots.appendChild(dot);
+    }
+
+    box.replaceChildren(subjectNode, dots);
 }
 
 
@@ -2663,7 +2719,9 @@ function renderMessages(messages, options = {}) {
         previousWasSystemEvent = false;
     });
 
-    box.innerHTML = chunks.join('');
+    const messagesMarkup = chunks.join('');
+    const fragment = document.createRange().createContextualFragment(messagesMarkup);
+    box.replaceChildren(fragment);
     if (typeof window.refreshUtcTimestamps === 'function') {
         window.refreshUtcTimestamps(box);
     }
