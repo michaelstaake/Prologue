@@ -289,7 +289,7 @@ class Attachment extends Model {
             }
         } else {
             // For non-image files: copy directly after MIME validation above
-            if (!copy($tmpPath, $targetPath)) {
+            if (!self::isPathWithinAttachmentsRoot($targetPath) || !copy($tmpPath, $targetPath)) {
                 $logFailure('attachment_upload_failed', 'copy_failed:' . $targetPath);
                 return ['error' => 'attachment_upload_failed'];
             }
@@ -299,7 +299,7 @@ class Attachment extends Model {
         clearstatcache(true, $targetPath);
         $storedSize = (int)@filesize($targetPath);
         if ($storedSize <= 0 || $storedSize > self::maxFileSizeBytes()) {
-            @unlink($targetPath);
+            self::safeUnlinkPath($targetPath);
             $logFailure('attachment_too_large', 'stored_size:' . $storedSize);
             return ['error' => 'attachment_too_large'];
         }
@@ -553,6 +553,13 @@ class Attachment extends Model {
      * that are also being deleted in the same batch.
      */
     private static function releaseOwnedFile(string $userNumber, string $fileName, string $ext, int $attachmentId, array $excludeAttachmentIds = []): bool {
+        if (!preg_match('/^\d{16}$/', $userNumber)) {
+            return false;
+        }
+        if (!self::isSafeAttachmentFileBase($fileName) || !self::isSafeAttachmentExtension($ext)) {
+            return false;
+        }
+
         $excludeClause = '';
         $params = [$attachmentId];
         if (count($excludeAttachmentIds) > 0) {
@@ -569,12 +576,10 @@ class Attachment extends Model {
             $params
         )->fetch();
 
-        $physicalPath = self::directoryForUserNumber($userNumber) . '/' . $fileName . '.' . $ext;
+        $physicalPath = self::buildAttachmentPath($userNumber, $fileName, $ext);
 
         if (!$referencing) {
-            if (is_file($physicalPath)) {
-                @unlink($physicalPath);
-            }
+            self::safeUnlinkPath($physicalPath);
             return true;
         }
 
@@ -582,6 +587,12 @@ class Attachment extends Model {
         // Keep old file intact if anything fails to avoid orphaning live references.
         $newOwnerNumber = preg_replace('/\D+/', '', (string)$referencing->user_number);
         if (!preg_match('/^\d{16}$/', $newOwnerNumber)) {
+            return false;
+        }
+
+        $newOwnerFileName = (string)$referencing->file_name;
+        $newOwnerExt = (string)$referencing->file_extension;
+        if (!self::isSafeAttachmentFileBase($newOwnerFileName) || !self::isSafeAttachmentExtension($newOwnerExt)) {
             return false;
         }
 
@@ -594,15 +605,15 @@ class Attachment extends Model {
             return false;
         }
 
-        $newOwnerPath = $newOwnerDir . '/' . $referencing->file_name . '.' . $referencing->file_extension;
+        $newOwnerPath = self::buildAttachmentPath($newOwnerNumber, $newOwnerFileName, $newOwnerExt);
         $tmpOwnerPath = $newOwnerPath . '.tmp_' . str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
 
-        if (!@copy($physicalPath, $tmpOwnerPath)) {
+        if (!self::safeCopyWithinAttachmentsRoot($physicalPath, $tmpOwnerPath)) {
             return false;
         }
 
         if (!@rename($tmpOwnerPath, $newOwnerPath)) {
-            @unlink($tmpOwnerPath);
+            self::safeUnlinkPath($tmpOwnerPath);
             return false;
         }
 
@@ -632,11 +643,11 @@ class Attachment extends Model {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
             }
-            @unlink($newOwnerPath);
+            self::safeUnlinkPath($newOwnerPath);
             return false;
         }
 
-        @unlink($physicalPath);
+        self::safeUnlinkPath($physicalPath);
         return true;
     }
 
@@ -728,6 +739,52 @@ class Attachment extends Model {
         }
 
         return null;
+    }
+
+    private static function isSafeAttachmentFileBase(string $fileBase): bool {
+        return (bool)preg_match('/^\d{16}$/', $fileBase);
+    }
+
+    private static function isSafeAttachmentExtension(string $ext): bool {
+        $ext = strtolower(trim($ext));
+        return isset(self::EXT_ALLOWED_MIMES[$ext]);
+    }
+
+    private static function safeUnlinkPath(string $path): void {
+        if (!self::isPathWithinAttachmentsRoot($path)) {
+            return;
+        }
+
+        if (is_file($path)) {
+            @unlink($path);
+        }
+    }
+
+    private static function safeCopyWithinAttachmentsRoot(string $sourcePath, string $destinationPath): bool {
+        if (!self::isPathWithinAttachmentsRoot($sourcePath) || !self::isPathWithinAttachmentsRoot($destinationPath)) {
+            return false;
+        }
+
+        if (!is_file($sourcePath)) {
+            return false;
+        }
+
+        return (bool)@copy($sourcePath, $destinationPath);
+    }
+
+    private static function isPathWithinAttachmentsRoot(string $path): bool {
+        if ($path === '' || strpos($path, "\0") !== false) {
+            return false;
+        }
+
+        $normalizedRoot = str_replace('\\', '/', rtrim(self::storageBaseDirectory(), '/')) . '/attachments/';
+        $normalizedPath = str_replace('\\', '/', $path);
+
+        return strncmp($normalizedPath, $normalizedRoot, strlen($normalizedRoot)) === 0;
+    }
+
+    private static function buildAttachmentPath(string $userNumber, string $fileBase, string $ext): string {
+        return self::directoryForUserNumber($userNumber) . '/' . $fileBase . '.' . strtolower($ext);
     }
 
     private static function storageBaseDirectory(): string {
