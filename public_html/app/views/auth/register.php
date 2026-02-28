@@ -26,7 +26,7 @@
         <label for="register-username" class="block text-sm text-zinc-300 mb-2">Username</label>
         <input id="register-username" type="text" name="username" placeholder="Username" minlength="4" maxlength="32" pattern="[a-z][a-z0-9]{3,31}" title="Username must be 4-32 characters, start with a lowercase letter, and contain only lowercase letters and numbers." autocapitalize="none" spellcheck="false" aria-describedby="username-requirements" class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-4" required>
         <p id="username-requirements" class="text-xs text-zinc-400 mt-2 mb-4">Username must be 4-32 characters, contain only lowercase letters and numbers, and cannot start with a number.</p>
-        <label for="register-email" class="block text-sm text-zinc-300 mb-2">Email</label>
+        <label for="register-email" class="block text-sm text-zinc-300 mb-2">Email address</label>
         <input id="register-email" type="email" name="email" placeholder="Email" class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-4 mb-4" required>
         <label for="register-password" class="block text-sm text-zinc-300 mb-2">Password</label>
         <input id="register-password" type="password" name="password" placeholder="Password (8+ chars)" class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-4 mb-4" required>

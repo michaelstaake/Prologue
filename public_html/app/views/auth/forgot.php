@@ -16,7 +16,8 @@
     <?php endif; ?>
     <form method="POST" action="<?= htmlspecialchars(base_url('/forgot-password'), ENT_QUOTES, 'UTF-8') ?>">
         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
-        <input type="email" name="email" placeholder="Email" class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-4 mb-6" required>
+        <label for="forgot-email" class="block text-sm text-zinc-300 mb-2">Email address</label>
+        <input id="forgot-email" type="email" name="email" placeholder="Email" class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-4 mb-6" required>
         <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 py-4 rounded-2xl font-semibold">Send reset link</button>
     </form>
     <div class="text-center mt-6">
