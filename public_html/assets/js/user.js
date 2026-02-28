@@ -1322,9 +1322,8 @@ function bindStatusMenu() {
     const menu = document.getElementById('status-menu');
     if (!toggle || !menu) return;
 
-    const currentLabel = document.getElementById('sidebar-user-status-label');
-    const currentText = String(currentLabel?.textContent || '').trim().toLowerCase();
-    selectedPresenceStatus = currentText === 'busy' ? 'busy' : (currentText === 'offline' ? 'offline' : 'online');
+    const storedStatus = String(window.CURRENT_USER_PRESENCE_STATUS || 'online').toLowerCase();
+    selectedPresenceStatus = storedStatus === 'busy' ? 'busy' : (storedStatus === 'offline' ? 'offline' : 'online');
     updateStatusMenuChecks(selectedPresenceStatus);
 
     const closeMenu = () => menu.classList.add('hidden');
