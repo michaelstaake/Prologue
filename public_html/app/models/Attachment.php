@@ -577,6 +577,9 @@ class Attachment extends Model {
         )->fetch();
 
         $physicalPath = self::buildAttachmentPath($userNumber, $fileName, $ext);
+        if ($physicalPath === '') {
+            return false;
+        }
 
         if (!$referencing) {
             self::safeUnlinkPath($physicalPath);
@@ -606,18 +609,21 @@ class Attachment extends Model {
         }
 
         $newOwnerPath = self::buildAttachmentPath($newOwnerNumber, $newOwnerFileName, $newOwnerExt);
+        if ($newOwnerPath === '') {
+            return false;
+        }
         $tmpOwnerPath = $newOwnerPath . '.tmp_' . str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
 
         if (!self::safeCopyWithinAttachmentsRoot($physicalPath, $tmpOwnerPath)) {
             return false;
         }
 
-        if (!@rename($tmpOwnerPath, $newOwnerPath)) {
+        if (!self::safeRenameWithinAttachmentsRoot($tmpOwnerPath, $newOwnerPath)) {
             self::safeUnlinkPath($tmpOwnerPath);
             return false;
         }
 
-        @chmod($newOwnerPath, 0644);
+        self::safeChmodPath($newOwnerPath, 0644);
 
         $pdo = Database::getInstance();
         try {
@@ -772,18 +778,92 @@ class Attachment extends Model {
         return (bool)@copy($sourcePath, $destinationPath);
     }
 
+    private static function safeRenameWithinAttachmentsRoot(string $sourcePath, string $destinationPath): bool {
+        if (!self::isPathWithinAttachmentsRoot($sourcePath) || !self::isPathWithinAttachmentsRoot($destinationPath)) {
+            return false;
+        }
+
+        return (bool)@rename($sourcePath, $destinationPath);
+    }
+
+    private static function safeChmodPath(string $path, int $mode): void {
+        if (!self::isPathWithinAttachmentsRoot($path)) {
+            return;
+        }
+
+        @chmod($path, $mode);
+    }
+
     private static function isPathWithinAttachmentsRoot(string $path): bool {
         if ($path === '' || strpos($path, "\0") !== false) {
             return false;
         }
 
-        $normalizedRoot = str_replace('\\', '/', rtrim(self::storageBaseDirectory(), '/')) . '/attachments/';
-        $normalizedPath = str_replace('\\', '/', $path);
+        $rootDir = self::storageBaseDirectory() . '/attachments';
+        $resolvedRoot = realpath($rootDir);
+        $normalizedRoot = self::normalizePathForComparison($resolvedRoot !== false ? $resolvedRoot : $rootDir);
+        if ($normalizedRoot === '') {
+            return false;
+        }
 
-        return strncmp($normalizedPath, $normalizedRoot, strlen($normalizedRoot)) === 0;
+        $candidatePath = self::normalizePathForComparison($path);
+        if ($candidatePath === '' || !self::isAbsolutePath($candidatePath)) {
+            return false;
+        }
+
+        $candidateDir = dirname($candidatePath);
+        $resolvedDir = realpath($candidateDir);
+        if ($resolvedDir === false) {
+            if (strpos($candidatePath, '/../') !== false || substr($candidatePath, -3) === '/..') {
+                return false;
+            }
+            if (strpos($candidatePath, '/./') !== false || substr($candidatePath, -2) === '/.') {
+                return false;
+            }
+            $resolvedCandidatePath = $candidatePath;
+        } else {
+            $resolvedCandidatePath = self::normalizePathForComparison($resolvedDir) . '/' . basename($candidatePath);
+        }
+
+        $normalizedRoot = rtrim($normalizedRoot, '/');
+        $resolvedCandidatePath = rtrim($resolvedCandidatePath, '/');
+
+        if ($resolvedCandidatePath === $normalizedRoot) {
+            return true;
+        }
+
+        $rootPrefix = $normalizedRoot . '/';
+        $pathPrefix = $resolvedCandidatePath . '/';
+
+        return strncmp($pathPrefix, $rootPrefix, strlen($rootPrefix)) === 0;
+    }
+
+    private static function normalizePathForComparison(string $path): string {
+        $normalized = str_replace('\\', '/', trim($path));
+        if ($normalized === '') {
+            return '';
+        }
+
+        $collapsed = preg_replace('#/+#', '/', $normalized);
+        return $collapsed === null ? '' : $collapsed;
+    }
+
+    private static function isAbsolutePath(string $path): bool {
+        if (strpos($path, '/') === 0) {
+            return true;
+        }
+
+        return (bool)preg_match('/^[A-Za-z]:\//', $path);
     }
 
     private static function buildAttachmentPath(string $userNumber, string $fileBase, string $ext): string {
+        if (!preg_match('/^\d{16}$/', $userNumber)) {
+            return '';
+        }
+        if (!self::isSafeAttachmentFileBase($fileBase) || !self::isSafeAttachmentExtension($ext)) {
+            return '';
+        }
+
         return self::directoryForUserNumber($userNumber) . '/' . $fileBase . '.' . strtolower($ext);
     }
 
