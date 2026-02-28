@@ -131,6 +131,7 @@ function persistActiveCallSession(call = null) {
         started_by: Number(safeCall.started_by || globalCallContext?.started_by || 0),
         participant_count: Math.max(0, Number(safeCall.participant_count || globalCallContext?.participant_count || 0)),
         current_user_joined: Number(safeCall.current_user_joined || globalCallContext?.current_user_joined || 0) > 0 ? 1 : 0,
+        signal_cursor: Number(callSignalCursor || 0),
         updated_at: Date.now()
     };
 
@@ -555,6 +556,15 @@ async function cleanupLocalCallSession(options = {}) {
         clearInterval(callSignalPollInterval);
         callSignalPollInterval = null;
     }
+    if (callSignalPollFastModeTimeout) {
+        clearTimeout(callSignalPollFastModeTimeout);
+        callSignalPollFastModeTimeout = null;
+    }
+    callSignalPollFastMode = false;
+    if (leftAloneCallEndTimeout) {
+        clearTimeout(leftAloneCallEndTimeout);
+        leftAloneCallEndTimeout = null;
+    }
     callSignalCursor = 0;
 
     callPeerConnections.forEach((pc) => {
@@ -660,6 +670,14 @@ async function applyActiveCallSnapshot(activeCall, options = {}) {
     const participantCount = Math.max(0, Number(activeCall?.participant_count || 0));
     const currentUserJoined = Number(activeCall?.current_user_joined || 0) > 0;
 
+    // Read the persisted session NOW, before persistActiveCallSession() overwrites it below.
+    // isReconnectingCall is true only if the user was previously joined to this exact call
+    // (current_user_joined: 1 in the snapshot saved during the call). This lets us reconnect
+    // after a beacon-triggered leave without auto-joining callers who were never in the call.
+    const priorPersistedSession = readPersistedActiveCallSession();
+    const isReconnectingCall = Number(priorPersistedSession?.call_id || 0) === safeActiveCallId
+        && Number(priorPersistedSession?.current_user_joined || 0) > 0;
+
     if (safeCurrentCallId > 0 && safeCurrentCallId === safeActiveCallId && participantCount >= 2) {
         hadCallPeerConnected = true;
     }
@@ -677,12 +695,25 @@ async function applyActiveCallSnapshot(activeCall, options = {}) {
         && hadCallPeerConnected;
 
     if (leftAloneAfterConnected) {
-        await postForm('/api/calls/end', {
-            csrf_token: getCsrfToken(),
-            call_id: String(safeCurrentCallId)
-        }).catch(() => {});
-        await cleanupLocalCallSession({ restorePresence: true });
-        return;
+        // Don't end the call immediately — a peer may have navigated/refreshed and is
+        // reconnecting. Give them 20 seconds to rejoin before we tear down the call.
+        if (!leftAloneCallEndTimeout) {
+            const endCallId = safeCurrentCallId;
+            leftAloneCallEndTimeout = setTimeout(async () => {
+                leftAloneCallEndTimeout = null;
+                if (Number(currentCallId || 0) === endCallId) {
+                    await postForm('/api/calls/end', {
+                        csrf_token: getCsrfToken(),
+                        call_id: String(endCallId)
+                    }).catch(() => {});
+                    await cleanupLocalCallSession({ restorePresence: true });
+                }
+            }, 20000);
+        }
+    } else if (leftAloneCallEndTimeout) {
+        // Peer rejoined — cancel the pending end-call.
+        clearTimeout(leftAloneCallEndTimeout);
+        leftAloneCallEndTimeout = null;
     }
 
     if (activeCall) {
@@ -707,7 +738,7 @@ async function applyActiveCallSnapshot(activeCall, options = {}) {
     const shouldRestoreSession = Boolean(options.allowRestore)
         && !localStream
         && safeActiveCallId > 0
-        && currentUserJoined;
+        && (currentUserJoined || isReconnectingCall);
     if (shouldRestoreSession) {
         await restoreCallSession(activeCall);
     }
@@ -750,6 +781,10 @@ async function initGlobalCallPersistence() {
     if (persisted) {
         setGlobalCallContext(persisted);
         ensureCurrentChatContext(persisted);
+        // Suppress ringing for this call while we reconnect. The beacon may have
+        // set left_at, causing current_user_joined to return 0 on this page load,
+        // which would otherwise trigger the incoming-call ring before restoreCallSession runs.
+        declinedCallId = Number(persisted.call_id || 0);
     }
 
     await refreshGlobalCallState({ force: true });
@@ -760,6 +795,20 @@ async function initGlobalCallPersistence() {
     globalCallStatusPollInterval = setInterval(() => {
         refreshGlobalCallState().catch(() => {});
     }, 3000);
+}
+
+function initCallLeaveBeacon() {
+    const fireLeaveBeacon = () => {
+        const callId = Number(currentCallId || 0);
+        if (callId <= 0) return;
+        const payload = new URLSearchParams({
+            csrf_token: getCsrfToken(),
+            call_id: String(callId)
+        });
+        navigator.sendBeacon('/api/calls/leave', payload);
+    };
+    window.addEventListener('pagehide', fireLeaveBeacon);
+    window.addEventListener('beforeunload', fireLeaveBeacon);
 }
 
 async function restoreCallSession(activeCall) {
@@ -775,7 +824,8 @@ async function restoreCallSession(activeCall) {
             silentStart: true,
             initialOverlayMode: restoredOverlayMode,
             showJoinConnectingOverlay: true,
-            joiningOverlayMode: 'reconnecting'
+            joiningOverlayMode: 'reconnecting',
+            reconnecting: true
         });
         setChatCallStatusBar(isMuted ? 'muted' : 'active');
     } catch {
@@ -894,7 +944,7 @@ async function startVoiceCall(options = {}) {
         effective_status_text_class: 'text-amber-400',
         effective_status_dot_class: 'bg-amber-500'
     });
-    await startCallSignaling();
+    await startCallSignaling({ fast: Boolean(options.reconnecting) });
     refreshChatCallStatusBar({ force: true });
     if (!options.silentStart) {
         showToast('Call started', 'success');
@@ -2145,12 +2195,17 @@ function ensurePeerConnection(peerId, username = '') {
             removePeerConnection(numericPeerId);
             return;
         }
+        if (state === 'connected') {
+            const allConnected = callPeerConnections.size > 0 &&
+                Array.from(callPeerConnections.values()).every(p => p.connectionState === 'connected');
+            if (allConnected) rampDownCallSignalPolling();
+        }
         if (state === 'disconnected') {
             setTimeout(() => {
                 if (pc.connectionState === 'disconnected') {
                     removePeerConnection(numericPeerId);
                 }
-            }, 5000);
+            }, 2000);
         }
     };
 
@@ -2246,15 +2301,48 @@ async function handleIncomingCallSignal(signal) {
     }
 }
 
-async function startCallSignaling() {
+function rampDownCallSignalPolling() {
+    if (!callSignalPollFastMode) return;
+    callSignalPollFastMode = false;
+    if (callSignalPollFastModeTimeout) {
+        clearTimeout(callSignalPollFastModeTimeout);
+        callSignalPollFastModeTimeout = null;
+    }
     if (callSignalPollInterval) {
         clearInterval(callSignalPollInterval);
         callSignalPollInterval = null;
     }
+    if (currentCallId) {
+        callSignalPollInterval = setInterval(pollCallSignal, 1200);
+    }
+}
 
-    callSignalCursor = 0;
+async function startCallSignaling(options = {}) {
+    if (callSignalPollInterval) {
+        clearInterval(callSignalPollInterval);
+        callSignalPollInterval = null;
+    }
+    if (callSignalPollFastModeTimeout) {
+        clearTimeout(callSignalPollFastModeTimeout);
+        callSignalPollFastModeTimeout = null;
+    }
+
+    const persistedSession = readPersistedActiveCallSession();
+    const persistedCursor = Number(persistedSession?.signal_cursor || 0);
+    const persistedCallId = Number(persistedSession?.call_id || 0);
+    callSignalCursor = (persistedCursor > 0 && persistedCallId === Number(currentCallId || 0))
+        ? persistedCursor
+        : 0;
+
+    callSignalPollFastMode = Boolean(options.fast);
+    const pollInterval = callSignalPollFastMode ? 300 : 1200;
+
     await pollCallSignal();
-    callSignalPollInterval = setInterval(pollCallSignal, 1200);
+    callSignalPollInterval = setInterval(pollCallSignal, pollInterval);
+
+    if (callSignalPollFastMode) {
+        callSignalPollFastModeTimeout = setTimeout(rampDownCallSignalPolling, 15000);
+    }
 }
 
 async function pollCallSignal() {
@@ -2266,6 +2354,14 @@ async function pollCallSignal() {
 
         if (Number.isFinite(Number(data?.next_since_id))) {
             callSignalCursor = Math.max(callSignalCursor, Number(data.next_since_id || 0));
+            try {
+                const raw = sessionStorage.getItem(CALL_SESSION_STORAGE_KEY);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    parsed.signal_cursor = callSignalCursor;
+                    sessionStorage.setItem(CALL_SESSION_STORAGE_KEY, JSON.stringify(parsed));
+                }
+            } catch {}
         }
 
         syncPeerParticipants(data?.participants || []);

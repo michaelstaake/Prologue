@@ -436,4 +436,36 @@ class CallController extends Controller {
 
         $this->json(['success' => true, 'ended' => $ended]);
     }
+
+    public function leaveCall() {
+        Auth::requireAuth();
+        Auth::csrfValidate();
+
+        $callId = (int)($_POST['call_id'] ?? 0);
+        $userId = Auth::user()->id;
+
+        if ($callId <= 0) {
+            $this->json(['error' => 'Invalid call'], 400);
+            return;
+        }
+
+        $call = Database::query(
+            "SELECT id FROM calls WHERE id = ? AND status = 'active'",
+            [$callId]
+        )->fetch();
+
+        if (!$call) {
+            $this->json(['success' => true]);
+            return;
+        }
+
+        Database::query(
+            "UPDATE call_participants
+             SET left_at = COALESCE(left_at, NOW())
+             WHERE call_id = ? AND user_id = ? AND left_at IS NULL",
+            [$callId, $userId]
+        );
+
+        $this->json(['success' => true]);
+    }
 }

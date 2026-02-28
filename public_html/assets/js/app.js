@@ -41,6 +41,8 @@ let peerConnection = null;
 let isCallOfferer = false;
 let appliedPeerIceCandidatesCount = 0;
 let callSignalPollInterval = null;
+let callSignalPollFastMode = false;
+let callSignalPollFastModeTimeout = null;
 let peerAnswerApplied = false;
 let peerOfferApplied = false;
 let lastAppliedOfferSdp = null;
@@ -57,6 +59,7 @@ let latestChatCallId = 0;
 let globalCallContext = null;
 let callRestoreInFlight = false;
 let globalCallStatusPollInterval = null;
+let leftAloneCallEndTimeout = null;
 let callDurationTickInterval = null;
 let callDurationStartedAtMs = 0;
 let callDurationBarState = null;
@@ -575,6 +578,7 @@ async function init() {
 
     if (Number(currentUserId || 0) > 0) {
         initGlobalCallPersistence();
+        initCallLeaveBeacon();
     }
 
     const messageForm = document.getElementById('message-form');

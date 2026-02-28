@@ -252,6 +252,7 @@ $router->post('/api/calls/start', 'CallController@startCall');
 $router->post('/api/calls/decline', 'CallController@declineCall');
 $router->post('/api/calls/signal', 'CallController@signal');
 $router->post('/api/calls/end', 'CallController@endCall');
+$router->post('/api/calls/leave', 'CallController@leaveCall');
 
 // Notifications
 $router->get('/notifications', 'NotificationController@getAll');
