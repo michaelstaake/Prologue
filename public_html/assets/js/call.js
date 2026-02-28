@@ -2241,6 +2241,12 @@ function syncPeerParticipants(participants) {
     });
 
     hadCallPeerConnected = hadCallPeerConnected || remoteParticipants.length > 0;
+
+    // Sync any active screenshare/camera tracks onto peer connections that were
+    // just created (e.g. a reconnecting peer). ensurePeerConnection only adds audio;
+    // video tracks must be re-applied whenever a new connection is established.
+    syncOutgoingVideoTracksAcrossPeers();
+
     refreshActiveRemoteTile();
 }
 
