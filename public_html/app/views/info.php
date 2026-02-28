@@ -1,6 +1,9 @@
 <div class="p-8 overflow-auto space-y-6">
     <h1 class="text-3xl font-bold">System</h1>
-    <a href="https://prologue.chat" target="_blank" class="inline-flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-100 transition-colors">prologue.chat <i class="fa-solid fa-arrow-up-right-from-square text-xs"></i></a>
+    <div class="flex items-center gap-4">
+        <a href="https://prologue.chat" target="_blank" class="inline-flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-100 transition-colors">Prologue.chat <i class="fa-solid fa-arrow-up-right-from-square text-xs"></i></a>
+        <a href="https://github.com/michaelstaake/Prologue/issues" target="_blank" class="inline-flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-100 transition-colors">Report Problems on GitHub <i class="fa-solid fa-arrow-up-right-from-square text-xs"></i></a>
+    </div>
 
     <section id="browser-permissions-section" class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-2xl">
         <h2 class="text-xl font-semibold mb-4">Browser Permissions</h2>
