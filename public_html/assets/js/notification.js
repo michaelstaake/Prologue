@@ -175,6 +175,79 @@ function renderTextWithOpenMojiMarkup(value) {
     return escapeHtml(text).replace(/\n/g, '<br>');
 }
 
+function appendTextWithOpenMojiNodes(container, value) {
+    if (!container) return;
+
+    const source = String(value ?? '');
+    const supportsGraphemeSegmentation = typeof getGraphemeClusters === 'function';
+    const supportsOpenMojiLookup = typeof findOpenMojiForGrapheme === 'function';
+
+    const appendPlainTextSegment = (segment) => {
+        if (!segment) return;
+
+        const graphemes = supportsGraphemeSegmentation
+            ? getGraphemeClusters(String(segment ?? ''))
+            : Array.from(String(segment ?? ''));
+
+        for (const grapheme of graphemes) {
+            if (grapheme === '\n') {
+                container.appendChild(document.createElement('br'));
+                continue;
+            }
+
+            if (supportsOpenMojiLookup) {
+                const emojiMatch = findOpenMojiForGrapheme(grapheme);
+                if (emojiMatch?.url) {
+                    const img = document.createElement('img');
+                    img.src = String(emojiMatch.url);
+                    img.alt = grapheme;
+                    img.className = 'inline-block w-7 h-7 align-[-0.2em] mx-[1px]';
+                    img.loading = 'lazy';
+                    img.decoding = 'async';
+                    container.appendChild(img);
+                    continue;
+                }
+            }
+
+            container.appendChild(document.createTextNode(grapheme));
+        }
+    };
+
+    const linkPattern = /(https?:\/\/[^\s<]+|\/c\/\d{4}-\d{4}-\d{4}-\d{4}\/delete)/gi;
+    let cursor = 0;
+    let match = linkPattern.exec(source);
+
+    while (match) {
+        const tokenStart = match.index;
+        if (tokenStart > cursor) {
+            appendPlainTextSegment(source.slice(cursor, tokenStart));
+        }
+
+        const matchedUrl = String(match[0] || '');
+        const deleteChatPattern = /^\/c\/\d{4}-\d{4}-\d{4}-\d{4}\/delete$/i;
+        const anchor = document.createElement('a');
+        anchor.href = matchedUrl;
+
+        if (deleteChatPattern.test(matchedUrl)) {
+            anchor.className = 'text-red-400 hover:text-red-300 hover:underline underline-offset-2';
+            anchor.textContent = 'Delete chat';
+        } else {
+            anchor.className = 'prologue-accent hover:text-emerald-300 hover:underline underline-offset-2';
+            anchor.target = '_blank';
+            anchor.rel = 'noopener noreferrer';
+            anchor.textContent = matchedUrl;
+        }
+
+        container.appendChild(anchor);
+        cursor = linkPattern.lastIndex;
+        match = linkPattern.exec(source);
+    }
+
+    if (cursor < source.length) {
+        appendPlainTextSegment(source.slice(cursor));
+    }
+}
+
 function showToast(message, kind = 'info', metadata = null) {
     const host = document.getElementById('toast-host');
     if (!host) return;
@@ -224,7 +297,7 @@ function showToast(message, kind = 'info', metadata = null) {
     const el = document.createElement('div');
     const color = kind === 'error' ? 'border-red-700 text-red-200 bg-red-950/80' : kind === 'success' ? 'border-emerald-700 text-emerald-100 bg-emerald-950/80' : 'border-zinc-700 text-zinc-100 bg-zinc-900/95';
     el.className = `border ${color} px-4 py-3 rounded-xl shadow-xl`;
-    el.innerHTML = renderTextWithOpenMojiMarkup(message);
+    appendTextWithOpenMojiNodes(el, message);
     host.appendChild(el);
 
     const timeoutId = setTimeout(() => {
@@ -896,7 +969,7 @@ function renderToastHistory() {
 
     if (!list) return;
 
-    list.innerHTML = visibleToasts.map(toast => {
+    list.innerHTML = visibleToasts.map((toast, index) => {
         const color = toast.kind === 'error' ? 'text-red-300' : toast.kind === 'success' ? 'text-emerald-300' : 'text-zinc-300';
         const action = getNotificationAction(toast);
         const isClickable = Boolean(action?.href);
@@ -911,12 +984,21 @@ function renderToastHistory() {
         const createdAt = String(toast.createdAt || '');
         return `
             <div class="relative px-4 py-3 border-b border-zinc-800 ${isClickable ? 'hover:bg-zinc-800 cursor-pointer' : ''}" data-toast-id="${toast.id}" ${isClickable ? `data-toast-link="${escapeHtml(action.href)}"` : ''}>
-                <div class="text-sm ${color}">${renderTextWithOpenMojiMarkup(toast.message)}</div>
+                <div class="text-sm ${color}" data-toast-message-index="${index}"></div>
                 <div class="text-xs text-zinc-500 mt-1" data-utc="${escapeHtml(createdAt)}" title="${escapeHtml(createdAt)}">${escapeHtml(formatToastTime(createdAt))}</div>
                 ${expiryBorder}
             </div>
         `;
     }).join('') || '<div class="px-4 py-3 text-zinc-400 text-sm">No notifications yet</div>';
+
+    const messageNodes = list.querySelectorAll('[data-toast-message-index]');
+    messageNodes.forEach((node) => {
+        const index = Number(node.getAttribute('data-toast-message-index'));
+        if (!Number.isFinite(index) || index < 0 || index >= visibleToasts.length) return;
+
+        appendTextWithOpenMojiNodes(node, visibleToasts[index].message);
+        node.removeAttribute('data-toast-message-index');
+    });
 
     if (typeof window.refreshUtcTimestamps === 'function') {
         window.refreshUtcTimestamps(list);

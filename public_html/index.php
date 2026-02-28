@@ -43,13 +43,29 @@ function enforce_https_if_needed(): void {
         return;
     }
 
-    $host = (string)($_SERVER['HTTP_HOST'] ?? '');
+    $appUrl = trim((string)(getenv('APP_URL') ?: ''));
+    if ($appUrl === '') {
+        return;
+    }
+
+    $parsedAppUrl = parse_url($appUrl);
+    $host = isset($parsedAppUrl['host']) ? trim((string)$parsedAppUrl['host']) : '';
     if ($host === '') {
         return;
     }
 
+    $port = isset($parsedAppUrl['port']) ? (int)$parsedAppUrl['port'] : 0;
+    $authority = $host;
+    if ($port > 0 && $port !== 443) {
+        $authority .= ':' . $port;
+    }
+
     $uri = (string)($_SERVER['REQUEST_URI'] ?? '/');
-    header('Location: https://' . $host . $uri, true, 301);
+    if ($uri === '' || $uri[0] !== '/') {
+        $uri = '/';
+    }
+
+    header('Location: https://' . $authority . $uri, true, 301);
     exit;
 }
 

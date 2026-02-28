@@ -55,16 +55,14 @@ class Auth {
     public static function requireAuth() {
         $user = self::user();
         if (!$user) {
-            header("Location: " . base_url('/login'));
-            exit;
+            self::redirect('/login');
         }
 
         $emailVerificationRequired = (string)(Setting::get('email_verification_required') ?? '1') === '1';
         if ($emailVerificationRequired && empty($user->email_verified_at)) {
             $_SESSION['email_verification_user'] = $user->id;
             unset($_SESSION['user_id']);
-            header("Location: " . base_url('/verify-email'));
-            exit;
+            self::redirect('/verify-email');
         }
     }
 
@@ -105,6 +103,15 @@ class Auth {
 
     private static function clearSessionState() {
         unset($_SESSION['user_id'], $_SESSION['auth_session_token'], $_SESSION['last_activity_touch_at']);
+    }
+
+    private static function redirect(string $path): void {
+        $normalizedPath = '/' . ltrim($path, '/');
+        $basePath = trim((string)(defined('APP_BASE_PATH') ? APP_BASE_PATH : ''), '/');
+        $target = ($basePath !== '' ? '/' . $basePath : '') . $normalizedPath;
+
+        header('Location: ' . $target, true, 302);
+        exit;
     }
 
     public static function setRememberCookie(int $userId, string $sessionToken): void {

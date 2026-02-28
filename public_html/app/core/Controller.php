@@ -45,7 +45,30 @@ class Controller {
     }
 
     protected function redirect($url) {
-        header("Location: " . base_url($url));
+        $candidate = str_replace(["\r", "\n"], '', trim((string)$url));
+        $parts = parse_url($candidate);
+
+        if ($parts === false || isset($parts['scheme']) || isset($parts['host'])) {
+            $normalizedPath = '/';
+        } else {
+            $path = isset($parts['path']) ? (string)$parts['path'] : '/';
+            if ($path === '') {
+                $path = '/';
+            }
+
+            $normalizedPath = '/' . ltrim($path, '/');
+            if (isset($parts['query']) && $parts['query'] !== '') {
+                $normalizedPath .= '?' . $parts['query'];
+            }
+            if (isset($parts['fragment']) && $parts['fragment'] !== '') {
+                $normalizedPath .= '#' . $parts['fragment'];
+            }
+        }
+
+        $basePath = trim((string)(defined('APP_BASE_PATH') ? APP_BASE_PATH : ''), '/');
+        $target = ($basePath !== '' ? '/' . $basePath : '') . $normalizedPath;
+
+        header('Location: ' . $target, true, 302);
         exit;
     }
 
