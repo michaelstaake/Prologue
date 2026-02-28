@@ -127,7 +127,11 @@ class InstallController extends Controller {
 
         $schemaSection = explode('/* STEP 2 */', $sql, 2)[0];
         $statements = $this->splitSqlStatements($schemaSection);
+        if (count($statements) === 0) {
+            throw new RuntimeException('DATABASE_SCHEMA_SQL has no executable SQL statements. Paste the full schema into CONFIG_DATABASE_SCHEMA_SQL.');
+        }
 
+        $executedStatements = 0;
         foreach ($statements as $index => $statement) {
             if (preg_match('/^CREATE\s+DATABASE\b/i', $statement)) {
                 continue;
@@ -139,6 +143,7 @@ class InstallController extends Controller {
 
             try {
                 Database::query($statement);
+                $executedStatements++;
             } catch (Throwable $exception) {
                 $preview = preg_replace('/\s+/', ' ', trim($statement));
                 if ($preview === null) {
@@ -151,6 +156,10 @@ class InstallController extends Controller {
                     $exception
                 );
             }
+        }
+
+        if ($executedStatements === 0) {
+            throw new RuntimeException('DATABASE_SCHEMA_SQL did not execute any table statements. Paste the full schema into CONFIG_DATABASE_SCHEMA_SQL.');
         }
 
         $this->assertRequiredInstallTables();
