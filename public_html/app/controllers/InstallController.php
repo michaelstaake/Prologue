@@ -117,13 +117,15 @@ class InstallController extends Controller {
         $schemaPath = defined('DATABASE_SCHEMA_FILE') ? (string)DATABASE_SCHEMA_FILE : (dirname(__DIR__, 4) . '/database.sql');
         $sql = @file_get_contents($schemaPath);
         if ($sql === false) {
-            throw new RuntimeException('Could not read database schema file.');
+            throw new RuntimeException('Could not read database schema file: ' . $schemaPath);
         }
+
+        $this->applyInstallDatabaseDefaults();
 
         $schemaSection = explode('/* STEP 2 */', $sql, 2)[0];
         $statements = $this->splitSqlStatements($schemaSection);
 
-        foreach ($statements as $statement) {
+        foreach ($statements as $index => $statement) {
             if (preg_match('/^CREATE\s+DATABASE\b/i', $statement)) {
                 continue;
             }
@@ -132,7 +134,60 @@ class InstallController extends Controller {
                 continue;
             }
 
-            Database::query($statement);
+            try {
+                Database::query($statement);
+            } catch (Throwable $exception) {
+                $preview = preg_replace('/\s+/', ' ', trim($statement));
+                if ($preview === null) {
+                    $preview = '';
+                }
+                $preview = mb_substr($preview, 0, 180);
+                throw new RuntimeException(
+                    'Schema execution failed at statement #' . ($index + 1) . ' from ' . $schemaPath . ': ' . $preview . ' | ' . $exception->getMessage(),
+                    0,
+                    $exception
+                );
+            }
+        }
+
+        $this->assertRequiredInstallTables();
+    }
+
+    private function applyInstallDatabaseDefaults() {
+        $defaults = [
+            "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci",
+            "SET SESSION default_storage_engine = InnoDB"
+        ];
+
+        foreach ($defaults as $statement) {
+            try {
+                Database::query($statement);
+            } catch (Throwable $exception) {
+            }
+        }
+    }
+
+    private function assertRequiredInstallTables() {
+        $requiredTables = [
+            'settings',
+            'users',
+            'auth_attempt_limits'
+        ];
+
+        $missingTables = [];
+        foreach ($requiredTables as $tableName) {
+            $row = Database::query(
+                'SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? LIMIT 1',
+                [DB_NAME, $tableName]
+            )->fetch();
+
+            if (!$row) {
+                $missingTables[] = $tableName;
+            }
+        }
+
+        if (!empty($missingTables)) {
+            throw new RuntimeException('Install incomplete: missing required tables: ' . implode(', ', $missingTables));
         }
     }
 

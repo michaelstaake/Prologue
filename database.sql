@@ -1,6 +1,9 @@
 CREATE DATABASE prologue CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE prologue;
 
+SET SESSION default_storage_engine = InnoDB;
+SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci;
+
 -- Settings
 -- Global settings use plain keys (e.g. 'invites_enabled').
 -- Per-user settings use keys suffixed with the user ID (e.g. 'timezone_1', 'browser_notifications_1').
