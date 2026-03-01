@@ -32,9 +32,9 @@
                 Search
             </a>
             <?php if (strtolower((string)(Auth::user()->role ?? '')) === 'admin'): ?>
-                <a href="<?= htmlspecialchars(base_url('/admin'), ENT_QUOTES, 'UTF-8') ?>" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-zinc-700 text-zinc-300 hover:bg-zinc-800 transition">
+                <a href="<?= htmlspecialchars(base_url('/controlpanel'), ENT_QUOTES, 'UTF-8') ?>" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-zinc-700 text-zinc-300 hover:bg-zinc-800 transition">
                     <i class="fa-solid fa-sliders text-xs"></i>
-                    Admin
+                    Control Panel
                 </a>
             <?php endif; ?>
         </div>
@@ -46,7 +46,7 @@
             <p class="text-sm font-semibold text-amber-300 mb-1">Announcement</p>
             <p class="text-sm text-amber-200 whitespace-pre-wrap break-words"><?= htmlspecialchars($dashboardAnnouncement, ENT_QUOTES, 'UTF-8') ?></p>
             <?php if (strtolower((string)(Auth::user()->role ?? '')) === 'admin'): ?>
-                <a href="<?= htmlspecialchars(base_url('/admin#announcement'), ENT_QUOTES, 'UTF-8') ?>" class="mt-3 inline-flex items-center gap-2 text-xs text-amber-300 hover:text-amber-200 transition">
+                <a href="<?= htmlspecialchars(base_url('/controlpanel'), ENT_QUOTES, 'UTF-8') ?>" class="mt-3 inline-flex items-center gap-2 text-xs text-amber-300 hover:text-amber-200 transition">
                     Manage Announcement <i class="fa fa-arrow-right text-[10px]"></i>
                 </a>
             <?php endif; ?>
@@ -235,7 +235,7 @@
                 Invite your friends, family, or teammates to join you on this Prologue Server. Each user will need an invite code to create an account. If they don't receive the verification email after creating an account using the invite code you provided them, remind them to check their spam folder.
             </p>
 
-            <a href="<?= htmlspecialchars(base_url('/settings'), ENT_QUOTES, 'UTF-8') ?>"
+            <a href="<?= htmlspecialchars(base_url('/controlpanel'), ENT_QUOTES, 'UTF-8') ?>"
             class="inline-flex items-center gap-2 text-sm text-emerald-400 hover:text-emerald-300 transition">
                 Manage Invites <i class="fa fa-arrow-right text-xs"></i>
             </a>

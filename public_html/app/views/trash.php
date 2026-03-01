@@ -1,7 +1,7 @@
 <div class="p-8 overflow-auto">
     <div class="flex items-center justify-between gap-4 mb-6">
         <h1 class="text-3xl font-bold">Trash</h1>
-        <a href="<?= htmlspecialchars(base_url('/settings'), ENT_QUOTES, 'UTF-8') ?>" class="bg-zinc-700 hover:bg-zinc-600 px-4 py-2 rounded-xl text-sm">Back to Settings</a>
+        <a href="<?= htmlspecialchars(base_url('/controlpanel'), ENT_QUOTES, 'UTF-8') ?>" class="bg-zinc-700 hover:bg-zinc-600 px-4 py-2 rounded-xl text-sm">Back to Control Panel</a>
     </div>
 
     <?php if (!empty($toastMessage ?? '')): ?>

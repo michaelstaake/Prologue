@@ -252,7 +252,7 @@
                             </button>
                         </div>
                     </div>
-                    <a href="<?= htmlspecialchars(base_url('/settings'), ENT_QUOTES, 'UTF-8') ?>" class="text-zinc-300 hover:text-zinc-100"><i class="fa fa-cog"></i> Settings</a>
+                    <a href="<?= htmlspecialchars(base_url('/controlpanel'), ENT_QUOTES, 'UTF-8') ?>" class="text-zinc-300 hover:text-zinc-100"><i class="fa fa-cog"></i> Settings</a>
                     <div onclick="logout()" class="cursor-pointer text-red-400 hover:text-red-300"><i class="fa fa-right-from-bracket"></i> Exit</div>
                 </div>
             </div>

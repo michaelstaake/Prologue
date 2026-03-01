@@ -270,8 +270,11 @@ $router->get('/trash', 'TrashController@index');
 $router->get('/trash/{chat_number}', 'TrashController@show');
 $router->post('/trash/delete', 'TrashController@delete');
 
+// Control Panel
+$router->get('/controlpanel', 'ControlPanelController@index');
+$router->get('/apikeys', 'ControlPanelController@apikeys');
+
 // Admin (admin only)
-$router->get('/admin', 'AdminController@index');
 $router->post('/admin/mail', 'AdminController@saveMailSettings');
 $router->post('/admin/mail/test', 'AdminController@sendTestMail');
 $router->post('/admin/storage/recalculate', 'AdminController@recalculateStorageStats');
@@ -282,8 +285,6 @@ $router->post('/admin/announcement', 'AdminController@saveAnnouncementSettings')
 $router->post('/admin/more', 'AdminController@saveMoreSettings');
 
 // Settings
-$router->get('/settings', 'HomeController@settings');
-$router->get('/info', 'HomeController@info');
 $router->post('/settings/account/email', 'HomeController@saveAccountEmail');
 $router->post('/settings/account/email/verify', 'HomeController@verifyAccountEmailChange');
 $router->post('/settings/account/password', 'HomeController@saveAccountPassword');

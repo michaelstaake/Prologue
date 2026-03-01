@@ -17,70 +17,6 @@ class AdminController extends Controller {
         return $user;
     }
 
-    public function index() {
-        $user = $this->requireAdminUser();
-        $bruteForceProtection = $this->getBruteForceProtectionData();
-        $storageRoot = $this->storageRoot();
-        $pendingReportCount = (int) Database::query(
-            "SELECT COUNT(*) FROM reports WHERE status = 'pending'"
-        )->fetchColumn();
-
-        $storageStatsLastRecalculatedAt = trim((string)(Setting::get('storage_stats_last_recalculated_at') ?? ''));
-        $hasStorageStats = $storageStatsLastRecalculatedAt !== '';
-
-        $storageTotalBytes = $hasStorageStats ? max(0, (int)(Setting::get('storage_total_bytes_cached') ?? 0)) : null;
-        $storageDedupSavedBytes = $hasStorageStats ? max(0, (int)(Setting::get('storage_dedup_saved_bytes_cached') ?? 0)) : null;
-
-        $storageDedupSavedPercent = null;
-        if ($hasStorageStats && $storageTotalBytes !== null && $storageDedupSavedBytes !== null) {
-            $withoutDedupBytes = $storageTotalBytes + $storageDedupSavedBytes;
-            $storageDedupSavedPercent = $withoutDedupBytes > 0
-                ? (($storageDedupSavedBytes / $withoutDedupBytes) * 100)
-                : 0.0;
-        }
-
-        $this->view('admin', [
-            'user' => $user,
-            'csrf' => $this->csrfToken(),
-            'announcement_message' => (string)(Setting::get('announcement_message') ?? ''),
-            'mail_host' => Setting::get('mail_host') ?? '',
-            'mail_port' => Setting::get('mail_port') ?? '587',
-            'mail_user' => Setting::get('mail_user') ?? '',
-            'mail_from' => Setting::get('mail_from') ?? '',
-            'mail_from_name' => Setting::get('mail_from_name') ?? '',
-            'invite_code_required' => (string)(Setting::get('invite_code_required') ?? '1') === '1',
-            'invites_enabled' => (string)(Setting::get('invites_enabled') ?? '1') === '1',
-            'invite_codes_per_user' => (int)(Setting::get('invite_codes_per_user') ?? 3),
-            'email_verification_required' => (string)(Setting::get('email_verification_required') ?? '1') === '1',
-            'attachments_accepted_file_types' => (string)(Setting::get('attachments_accepted_file_types') ?? 'png,jpg'),
-            'attachments_maximum_file_size_mb' => (int)(Setting::get('attachments_maximum_file_size_mb') ?? 10),
-            'error_display' => (string)(Setting::get('error_display') ?? '0') === '1',
-            'attachment_logging' => (string)(Setting::get('attachment_logging') ?? '0') === '1',
-            'check_for_updates' => (string)(Setting::get('check_for_updates') ?? '0') === '1',
-            'new_user_notification' => (string)(Setting::get('new_user_notification') ?? '0') === '1',
-            'pendingReportCount' => $pendingReportCount,
-            'failed_login_attempts_24h' => $bruteForceProtection['failed_login_attempts_24h'],
-            'failed_registration_attempts_24h' => $bruteForceProtection['failed_registration_attempts_24h'],
-            'active_banned_ips' => $bruteForceProtection['active_banned_ips'],
-            'storage_writable' => is_dir($storageRoot) && is_writable($storageRoot),
-            'storage_total_size_label' => $hasStorageStats && $storageTotalBytes !== null ? $this->formatBytes($storageTotalBytes) : 'N/A',
-            'storage_dedup_saved_label' => $hasStorageStats && $storageDedupSavedBytes !== null && $storageDedupSavedPercent !== null
-                ? ($this->formatBytes($storageDedupSavedBytes) . ' (' . number_format($storageDedupSavedPercent, 2) . '%)')
-                : 'N/A',
-            'storage_stats_last_recalculated_label' => $this->formatLastRecalculatedLabel($storageStatsLastRecalculatedAt),
-            'php_version' => PHP_VERSION,
-            'php_ext_fileinfo' => extension_loaded('fileinfo'),
-            'php_ext_gd' => extension_loaded('gd'),
-            'php_ext_mbstring' => extension_loaded('mbstring'),
-            'php_file_uploads' => (bool)ini_get('file_uploads'),
-            'php_upload_max_filesize' => ini_get('upload_max_filesize'),
-            'php_post_max_size' => ini_get('post_max_size'),
-            'php_memory_limit' => ini_get('memory_limit'),
-            'app_version' => APP_VERSION,
-            'database_version' => (string)(Setting::get('database_version') ?? 'unknown'),
-        ]);
-    }
-
     public function saveAccountSettings() {
         $this->requireAdminUser();
         Auth::csrfValidate();
@@ -92,7 +28,7 @@ class AdminController extends Controller {
         Setting::set('new_user_notification', isset($_POST['new_user_notification']) ? '1' : '0');
 
         $this->flash('success', 'accounts_saved');
-        $this->redirect('/admin');
+        $this->redirect('/controlpanel');
     }
 
     public function saveAnnouncementSettings() {
@@ -110,7 +46,7 @@ class AdminController extends Controller {
         Setting::set('announcement_message', $announcement);
 
         $this->flash('success', 'announcement_saved');
-        $this->redirect('/admin');
+        $this->redirect('/controlpanel');
     }
 
     public function saveMoreSettings() {
@@ -123,7 +59,7 @@ class AdminController extends Controller {
         Setting::set('check_for_updates', isset($_POST['check_for_updates']) ? '1' : '0');
 
         $this->flash('success', 'more_saved');
-        $this->redirect('/admin');
+        $this->redirect('/controlpanel');
     }
 
     public function saveAttachmentSettings() {
@@ -142,7 +78,7 @@ class AdminController extends Controller {
         Setting::set('attachments_maximum_file_size_mb', (string)$maxMb);
 
         $this->flash('success', 'attachments_saved');
-        $this->redirect('/admin');
+        $this->redirect('/controlpanel');
     }
 
     public function saveMailSettings() {
@@ -166,7 +102,7 @@ class AdminController extends Controller {
         Setting::set('mail_from_name', $mailFromName);
 
         $this->flash('success', 'mail_saved');
-        $this->redirect('/admin');
+        $this->redirect('/controlpanel');
     }
 
     public function sendTestMail() {
@@ -178,7 +114,7 @@ class AdminController extends Controller {
 
         if ($mailHost === '' || $mailUser === '') {
             $this->flash('mail_test_error', 'Mail host and username must be configured before sending a test email.');
-            $this->redirect('/admin');
+            $this->redirect('/controlpanel');
         }
 
         $mailPort = (int)(Setting::get('mail_port') ?? 587);
@@ -208,7 +144,7 @@ class AdminController extends Controller {
             $this->flash('mail_test_error', $e->getMessage());
         }
 
-        $this->redirect('/admin');
+        $this->redirect('/controlpanel');
     }
 
         public function recalculateStorageStats() {
@@ -227,7 +163,7 @@ class AdminController extends Controller {
                 $this->flash('error', 'storage_recalculate_failed');
             }
 
-            $this->redirect('/admin');
+            $this->redirect('/controlpanel');
         }
 
     public function checkForUpdatesNow() {
@@ -239,16 +175,16 @@ class AdminController extends Controller {
         if (($result['status'] ?? '') === 'update_available') {
             $latestVersion = (string)($result['latest_version'] ?? '');
             $this->flash('success', 'update_check_update_available:' . $latestVersion);
-            $this->redirect('/admin');
+            $this->redirect('/controlpanel');
         }
 
         if (($result['status'] ?? '') === 'up_to_date') {
             $this->flash('success', 'update_check_up_to_date');
-            $this->redirect('/admin');
+            $this->redirect('/controlpanel');
         }
 
         $this->flash('error', 'update_check_failed');
-        $this->redirect('/admin');
+        $this->redirect('/controlpanel');
     }
 
     private function storageRoot(): string {

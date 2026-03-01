@@ -229,72 +229,6 @@ class HomeController extends Controller {
         ]);
     }
 
-    public function settings() {
-        Auth::requireAuth();
-        $user = Auth::user();
-        $this->clearExpiredEmailChangeRequest((int)$user->id);
-        $pendingEmailChange = $this->getPendingEmailChangeRequest((int)$user->id);
-        $settingPrefix = (int)$user->id;
-        $browserNotif = (string)(Setting::get('browser_notifications_' . $settingPrefix) ?? '0');
-        $friendRequestSoundNotif = (string)(Setting::get('sound_friend_request_' . $settingPrefix) ?? '1');
-        $newMessageSoundNotif = (string)(Setting::get('sound_new_message_' . $settingPrefix) ?? '1');
-        $otherNotificationSoundNotif = (string)(Setting::get('sound_other_notifications_' . $settingPrefix) ?? '1');
-        $outgoingCallRingSoundNotif = (string)(Setting::get('sound_outgoing_call_ring_' . $settingPrefix) ?? '1');
-        $usernameChangeAvailableAt = $this->usernameChangeAvailableAt($user);
-        $invitesEnabled = (string)(Setting::get('invites_enabled') ?? '1') === '1';
-        $inviteLimit = (int) (Setting::get('invite_codes_per_user') ?? 0);
-        $inviteCount = 0;
-        $invites = [];
-        if ($invitesEnabled) {
-            $inviteCount = (int) Database::query("SELECT COUNT(*) FROM invite_codes WHERE creator_id = ?", [$user->id])->fetchColumn();
-            $invites = Database::query("SELECT ic.code, ic.used_by, u.username AS used_by_username, ic.used_at, ic.created_at FROM invite_codes ic LEFT JOIN users u ON u.id = ic.used_by WHERE ic.creator_id = ? ORDER BY ic.created_at DESC", [$user->id])->fetchAll();
-        }
-        $currentSessionToken = (string)($_SESSION['auth_session_token'] ?? '');
-        $sessions = User::getActiveSessions((int)$user->id);
-        foreach ($sessions as $session) {
-            $session->is_current = ($currentSessionToken !== '' && hash_equals($currentSessionToken, (string)$session->session_token));
-        }
-
-        $pendingReportCount = 0;
-        if (strtolower((string)($user->role ?? '')) === 'admin') {
-            $pendingReportCount = (int) Database::query(
-                "SELECT COUNT(*) FROM reports WHERE status = 'pending'"
-            )->fetchColumn();
-        }
-
-        $userTimezone = (string)(Setting::get('timezone_' . $settingPrefix) ?? 'UTC+0');
-
-        $this->view('settings', [
-            'user' => $user,
-            'browserNotif' => (int) $browserNotif,
-            'friendRequestSoundNotif' => (int) $friendRequestSoundNotif,
-            'newMessageSoundNotif' => (int) $newMessageSoundNotif,
-            'otherNotificationSoundNotif' => (int) $otherNotificationSoundNotif,
-            'outgoingCallRingSoundNotif' => (int) $outgoingCallRingSoundNotif,
-            'userTimezone' => $userTimezone,
-            'usernameCanChangeNow' => $usernameChangeAvailableAt === null,
-            'usernameChangeAvailableAt' => $usernameChangeAvailableAt,
-            'invitesEnabled' => $invitesEnabled,
-            'inviteLimit' => $inviteLimit,
-            'inviteCount' => $inviteCount,
-            'invites' => $invites,
-            'sessions' => $sessions,
-            'pendingReportCount' => $pendingReportCount,
-            'pendingEmailChange' => $pendingEmailChange,
-            'csrf' => $this->csrfToken()
-        ]);
-    }
-
-    public function info() {
-        Auth::requireAuth();
-        $user = Auth::user();
-
-        $this->view('info', [
-            'user' => $user,
-            'csrf' => $this->csrfToken()
-        ]);
-    }
-
     public function exitSession() {
         Auth::requireAuth();
         Auth::csrfValidate();
@@ -303,7 +237,7 @@ class HomeController extends Controller {
         $sessionId = (int)($_POST['session_id'] ?? 0);
         if ($sessionId <= 0) {
             $this->flash('error', 'session_not_found');
-            $this->redirect('/settings');
+            $this->redirect('/controlpanel');
         }
 
         $session = Database::query(
@@ -313,7 +247,7 @@ class HomeController extends Controller {
 
         if (!$session) {
             $this->flash('error', 'session_not_found');
-            $this->redirect('/settings');
+            $this->redirect('/controlpanel');
         }
 
         $currentToken = (string)($_SESSION['auth_session_token'] ?? '');
@@ -321,7 +255,7 @@ class HomeController extends Controller {
 
         if (!User::revokeSessionById((int)$user->id, $sessionId)) {
             $this->flash('error', 'session_not_found');
-            $this->redirect('/settings');
+            $this->redirect('/controlpanel');
         }
 
         if (User::activeSessionCount((int)$user->id) === 0) {
@@ -336,7 +270,7 @@ class HomeController extends Controller {
         }
 
         $this->flash('success', 'session_exited');
-        $this->redirect('/settings');
+        $this->redirect('/controlpanel');
     }
 
     public function generateInvite() {
@@ -347,26 +281,26 @@ class HomeController extends Controller {
         $invitesEnabled = (string)(Setting::get('invites_enabled') ?? '1') === '1';
         if (!$invitesEnabled) {
             $this->flash('error', 'invite_disabled');
-            $this->redirect('/settings');
+            $this->redirect('/controlpanel');
         }
 
         $inviteLimit = (int) (Setting::get('invite_codes_per_user') ?? 0);
         if ($inviteLimit <= 0) {
             $this->flash('error', 'invite_disabled');
-            $this->redirect('/settings');
+            $this->redirect('/controlpanel');
         }
 
         $inviteCount = (int) Database::query("SELECT COUNT(*) FROM invite_codes WHERE creator_id = ?", [$user->id])->fetchColumn();
         if ($inviteCount >= $inviteLimit) {
             $this->flash('error', 'invite_limit');
-            $this->redirect('/settings');
+            $this->redirect('/controlpanel');
         }
 
         $newCode = $this->generateInviteCode();
         Database::query("INSERT INTO invite_codes (code, creator_id) VALUES (?, ?)", [$newCode, $user->id]);
 
         $this->flash('success', 'invite_created');
-        $this->redirect('/settings');
+        $this->redirect('/controlpanel');
     }
 
     public function deleteInvite() {
@@ -376,14 +310,14 @@ class HomeController extends Controller {
         $invitesEnabled = (string)(Setting::get('invites_enabled') ?? '1') === '1';
         if (!$invitesEnabled) {
             $this->flash('error', 'invite_disabled');
-            $this->redirect('/settings');
+            $this->redirect('/controlpanel');
         }
 
         $user = Auth::user();
         $inviteCode = trim($_POST['invite_code'] ?? '');
         if (!preg_match('/^\d{4}-\d{4}$/', $inviteCode)) {
             $this->flash('error', 'invite_delete_unavailable');
-            $this->redirect('/settings');
+            $this->redirect('/controlpanel');
         }
 
         $invite = Database::query(
@@ -393,7 +327,7 @@ class HomeController extends Controller {
 
         if (!$invite) {
             $this->flash('error', 'invite_delete_unavailable');
-            $this->redirect('/settings');
+            $this->redirect('/controlpanel');
         }
 
         $deleted = Database::query(
@@ -403,11 +337,11 @@ class HomeController extends Controller {
 
         if ($deleted->rowCount() < 1) {
             $this->flash('error', 'invite_delete_unavailable');
-            $this->redirect('/settings');
+            $this->redirect('/controlpanel');
         }
 
         $this->flash('success', 'invite_deleted');
-        $this->redirect('/settings');
+        $this->redirect('/controlpanel');
     }
 
     public function saveAccountEmail() {
@@ -419,19 +353,19 @@ class HomeController extends Controller {
         $email = trim($_POST['email'] ?? '');
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $this->flash('error', 'email_invalid');
-            $this->redirect('/settings');
+            $this->redirect('/controlpanel');
         }
 
         if (strcasecmp($email, (string)$user->email) === 0) {
             Database::query("DELETE FROM email_change_requests WHERE user_id = ?", [$user->id]);
             $this->flash('success', 'email_saved');
-            $this->redirect('/settings');
+            $this->redirect('/controlpanel');
         }
 
         $existingEmail = Database::query("SELECT id FROM users WHERE email = ? AND id <> ?", [$email, $user->id])->fetch();
         if ($existingEmail) {
             $this->flash('error', 'email_taken');
-            $this->redirect('/settings');
+            $this->redirect('/controlpanel');
         }
 
         $emailPendingForAnotherUser = Database::query(
@@ -440,7 +374,7 @@ class HomeController extends Controller {
         )->fetch();
         if ($emailPendingForAnotherUser) {
             $this->flash('error', 'email_taken');
-            $this->redirect('/settings');
+            $this->redirect('/controlpanel');
         }
 
         $code = $this->generateSixDigitCode();
@@ -458,7 +392,7 @@ class HomeController extends Controller {
         );
 
         $this->flash('success', 'email_change_sent');
-        $this->redirect('/settings');
+        $this->redirect('/controlpanel');
     }
 
     public function verifyAccountEmailChange() {
@@ -471,7 +405,7 @@ class HomeController extends Controller {
         $code = trim($_POST['code'] ?? '');
         if (!preg_match('/^\d{6}$/', $code)) {
             $this->flash('error', 'email_change_code_invalid');
-            $this->redirect('/settings');
+            $this->redirect('/controlpanel');
         }
 
         $pendingRequest = Database::query(
@@ -487,32 +421,32 @@ class HomeController extends Controller {
 
             if (!$pendingExists) {
                 $this->flash('error', 'email_change_expired');
-                $this->redirect('/settings');
+                $this->redirect('/controlpanel');
             }
 
             $this->flash('error', 'email_change_code_invalid');
-            $this->redirect('/settings');
+            $this->redirect('/controlpanel');
         }
 
         $newEmail = trim((string)$pendingRequest->new_email);
         if (!filter_var($newEmail, FILTER_VALIDATE_EMAIL)) {
             Database::query("DELETE FROM email_change_requests WHERE user_id = ?", [$user->id]);
             $this->flash('error', 'email_change_expired');
-            $this->redirect('/settings');
+            $this->redirect('/controlpanel');
         }
 
         $existingEmail = Database::query("SELECT id FROM users WHERE email = ? AND id <> ?", [$newEmail, $user->id])->fetch();
         if ($existingEmail) {
             Database::query("DELETE FROM email_change_requests WHERE user_id = ?", [$user->id]);
             $this->flash('error', 'email_taken');
-            $this->redirect('/settings');
+            $this->redirect('/controlpanel');
         }
 
         Database::query("UPDATE users SET email = ?, email_verified_at = NOW() WHERE id = ?", [$newEmail, $user->id]);
         Database::query("DELETE FROM email_change_requests WHERE user_id = ?", [$user->id]);
 
         $this->flash('success', 'email_saved');
-        $this->redirect('/settings');
+        $this->redirect('/controlpanel');
     }
 
     public function saveAccountPassword() {
@@ -526,23 +460,23 @@ class HomeController extends Controller {
 
         if (!password_verify($currentPassword, (string)$user->password)) {
             $this->flash('error', 'password_current_invalid');
-            $this->redirect('/settings');
+            $this->redirect('/controlpanel');
         }
 
         if (strlen($newPassword) < 8) {
             $this->flash('error', 'password_invalid');
-            $this->redirect('/settings');
+            $this->redirect('/controlpanel');
         }
 
         if (!hash_equals($newPassword, $confirmPassword)) {
             $this->flash('error', 'password_mismatch');
-            $this->redirect('/settings');
+            $this->redirect('/controlpanel');
         }
 
         $hashedPassword = password_hash($newPassword, PASSWORD_DEFAULT);
         Database::query("UPDATE users SET password = ? WHERE id = ?", [$hashedPassword, $user->id]);
         $this->flash('success', 'password_saved');
-        $this->redirect('/settings');
+        $this->redirect('/controlpanel');
     }
 
     public function saveProfileUsername() {
@@ -554,23 +488,23 @@ class HomeController extends Controller {
 
         if (!User::isUsernameFormatValid($username)) {
             $this->flash('error', 'username_invalid');
-            $this->redirect('/settings');
+            $this->redirect('/controlpanel');
         }
 
         if ($username === User::normalizeUsername((string)$user->username)) {
             $this->flash('error', 'username_same');
-            $this->redirect('/settings');
+            $this->redirect('/controlpanel');
         }
 
         $usernameChangeAvailableAt = $this->usernameChangeAvailableAt($user);
         if ($usernameChangeAvailableAt !== null) {
             $this->flash('error', 'username_cooldown');
-            $this->redirect('/settings');
+            $this->redirect('/controlpanel');
         }
 
         if (!User::isUsernameAvailableForUser($username, (int)$user->id, (string)$user->username)) {
             $this->flash('error', 'username_taken');
-            $this->redirect('/settings');
+            $this->redirect('/controlpanel');
         }
 
         Database::query(
@@ -580,7 +514,7 @@ class HomeController extends Controller {
         User::recordUsernameHistory((int)$user->id, $username);
 
         $this->flash('success', 'username_saved');
-        $this->redirect('/settings');
+        $this->redirect('/controlpanel');
     }
 
     public function saveAvatarSettings() {
@@ -594,7 +528,7 @@ class HomeController extends Controller {
                 $this->json(['error' => 'avatar_upload_failed'], 400);
             }
             $this->flash('error', 'avatar_upload_failed');
-            $this->redirect('/settings');
+            $this->redirect('/controlpanel');
         }
 
         $avatarError = $this->handleAvatarUpload($userId, $_FILES['avatar']);
@@ -603,7 +537,7 @@ class HomeController extends Controller {
                 $this->json(['error' => $avatarError], 400);
             }
             $this->flash('error', $avatarError);
-            $this->redirect('/settings');
+            $this->redirect('/controlpanel');
         }
 
         if ($isAjax) {
@@ -613,7 +547,7 @@ class HomeController extends Controller {
         }
 
         $this->flash('success', 'avatar_saved');
-        $this->redirect('/settings');
+        $this->redirect('/controlpanel');
     }
 
     public function deleteAvatarSettings() {
@@ -629,7 +563,7 @@ class HomeController extends Controller {
         }
 
         $this->flash('success', 'avatar_removed');
-        $this->redirect('/settings');
+        $this->redirect('/controlpanel');
     }
 
     public function saveNotificationSettings() {
@@ -672,7 +606,7 @@ class HomeController extends Controller {
         }
 
         $this->flash('success', 'notifications_saved');
-        $this->redirect('/settings');
+        $this->redirect('/controlpanel');
     }
 
     public function saveTimezoneSettings() {
@@ -708,7 +642,7 @@ class HomeController extends Controller {
         }
 
         $this->flash('success', 'timezone_saved');
-        $this->redirect('/settings');
+        $this->redirect('/controlpanel');
     }
 
     private function usernameChangeAvailableAt($user) {
