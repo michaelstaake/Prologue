@@ -6,7 +6,7 @@ require_once __DIR__ . '/../../vendor/phpmailer/src/Exception.php';
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception as MailException;
 
-class ConfigController extends Controller {
+class AdminController extends Controller {
     private function requireAdminUser() {
         Auth::requireAuth();
         $user = Auth::user();
@@ -21,6 +21,9 @@ class ConfigController extends Controller {
         $user = $this->requireAdminUser();
         $bruteForceProtection = $this->getBruteForceProtectionData();
         $storageRoot = $this->storageRoot();
+        $pendingReportCount = (int) Database::query(
+            "SELECT COUNT(*) FROM reports WHERE status = 'pending'"
+        )->fetchColumn();
 
         $storageStatsLastRecalculatedAt = trim((string)(Setting::get('storage_stats_last_recalculated_at') ?? ''));
         $hasStorageStats = $storageStatsLastRecalculatedAt !== '';
@@ -36,7 +39,7 @@ class ConfigController extends Controller {
                 : 0.0;
         }
 
-        $this->view('config', [
+        $this->view('admin', [
             'user' => $user,
             'csrf' => $this->csrfToken(),
             'announcement_message' => (string)(Setting::get('announcement_message') ?? ''),
@@ -55,6 +58,7 @@ class ConfigController extends Controller {
             'attachment_logging' => (string)(Setting::get('attachment_logging') ?? '0') === '1',
             'check_for_updates' => (string)(Setting::get('check_for_updates') ?? '0') === '1',
             'new_user_notification' => (string)(Setting::get('new_user_notification') ?? '0') === '1',
+            'pendingReportCount' => $pendingReportCount,
             'failed_login_attempts_24h' => $bruteForceProtection['failed_login_attempts_24h'],
             'failed_registration_attempts_24h' => $bruteForceProtection['failed_registration_attempts_24h'],
             'active_banned_ips' => $bruteForceProtection['active_banned_ips'],
@@ -88,7 +92,7 @@ class ConfigController extends Controller {
         Setting::set('new_user_notification', isset($_POST['new_user_notification']) ? '1' : '0');
 
         $this->flash('success', 'accounts_saved');
-        $this->redirect('/config');
+        $this->redirect('/admin');
     }
 
     public function saveAnnouncementSettings() {
@@ -106,7 +110,7 @@ class ConfigController extends Controller {
         Setting::set('announcement_message', $announcement);
 
         $this->flash('success', 'announcement_saved');
-        $this->redirect('/config');
+        $this->redirect('/admin');
     }
 
     public function saveMoreSettings() {
@@ -119,7 +123,7 @@ class ConfigController extends Controller {
         Setting::set('check_for_updates', isset($_POST['check_for_updates']) ? '1' : '0');
 
         $this->flash('success', 'more_saved');
-        $this->redirect('/config');
+        $this->redirect('/admin');
     }
 
     public function saveAttachmentSettings() {
@@ -138,7 +142,7 @@ class ConfigController extends Controller {
         Setting::set('attachments_maximum_file_size_mb', (string)$maxMb);
 
         $this->flash('success', 'attachments_saved');
-        $this->redirect('/config');
+        $this->redirect('/admin');
     }
 
     public function saveMailSettings() {
@@ -162,7 +166,7 @@ class ConfigController extends Controller {
         Setting::set('mail_from_name', $mailFromName);
 
         $this->flash('success', 'mail_saved');
-        $this->redirect('/config');
+        $this->redirect('/admin');
     }
 
     public function sendTestMail() {
@@ -174,7 +178,7 @@ class ConfigController extends Controller {
 
         if ($mailHost === '' || $mailUser === '') {
             $this->flash('mail_test_error', 'Mail host and username must be configured before sending a test email.');
-            $this->redirect('/config');
+            $this->redirect('/admin');
         }
 
         $mailPort = (int)(Setting::get('mail_port') ?? 587);
@@ -204,7 +208,7 @@ class ConfigController extends Controller {
             $this->flash('mail_test_error', $e->getMessage());
         }
 
-        $this->redirect('/config');
+        $this->redirect('/admin');
     }
 
         public function recalculateStorageStats() {
@@ -223,7 +227,7 @@ class ConfigController extends Controller {
                 $this->flash('error', 'storage_recalculate_failed');
             }
 
-            $this->redirect('/config');
+            $this->redirect('/admin');
         }
 
     public function checkForUpdatesNow() {
@@ -235,16 +239,16 @@ class ConfigController extends Controller {
         if (($result['status'] ?? '') === 'update_available') {
             $latestVersion = (string)($result['latest_version'] ?? '');
             $this->flash('success', 'update_check_update_available:' . $latestVersion);
-            $this->redirect('/config');
+            $this->redirect('/admin');
         }
 
         if (($result['status'] ?? '') === 'up_to_date') {
             $this->flash('success', 'update_check_up_to_date');
-            $this->redirect('/config');
+            $this->redirect('/admin');
         }
 
         $this->flash('error', 'update_check_failed');
-        $this->redirect('/config');
+        $this->redirect('/admin');
     }
 
     private function storageRoot(): string {

@@ -270,16 +270,16 @@ $router->get('/trash', 'TrashController@index');
 $router->get('/trash/{chat_number}', 'TrashController@show');
 $router->post('/trash/delete', 'TrashController@delete');
 
-// Config (admin only)
-$router->get('/config', 'ConfigController@index');
-$router->post('/config/mail', 'ConfigController@saveMailSettings');
-$router->post('/config/mail/test', 'ConfigController@sendTestMail');
-$router->post('/config/storage/recalculate', 'ConfigController@recalculateStorageStats');
-$router->post('/config/check-updates', 'ConfigController@checkForUpdatesNow');
-$router->post('/config/accounts', 'ConfigController@saveAccountSettings');
-$router->post('/config/attachments', 'ConfigController@saveAttachmentSettings');
-$router->post('/config/announcement', 'ConfigController@saveAnnouncementSettings');
-$router->post('/config/more', 'ConfigController@saveMoreSettings');
+// Admin (admin only)
+$router->get('/admin', 'AdminController@index');
+$router->post('/admin/mail', 'AdminController@saveMailSettings');
+$router->post('/admin/mail/test', 'AdminController@sendTestMail');
+$router->post('/admin/storage/recalculate', 'AdminController@recalculateStorageStats');
+$router->post('/admin/check-updates', 'AdminController@checkForUpdatesNow');
+$router->post('/admin/accounts', 'AdminController@saveAccountSettings');
+$router->post('/admin/attachments', 'AdminController@saveAttachmentSettings');
+$router->post('/admin/announcement', 'AdminController@saveAnnouncementSettings');
+$router->post('/admin/more', 'AdminController@saveMoreSettings');
 
 // Settings
 $router->get('/settings', 'HomeController@settings');

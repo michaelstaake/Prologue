@@ -1,5 +1,42 @@
 <div class="p-8 overflow-auto space-y-6">
-    <h1 class="text-3xl font-bold">Config</h1>
+    <h1 class="text-3xl font-bold">Admin</h1>
+
+    <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 w-full">
+        <h2 class="text-xl font-semibold mb-4">Functions</h2>
+        <div class="flex flex-wrap items-center gap-3">
+            <a
+                href="<?= htmlspecialchars(base_url('/reports'), ENT_QUOTES, 'UTF-8') ?>"
+                class="inline-flex items-center gap-2 <?= ((int)($pendingReportCount ?? 0) > 0) ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-zinc-700 hover:bg-zinc-600' ?> px-6 py-2 rounded-xl"
+            >
+                <i class="fa-regular fa-flag"></i>
+                <span>Reports</span>
+                <span class="min-w-[1.25rem] h-5 px-1 rounded-full bg-zinc-900/70 border border-emerald-300/50 text-white text-xs inline-flex items-center justify-center <?= ((int)($pendingReportCount ?? 0) > 0) ? '' : 'hidden' ?>">
+                    <?= htmlspecialchars((string)min(99, (int)($pendingReportCount ?? 0)) . (((int)($pendingReportCount ?? 0) > 99) ? '+' : ''), ENT_QUOTES, 'UTF-8') ?>
+                </span>
+            </a>
+            <a
+                href="<?= htmlspecialchars(base_url('/users'), ENT_QUOTES, 'UTF-8') ?>"
+                class="inline-flex items-center gap-2 bg-zinc-700 hover:bg-zinc-600 px-6 py-2 rounded-xl"
+            >
+                <i class="fa-solid fa-user-shield"></i>
+                <span>Users</span>
+            </a>
+            <a
+                href="<?= htmlspecialchars(base_url('/tree'), ENT_QUOTES, 'UTF-8') ?>"
+                class="inline-flex items-center gap-2 bg-zinc-700 hover:bg-zinc-600 px-6 py-2 rounded-xl"
+            >
+                <i class="fa-solid fa-diagram-project"></i>
+                <span>Tree</span>
+            </a>
+            <a
+                href="<?= htmlspecialchars(base_url('/trash'), ENT_QUOTES, 'UTF-8') ?>"
+                class="inline-flex items-center gap-2 bg-zinc-700 hover:bg-zinc-600 px-6 py-2 rounded-xl"
+            >
+                <i class="fa-regular fa-trash-can"></i>
+                <span>Trash</span>
+            </a>
+        </div>
+    </section>
 
     <?php
         $toastMessage = '';
@@ -63,11 +100,13 @@
         </div>
     <?php endif; ?>
 
-    <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-2xl">
+    <div id="admin-sections" class="space-y-6 xl:space-y-0 xl:columns-2 xl:gap-6">
+
+    <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 w-full">
         <h2 class="text-xl font-semibold mb-1">Mail</h2>
         <p class="text-sm text-zinc-400 mb-5">SMTP settings used to send verification and notification emails. Leave the password field blank to keep the current password.</p>
 
-        <form method="POST" action="<?= htmlspecialchars(base_url('/config/mail'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-4">
+        <form method="POST" action="<?= htmlspecialchars(base_url('/admin/mail'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-4">
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
 
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -158,7 +197,7 @@
 
         <div class="mt-5 pt-5 border-t border-zinc-700">
             <p class="text-sm text-zinc-400 mb-3">Send a test email to your account address to verify the settings above are working.</p>
-            <form method="POST" action="<?= htmlspecialchars(base_url('/config/mail/test'), ENT_QUOTES, 'UTF-8') ?>">
+            <form method="POST" action="<?= htmlspecialchars(base_url('/admin/mail/test'), ENT_QUOTES, 'UTF-8') ?>">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
                 <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 bg-zinc-700 hover:bg-zinc-600 text-zinc-100 rounded-xl font-medium transition">
                     <i class="fa-regular fa-paper-plane"></i>
@@ -168,11 +207,11 @@
         </div>
     </section>
 
-    <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-2xl">
+    <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 w-full">
         <h2 class="text-xl font-semibold mb-1">Accounts</h2>
         <p class="text-sm text-zinc-400 mb-5">Control how new accounts are created and verified.</p>
 
-        <form method="POST" action="<?= htmlspecialchars(base_url('/config/accounts'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-4">
+        <form method="POST" action="<?= htmlspecialchars(base_url('/admin/accounts'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-4">
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
 
             <label class="flex items-center justify-between gap-4 rounded-xl border border-zinc-700 bg-zinc-800/30 px-4 py-3 cursor-pointer">
@@ -227,7 +266,7 @@
         </form>
     </section>
 
-    <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-2xl">
+    <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 w-full">
         <h2 class="text-xl font-semibold mb-1">Attachments</h2>
         <p class="text-sm text-zinc-400 mb-5">Control which file types users can attach and the maximum upload size. The size limit is capped by your server's PHP settings.</p>
 
@@ -239,7 +278,7 @@
             };
         ?>
 
-        <form method="POST" action="<?= htmlspecialchars(base_url('/config/attachments'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-5" id="attachments-type-form">
+        <form method="POST" action="<?= htmlspecialchars(base_url('/admin/attachments'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-5" id="attachments-type-form">
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
 
             <div class="flex items-center justify-end">
@@ -324,11 +363,11 @@
         </script>
     </section>
 
-    <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-2xl" id="announcement">
+    <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 w-full" id="announcement">
         <h2 class="text-xl font-semibold mb-1">Announcement</h2>
         <p class="text-sm text-zinc-400 mb-5">Show a plain text alert on the dashboard for all users. Leave blank to hide it.</p>
 
-        <form method="POST" action="<?= htmlspecialchars(base_url('/config/announcement'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-4">
+        <form method="POST" action="<?= htmlspecialchars(base_url('/admin/announcement'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-4">
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
 
             <div>
@@ -368,7 +407,7 @@
         </script>
     </section>
 
-    <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-2xl">
+    <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 w-full">
         <h2 class="text-xl font-semibold mb-1">Brute Force Protection</h2>
         <p class="text-sm text-zinc-400 mb-5">Rate-limit status for failed authentication attempts.</p>
 
@@ -404,7 +443,7 @@
         </div>
     </section>
 
-    <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-2xl">
+    <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 w-full">
         <h2 class="text-xl font-semibold mb-1">Storage size</h2>
         <p class="text-sm text-zinc-400 mb-5">Storage usage is calculated manually to avoid resource-intensive automatic scans.</p>
 
@@ -421,7 +460,7 @@
         </div>
 
         <div class="mt-5 pt-5 border-t border-zinc-700">
-            <form method="POST" action="<?= htmlspecialchars(base_url('/config/storage/recalculate'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-3">
+            <form method="POST" action="<?= htmlspecialchars(base_url('/admin/storage/recalculate'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-3">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
                 <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 bg-zinc-700 hover:bg-zinc-600 text-zinc-100 rounded-xl font-medium transition">
                     <i class="fa-solid fa-rotate-right"></i>
@@ -432,7 +471,7 @@
         </div>
     </section>
 
-    <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-2xl">
+    <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 w-full">
         <h2 class="text-xl font-semibold mb-1">Diagnostics</h2>
         <p class="text-sm text-zinc-400 mb-5">Server environment checks relevant to file uploads and storage.</p>
         <div class="space-y-3">
@@ -503,7 +542,7 @@
         </div>
     </section>
 
-    <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-2xl">
+    <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 w-full">
         <h2 class="text-xl font-semibold mb-4">Version</h2>
         <div class="space-y-3 text-zinc-200">
             <div class="flex items-center justify-between gap-4 border border-zinc-700 bg-zinc-800/40 rounded-xl px-4 py-3">
@@ -517,11 +556,11 @@
         </div>
     </section>
 
-    <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-2xl">
+    <section class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 w-full">
         <h2 class="text-xl font-semibold mb-1">More</h2>
         <p class="text-sm text-zinc-400 mb-5">Additional server-level settings.</p>
 
-        <form method="POST" action="<?= htmlspecialchars(base_url('/config/more'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-4">
+        <form method="POST" action="<?= htmlspecialchars(base_url('/admin/more'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-4">
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
 
             <label class="flex items-center justify-between gap-4 rounded-xl border border-zinc-700 bg-zinc-800/30 px-4 py-3 cursor-pointer">
@@ -552,7 +591,7 @@
                 <p class="text-xs text-zinc-500 mb-2">Run the same update check immediately.</p>
                 <button
                     type="submit"
-                    formaction="<?= htmlspecialchars(base_url('/config/check-updates'), ENT_QUOTES, 'UTF-8') ?>"
+                    formaction="<?= htmlspecialchars(base_url('/admin/check-updates'), ENT_QUOTES, 'UTF-8') ?>"
                     class="w-full flex items-center justify-between gap-4 rounded-xl border border-zinc-700 bg-zinc-800/30 px-4 py-3 text-left text-zinc-100 hover:bg-zinc-800/50 transition"
                 >
                     <span class="block">Check for updates now</span>
@@ -565,4 +604,17 @@
             </div>
         </form>
     </section>
+
+    </div>
+
+    <style>
+    @media (min-width: 1280px) {
+        #admin-sections > section {
+            display: inline-block;
+            width: 100%;
+            break-inside: avoid;
+            margin-bottom: 1.5rem;
+        }
+    }
+    </style>
 </div>
