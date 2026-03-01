@@ -9,7 +9,7 @@
     </div>
 
     <h1 class="text-3xl font-bold">Bot API Documentation</h1>
-    <p class="text-zinc-400">Use Bot API keys to send messages to group chats you own from external applications, scripts, or services.</p>
+    <p class="text-zinc-400">Use Bot API keys to send messages to group chats you own from external applications, scripts, or services. User keys will have more access but will come later.</p>
 
     <!-- Authentication -->
     <section class="space-y-3">
