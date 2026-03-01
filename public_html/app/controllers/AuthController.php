@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../../vendor/phpmailer/src/PHPMailer.php';
 require_once __DIR__ . '/../../vendor/phpmailer/src/SMTP.php';
 require_once __DIR__ . '/../../vendor/phpmailer/src/Exception.php';
+require_once __DIR__ . '/../modules/2fa/TwoFAManager.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
@@ -70,16 +71,14 @@ class AuthController extends Controller {
 
         $rememberMe = !empty($_POST['remember_me']);
 
-        if (!$shouldBypassBootstrap2FA && Auth::needs2FA($user->id, $ip)) {
-            $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
-            $expires = date('Y-m-d H:i:s', strtotime('+10 minutes'));
-            Database::query("INSERT INTO twofa_codes (user_id, code, ip, expires_at) VALUES (?, ?, ?, ?)",
-                [$user->id, $code, $ip, $expires]);
-
-            $this->sendEmail($user->email, 'Your Prologue 2FA Code', "Your login code is <b>{$code}</b> (valid 10 minutes).");
-            $_SESSION['2fa_pending_user'] = $user->id;
-            $_SESSION['2fa_remember_me'] = $rememberMe;
-            $this->redirect('/2fa');
+        $twofaProvider = TwoFAManager::getAvailableProvider((int)$user->id);
+        if (!$shouldBypassBootstrap2FA && $twofaProvider && Auth::needs2FA($user->id, $ip)) {
+            if ($twofaProvider->sendChallenge((int)$user->id, $ip)) {
+                $_SESSION['2fa_pending_user'] = $user->id;
+                $_SESSION['2fa_remember_me'] = $rememberMe;
+                $_SESSION['2fa_provider'] = $twofaProvider->getName();
+                $this->redirect('/2fa');
+            }
         }
 
         Auth::markTrustedIP($user->id, $ip);
@@ -100,7 +99,12 @@ class AuthController extends Controller {
 
     public function show2FA() {
         if (!isset($_SESSION['2fa_pending_user'])) $this->redirect('/login');
-        $this->view('auth/twofa', ['csrf' => $this->csrfToken()]);
+        $providerName = $_SESSION['2fa_provider'] ?? 'email';
+        $provider = TwoFAManager::getProviderByName($providerName);
+        $this->view('auth/twofa', [
+            'csrf' => $this->csrfToken(),
+            'providerLabel' => $provider ? $provider->getLabel() : 'Email',
+        ]);
     }
 
     public function verify2FA() {
@@ -123,20 +127,19 @@ class AuthController extends Controller {
             $this->redirect('/2fa');
         }
 
-        $row = Database::query("SELECT * FROM twofa_codes WHERE user_id = ? AND code = ? AND expires_at > NOW() AND ip = ?",
-            [$userId, $code, $ip])->fetch();
+        $providerName = $_SESSION['2fa_provider'] ?? '';
+        $provider = TwoFAManager::getProviderByName($providerName);
 
-        if (!$row) {
+        if (!$provider || !$provider->verifyCode((int)$userId, $code, $ip)) {
             $this->flash('error', 'invalid');
             $this->redirect('/2fa');
         }
 
-        // Clean up and trust IP
-        Database::query("DELETE FROM twofa_codes WHERE user_id = ?", [$userId]);
+        $provider->cleanup((int)$userId);
         Auth::markTrustedIP($userId, $ip);
 
         $rememberMe = !empty($_SESSION['2fa_remember_me']);
-        unset($_SESSION['2fa_pending_user'], $_SESSION['2fa_remember_me']);
+        unset($_SESSION['2fa_pending_user'], $_SESSION['2fa_remember_me'], $_SESSION['2fa_provider']);
         $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
         session_regenerate_id(true);
         $_SESSION['user_id'] = (int)$userId;
@@ -533,7 +536,7 @@ class AuthController extends Controller {
             return false;
         }
 
-        if ($this->isEmailDeliveryConfigured()) {
+        if (TwoFAManager::getAvailableProvider($userId) !== null) {
             return false;
         }
 
@@ -543,13 +546,6 @@ class AuthController extends Controller {
         )->fetchColumn() > 0;
 
         return !$hasAnyPriorSession;
-    }
-
-    private function isEmailDeliveryConfigured(): bool {
-        $mailHost = trim((string)(Setting::get('mail_host') ?? ''));
-        $mailUser = trim((string)(Setting::get('mail_user') ?? ''));
-
-        return $mailHost !== '' && $mailUser !== '';
     }
 
     private function generateUserNumber() {
