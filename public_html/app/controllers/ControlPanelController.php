@@ -127,14 +127,6 @@ class ControlPanelController extends Controller {
         $this->view('controlpanel', $viewData);
     }
 
-    public function apikeys() {
-        Auth::requireAuth();
-        $this->view('apikeys', [
-            'user' => Auth::user(),
-            'csrf' => $this->csrfToken(),
-        ]);
-    }
-
     private function usernameChangeAvailableAt($user) {
         if (!$user || empty($user->username_changed_at)) {
             return null;

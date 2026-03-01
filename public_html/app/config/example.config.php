@@ -227,6 +227,7 @@ CREATE TABLE messages (
 	quoted_message_id INT NULL,
 	quoted_user_id INT NULL,
 	quoted_content TEXT NULL,
+	bot_name VARCHAR(100) NULL,
 	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 	FOREIGN KEY (chat_id) REFERENCES chats(id) ON DELETE CASCADE,
 	FOREIGN KEY (user_id) REFERENCES users(id),
@@ -427,14 +428,32 @@ CREATE TABLE channels (
 	FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
 );
 
--- API tokens for mobile
-CREATE TABLE api_tokens (
+-- API keys
+CREATE TABLE api_keys (
 	id INT AUTO_INCREMENT PRIMARY KEY,
 	user_id INT NOT NULL,
-	token VARCHAR(64) UNIQUE NOT NULL,
+	api_key CHAR(64) UNIQUE NOT NULL,
+	name VARCHAR(100) NOT NULL,
+	type ENUM('bot','user') NOT NULL,
+	status ENUM('active','expired') NOT NULL DEFAULT 'active',
+	allowed_ips TEXT NULL,
+	allowed_chats TEXT NULL,
 	expires_at TIMESTAMP NULL,
 	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-	FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+	FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+	KEY idx_api_keys_user (user_id, status),
+	KEY idx_api_keys_lookup (api_key, status)
+);
+
+-- API key usage logs
+CREATE TABLE api_key_logs (
+	id BIGINT AUTO_INCREMENT PRIMARY KEY,
+	api_key_id INT NOT NULL,
+	ip_address VARCHAR(45) NOT NULL,
+	endpoint VARCHAR(191) NOT NULL,
+	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	FOREIGN KEY (api_key_id) REFERENCES api_keys(id) ON DELETE CASCADE,
+	KEY idx_api_key_logs_key (api_key_id, created_at)
 );
 SQL;
 

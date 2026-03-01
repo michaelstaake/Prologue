@@ -12,7 +12,13 @@ class Message extends Model {
     ];
 
     public static function getRecent($chatId) {
-        return Database::query("SELECT m.*, u.username FROM messages m JOIN users u ON m.user_id = u.id WHERE m.chat_id = ? ORDER BY m.created_at DESC LIMIT 50", [$chatId])->fetchAll();
+        $messages = Database::query("SELECT m.*, u.username FROM messages m JOIN users u ON m.user_id = u.id WHERE m.chat_id = ? ORDER BY m.created_at DESC LIMIT 50", [$chatId])->fetchAll();
+        foreach ($messages as $message) {
+            if (!empty($message->bot_name)) {
+                $message->username = $message->bot_name;
+            }
+        }
+        return $messages;
     }
 
     public static function encodeMentionsForChat($chatId, $content) {

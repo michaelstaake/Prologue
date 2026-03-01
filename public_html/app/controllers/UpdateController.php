@@ -16,6 +16,34 @@ class UpdateController extends Controller {
                 "ALTER TABLE attachments ADD COLUMN file_hash CHAR(64) NULL AFTER height, ADD COLUMN dedup_source_id BIGINT NULL AFTER file_hash, ADD KEY idx_attachments_hash (file_hash, file_extension)",
                 "ALTER TABLE attachments ADD CONSTRAINT fk_attachments_dedup_source FOREIGN KEY (dedup_source_id) REFERENCES attachments(id) ON DELETE SET NULL",
             ],
+            '0.1.0' => [
+                "DROP TABLE IF EXISTS api_tokens",
+                "CREATE TABLE IF NOT EXISTS api_keys (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    user_id INT NOT NULL,
+                    api_key CHAR(64) UNIQUE NOT NULL,
+                    name VARCHAR(100) NOT NULL,
+                    type ENUM('bot','user') NOT NULL,
+                    status ENUM('active','expired') NOT NULL DEFAULT 'active',
+                    allowed_ips TEXT NULL,
+                    allowed_chats TEXT NULL,
+                    expires_at TIMESTAMP NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                    KEY idx_api_keys_user (user_id, status),
+                    KEY idx_api_keys_lookup (api_key, status)
+                )",
+                "CREATE TABLE IF NOT EXISTS api_key_logs (
+                    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                    api_key_id INT NOT NULL,
+                    ip_address VARCHAR(45) NOT NULL,
+                    endpoint VARCHAR(191) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (api_key_id) REFERENCES api_keys(id) ON DELETE CASCADE,
+                    KEY idx_api_key_logs_key (api_key_id, created_at)
+                )",
+                "ALTER TABLE messages ADD COLUMN bot_name VARCHAR(100) NULL AFTER quoted_content",
+            ],
         ];
     }
 

@@ -243,6 +243,7 @@ class AdminUserController extends Controller {
                 [(int)$targetUserId]
             );
             User::deleteAllSessionsForUser((int)$targetUserId);
+            ApiKey::expireAllForUser((int)$targetUserId);
         } else {
             Database::query(
                 "UPDATE users SET is_banned = 0 WHERE id = ?",
@@ -305,6 +306,7 @@ class AdminUserController extends Controller {
 
             Database::query("DELETE FROM reports WHERE reporter_id = ?", [(int)$targetUserId]);
             Database::query("DELETE FROM call_participants WHERE user_id = ?", [(int)$targetUserId]);
+            ApiKey::deleteAllForUser((int)$targetUserId);
 
             $retainedMessagesUserId = 0;
             if ($retainMessages) {

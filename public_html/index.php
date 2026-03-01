@@ -257,6 +257,7 @@ $router->get('/emojis/{filename}', 'EmojiController@serve');
 $router->get('/c/{chat_number}/delete', 'ChatController@deletePersonalByNumber');
 $router->post('/c/{chat_number}/delete', 'ChatController@deletePersonalByNumberConfirm');
 $router->get('/c/{chat_number}', 'ChatController@show');
+$router->post('/api/bot/send', 'ApiKeyController@botSendMessage');
 $router->post('/api/messages', 'ChatController@sendMessage'); // also used by web
 $router->post('/api/messages/react', 'ChatController@reactMessage');
 $router->post('/api/messages/pin', 'ApiController@pinMessage');
@@ -301,7 +302,10 @@ $router->post('/trash/delete', 'TrashController@delete');
 
 // Control Panel
 $router->get('/controlpanel', 'ControlPanelController@index');
-$router->get('/apikeys', 'ControlPanelController@apikeys');
+$router->get('/apikeys', 'ApiKeyController@index');
+$router->post('/apikeys/create', 'ApiKeyController@create');
+$router->post('/apikeys/expire', 'ApiKeyController@expire');
+$router->get('/apikeys/docs', 'ApiKeyController@docs');
 
 // Admin (admin only)
 $router->post('/admin/mail', 'AdminController@saveMailSettings');
