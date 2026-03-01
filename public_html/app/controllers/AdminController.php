@@ -62,6 +62,32 @@ class AdminController extends Controller {
         $this->redirect('/controlpanel');
     }
 
+    public function saveCaptchaSettings() {
+        $this->requireAdminUser();
+        Auth::csrfValidate();
+
+        $provider = trim((string)($_POST['captcha_provider'] ?? ''));
+        $validProviders = ['', 'cloudflare-turnstile', 'google-recaptcha-v2'];
+        if (!in_array($provider, $validProviders, true)) {
+            $provider = '';
+        }
+
+        Setting::set('captcha_provider', $provider);
+
+        if ($provider !== '') {
+            $siteKey = trim((string)($_POST['captcha_site_key'] ?? ''));
+            Setting::set('captcha_site_key', $siteKey);
+
+            $secretKey = trim((string)($_POST['captcha_secret_key'] ?? ''));
+            if ($secretKey !== '') {
+                Setting::set('captcha_secret_key', $secretKey);
+            }
+        }
+
+        $this->flash('success', 'captcha_saved');
+        $this->redirect('/controlpanel');
+    }
+
     public function saveAttachmentSettings() {
         $this->requireAdminUser();
         Auth::csrfValidate();

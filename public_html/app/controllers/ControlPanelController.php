@@ -103,6 +103,8 @@ class ControlPanelController extends Controller {
                 'failed_login_attempts_24h' => $bruteForceProtection['failed_login_attempts_24h'],
                 'failed_registration_attempts_24h' => $bruteForceProtection['failed_registration_attempts_24h'],
                 'active_banned_ips' => $bruteForceProtection['active_banned_ips'],
+                'captcha_provider' => (string)(Setting::get('captcha_provider') ?? ''),
+                'captcha_site_key' => (string)(Setting::get('captcha_site_key') ?? ''),
                 'storage_writable' => is_dir($storageRoot) && is_writable($storageRoot),
                 'storage_total_size_label' => $hasStorageStats && $storageTotalBytes !== null ? $this->formatBytes($storageTotalBytes) : 'N/A',
                 'storage_dedup_saved_label' => $hasStorageStats && $storageDedupSavedBytes !== null && $storageDedupSavedPercent !== null

@@ -87,16 +87,45 @@ function configure_secure_session(): void {
     ]);
 }
 
+function get_captcha_csp_domains(): array {
+    try {
+        $provider = trim((string)(Setting::get('captcha_provider') ?? ''));
+    } catch (Throwable $e) {
+        return [];
+    }
+
+    if ($provider === 'cloudflare-turnstile') {
+        return ['https://challenges.cloudflare.com'];
+    }
+
+    if ($provider === 'google-recaptcha-v2') {
+        return ['https://www.google.com', 'https://www.gstatic.com'];
+    }
+
+    return [];
+}
+
 function send_security_headers(): void {
     if (headers_sent()) {
         return;
+    }
+
+    $captchaDomains = get_captcha_csp_domains();
+    $extraScriptSrc = '';
+    $extraFrameSrc = '';
+    $extraConnectSrc = '';
+    if (!empty($captchaDomains)) {
+        $domainStr = ' ' . implode(' ', $captchaDomains);
+        $extraScriptSrc = $domainStr;
+        $extraFrameSrc = '; frame-src' . $domainStr;
+        $extraConnectSrc = $domainStr;
     }
 
     header('X-Frame-Options: DENY');
     header('X-Content-Type-Options: nosniff');
     header('Referrer-Policy: strict-origin-when-cross-origin');
     header('Permissions-Policy: geolocation=(), payment=(), usb=(), camera=(self), microphone=(self)');
-    header("Content-Security-Policy: default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self' data: https://cdnjs.cloudflare.com; connect-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com");
+    header("Content-Security-Policy: default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self' data: https://cdnjs.cloudflare.com; connect-src 'self'" . $extraConnectSrc . "; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com" . $extraScriptSrc . "; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com" . $extraFrameSrc);
 
     if (is_https_request()) {
         header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
@@ -283,6 +312,7 @@ $router->post('/admin/accounts', 'AdminController@saveAccountSettings');
 $router->post('/admin/attachments', 'AdminController@saveAttachmentSettings');
 $router->post('/admin/announcement', 'AdminController@saveAnnouncementSettings');
 $router->post('/admin/more', 'AdminController@saveMoreSettings');
+$router->post('/admin/captcha', 'AdminController@saveCaptchaSettings');
 
 // Settings
 $router->post('/settings/account/email', 'HomeController@saveAccountEmail');

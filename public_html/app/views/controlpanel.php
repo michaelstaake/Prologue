@@ -73,6 +73,9 @@
         } elseif ($flashSuccess === 'attachments_saved') {
             $toastMessage = 'Attachment settings saved.';
             $toastKind = 'success';
+        } elseif ($flashSuccess === 'captcha_saved') {
+            $toastMessage = 'Captcha settings saved.';
+            $toastKind = 'success';
         } elseif ($flashSuccess === 'announcement_saved') {
             $toastMessage = 'Announcement saved.';
             $toastKind = 'success';
@@ -546,6 +549,44 @@
                 <?php else: ?>
                     <p class="text-sm text-zinc-500">No IPs are currently banned.</p>
                 <?php endif; ?>
+            </div>
+            <div class="mt-5 pt-5 border-t border-zinc-700">
+                <h4 class="text-sm font-semibold text-zinc-200 mb-3">Captcha</h4>
+                <p class="text-xs text-zinc-500 mb-4">Protect login, registration, and password reset forms with a captcha challenge.</p>
+                <form method="POST" action="<?= htmlspecialchars(base_url('/admin/captcha'), ENT_QUOTES, 'UTF-8') ?>">
+                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
+                    <div class="mb-4">
+                        <label for="cp_captcha_provider" class="block text-sm text-zinc-400 mb-1">Provider</label>
+                        <select id="cp_captcha_provider" name="captcha_provider" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-zinc-100">
+                            <option value="" <?= ($captcha_provider ?? '') === '' ? 'selected' : '' ?>>None</option>
+                            <option value="cloudflare-turnstile" <?= ($captcha_provider ?? '') === 'cloudflare-turnstile' ? 'selected' : '' ?>>Cloudflare Turnstile</option>
+                            <option value="google-recaptcha-v2" <?= ($captcha_provider ?? '') === 'google-recaptcha-v2' ? 'selected' : '' ?>>Google reCAPTCHA v2</option>
+                        </select>
+                    </div>
+                    <div id="cp-captcha-keys" class="<?= ($captcha_provider ?? '') === '' ? 'hidden' : '' ?>">
+                        <div class="mb-4">
+                            <label for="cp_captcha_site_key" class="block text-sm text-zinc-400 mb-1">Site key</label>
+                            <input type="text" id="cp_captcha_site_key" name="captcha_site_key" value="<?= htmlspecialchars($captcha_site_key ?? '', ENT_QUOTES, 'UTF-8') ?>" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-zinc-100" autocomplete="off">
+                        </div>
+                        <div class="mb-4">
+                            <label for="cp_captcha_secret_key" class="block text-sm text-zinc-400 mb-1">Secret key</label>
+                            <input type="password" id="cp_captcha_secret_key" name="captcha_secret_key" placeholder="<?= ($captcha_provider ?? '') !== '' ? 'Unchanged' : '' ?>" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-zinc-100" autocomplete="off">
+                        </div>
+                    </div>
+                    <div class="pt-2">
+                        <button type="submit" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-medium transition">Save captcha settings</button>
+                    </div>
+                </form>
+                <script>
+                    document.getElementById('cp_captcha_provider').addEventListener('change', function() {
+                        var keysDiv = document.getElementById('cp-captcha-keys');
+                        if (this.value === '') {
+                            keysDiv.classList.add('hidden');
+                        } else {
+                            keysDiv.classList.remove('hidden');
+                        }
+                    });
+                </script>
             </div>
         </div>
     </div>

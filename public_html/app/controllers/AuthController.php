@@ -3,6 +3,7 @@ require_once __DIR__ . '/../../vendor/phpmailer/src/PHPMailer.php';
 require_once __DIR__ . '/../../vendor/phpmailer/src/SMTP.php';
 require_once __DIR__ . '/../../vendor/phpmailer/src/Exception.php';
 require_once __DIR__ . '/../modules/2fa/TwoFAManager.php';
+require_once __DIR__ . '/../modules/captcha/CaptchaManager.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
@@ -17,7 +18,7 @@ class AuthController extends Controller {
             $this->redirect('/');
         }
 
-        $this->view('auth/login', ['csrf' => $this->csrfToken()]);
+        $this->view('auth/login', array_merge(['csrf' => $this->csrfToken()], $this->getCaptchaViewData()));
     }
 
     public function login() {
@@ -26,6 +27,7 @@ class AuthController extends Controller {
         }
 
         Auth::csrfValidate();
+        $this->verifyCaptchaOrFail('/login');
         $email = trim($_POST['email'] ?? '');
         $password = $_POST['password'] ?? '';
         $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
@@ -165,14 +167,15 @@ class AuthController extends Controller {
 
         $inviteCodeRequired = (string)(Setting::get('invite_code_required') ?? '1') === '1';
 
-        $this->view('auth/register', [
+        $this->view('auth/register', array_merge([
             'csrf' => $this->csrfToken(),
             'invitesEnabled' => $inviteCodeRequired
-        ]);
+        ], $this->getCaptchaViewData()));
     }
 
     public function register() {
         Auth::csrfValidate();
+        $this->verifyCaptchaOrFail('/register');
         $username = User::normalizeUsername($_POST['username'] ?? '');
         $email = trim($_POST['email'] ?? '');
         $rawPassword = $_POST['password'] ?? '';
@@ -420,11 +423,12 @@ class AuthController extends Controller {
             $this->redirect('/');
         }
 
-        $this->view('auth/forgot', ['csrf' => $this->csrfToken()]);
+        $this->view('auth/forgot', array_merge(['csrf' => $this->csrfToken()], $this->getCaptchaViewData()));
     }
 
     public function forgotPassword() {
         Auth::csrfValidate();
+        $this->verifyCaptchaOrFail('/forgot-password');
         $email = trim($_POST['email'] ?? '');
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $this->flash('success', 'sent');
@@ -624,6 +628,34 @@ class AuthController extends Controller {
             && !str_contains($ua, 'opera');
 
         return $containsSafari && $isNotSafariEngineWrapper;
+    }
+
+    private function verifyCaptchaOrFail(string $redirectTo): void {
+        $provider = CaptchaManager::getActiveProvider();
+        if ($provider === null) {
+            return;
+        }
+
+        $token = trim((string)($_POST[$provider->getTokenFieldName()] ?? ''));
+        $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+
+        if (!$provider->verify($token, $ip)) {
+            $this->flash('error', 'captcha_failed');
+            $this->redirect($redirectTo);
+        }
+    }
+
+    private function getCaptchaViewData(): array {
+        $provider = CaptchaManager::getActiveProvider();
+        if ($provider === null) {
+            return ['captchaWidgetHtml' => '', 'captchaScriptUrl' => ''];
+        }
+
+        $siteKey = trim((string)(Setting::get('captcha_site_key') ?? ''));
+        return [
+            'captchaWidgetHtml' => $provider->getWidgetHtml($siteKey),
+            'captchaScriptUrl' => $provider->getScriptUrl(),
+        ];
     }
 
     private function hasTooManyAuthAttempts($ip, $actionType) {

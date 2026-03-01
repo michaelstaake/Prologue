@@ -14,6 +14,8 @@
             $toastMessage = 'Email is already in use.';
         } elseif ($flashError === 'invalid_invite') {
             $toastMessage = 'Invalid or already used invite code.';
+        } elseif ($flashError === 'captcha_failed') {
+            $toastMessage = 'Captcha verification failed. Please try again.';
         } elseif ($flashError !== null) {
             $toastMessage = 'Registration failed. Check invite code and form values.';
         }
@@ -33,6 +35,10 @@
         <?php if (!isset($invitesEnabled) || $invitesEnabled): ?>
             <label for="register-invite-code" class="block text-sm text-zinc-300 mb-2">Invite code</label>
             <input id="register-invite-code" type="text" name="invite_code" placeholder="Invite code (1234-5678)" class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-4 mb-6" required>
+        <?php endif; ?>
+        <?php if (!empty($captchaWidgetHtml)): ?>
+            <div class="mb-4"><?= $captchaWidgetHtml ?></div>
+            <script src="<?= htmlspecialchars($captchaScriptUrl, ENT_QUOTES, 'UTF-8') ?>" async defer></script>
         <?php endif; ?>
         <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 py-4 rounded-2xl font-semibold">Register</button>
     </form>

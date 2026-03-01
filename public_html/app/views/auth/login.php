@@ -16,6 +16,9 @@
         } elseif ($flashError === 'too_many_attempts') {
             $toastMessage = 'Too many attempts - please try again in a few minutes.';
             $toastKind = 'error';
+        } elseif ($flashError === 'captcha_failed') {
+            $toastMessage = 'Captcha verification failed. Please try again.';
+            $toastKind = 'error';
         } elseif ($flashError !== null) {
             $toastMessage = 'Login failed. Check your credentials.';
             $toastKind = 'error';
@@ -55,6 +58,10 @@
                 <span class="text-sm text-zinc-400 group-hover:text-zinc-300 transition-colors duration-150">Remember me</span>
             </label>
         </div>
+        <?php if (!empty($captchaWidgetHtml)): ?>
+            <div class="mb-4"><?= $captchaWidgetHtml ?></div>
+            <script src="<?= htmlspecialchars($captchaScriptUrl, ENT_QUOTES, 'UTF-8') ?>" async defer></script>
+        <?php endif; ?>
         <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 py-4 rounded-2xl font-semibold">Log in</button>
     </form>
     <div class="mt-8">
