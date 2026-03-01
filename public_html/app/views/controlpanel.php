@@ -1086,13 +1086,6 @@
                         <span data-browser-permission-status="microphone" class="text-xs px-2.5 py-1 rounded-full border border-zinc-600 bg-zinc-700/50 text-zinc-200">Checking&hellip;</span>
                     </div>
                 </div>
-                <div class="flex items-center justify-between gap-4 rounded-xl border border-zinc-700 bg-zinc-800/30 px-4 py-3">
-                    <span class="text-zinc-100">Screensharing</span>
-                    <div class="flex items-center gap-2">
-                        <button type="button" data-browser-permission-test="screenshare" class="hidden px-3 py-1.5 text-xs rounded-lg bg-zinc-700 hover:bg-zinc-600 text-zinc-100">Test</button>
-                        <span data-browser-permission-status="screenshare" class="text-xs px-2.5 py-1 rounded-full border border-zinc-600 bg-zinc-700/50 text-zinc-200">Checking&hellip;</span>
-                    </div>
-                </div>
             </div>
         </div>
     </div>

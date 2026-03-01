@@ -720,8 +720,6 @@ async function updateBrowserPermissionsStatuses() {
 
     const hasMediaDevices = Boolean(navigator?.mediaDevices);
     const hasUserMedia = hasMediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function';
-    const hasDisplayMedia = hasMediaDevices && typeof navigator.mediaDevices.getDisplayMedia === 'function';
-
     if (!hasUserMedia) {
         setBrowserPermissionStatus('camera', 'Unavailable', 'info');
         setBrowserPermissionTestButtonState('camera', 'info');
@@ -738,22 +736,6 @@ async function updateBrowserPermissionsStatuses() {
         setBrowserPermissionTestButtonState('microphone', microphoneBadge.kind);
     }
 
-    if (!hasDisplayMedia) {
-        setBrowserPermissionStatus('screenshare', 'Unavailable', 'info');
-        setBrowserPermissionTestButtonState('screenshare', 'info');
-        return;
-    }
-
-    const displayCaptureState = await queryBrowserPermissionState('display-capture');
-    if (!displayCaptureState) {
-        setBrowserPermissionStatus('screenshare', 'Ask each time', 'prompt');
-        setBrowserPermissionTestButtonState('screenshare', 'prompt');
-        return;
-    }
-
-    const screenshareBadge = mapPermissionStateToBadge(displayCaptureState);
-    setBrowserPermissionStatus('screenshare', screenshareBadge.label, screenshareBadge.kind);
-    setBrowserPermissionTestButtonState('screenshare', screenshareBadge.kind);
 }
 
 async function testBrowserPermission(type) {
@@ -787,13 +769,6 @@ async function testBrowserPermission(type) {
         return;
     }
 
-    if (permissionType === 'screenshare') {
-        if (typeof navigator.mediaDevices.getDisplayMedia !== 'function') {
-            throw new Error('Screen sharing is not supported in this browser.');
-        }
-        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
-        stopStreamTracks(stream);
-    }
 }
 
 function bindBrowserPermissionChecks() {
@@ -833,8 +808,6 @@ function bindBrowserPermissionChecks() {
         setBrowserPermissionTestButtonState('camera', 'info');
         setBrowserPermissionStatus('microphone', 'Unknown', 'info');
         setBrowserPermissionTestButtonState('microphone', 'info');
-        setBrowserPermissionStatus('screenshare', 'Unknown', 'info');
-        setBrowserPermissionTestButtonState('screenshare', 'info');
     });
 }
 
