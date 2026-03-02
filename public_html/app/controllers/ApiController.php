@@ -1,7 +1,101 @@
 <?php
 class ApiController extends Controller {
+    private const SIDEBAR_CUSTOM_MAX_CHATS = 8;
+
     private function getPinnedMessageSettingKey(int $chatId): string {
         return 'pinned_message_chat_' . $chatId;
+    }
+
+    private function getSidebarCustomSettingKey(int $userId): string {
+        return 'chat_sidebar_custom_' . $userId;
+    }
+
+    private function normalizeSidebarCustomChatNumbers($incoming): array {
+        if (!is_array($incoming)) {
+            return [];
+        }
+
+        $normalized = [];
+        $seen = [];
+
+        foreach ($incoming as $value) {
+            $raw = trim((string)$value);
+            if ($raw === '' || !preg_match('/^\d+$/', $raw)) {
+                continue;
+            }
+
+            $chatNumber = (string)((int)$raw);
+            if ($chatNumber === '0' || isset($seen[$chatNumber])) {
+                continue;
+            }
+
+            $seen[$chatNumber] = true;
+            $normalized[] = $chatNumber;
+
+            if (count($normalized) >= self::SIDEBAR_CUSTOM_MAX_CHATS) {
+                break;
+            }
+        }
+
+        return $normalized;
+    }
+
+    private function getAccessibleSidebarCustomChatNumbers(int $userId, array $chatNumbers): array {
+        $normalized = $this->normalizeSidebarCustomChatNumbers($chatNumbers);
+        if (empty($normalized)) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($normalized), '?'));
+        $params = array_merge([$userId], $normalized);
+
+        $query = "SELECT c.chat_number
+                  FROM chats c
+                  JOIN chat_members cm ON cm.chat_id = c.id
+                  WHERE cm.user_id = ?
+                    AND c.chat_number IN ($placeholders)";
+
+        if ($this->supportsChatSoftDelete()) {
+            $query .= " AND c.deleted_at IS NULL";
+        }
+
+        $rows = Database::query($query, $params)->fetchAll();
+        $allowed = [];
+        foreach ($rows as $row) {
+            $key = (string)((int)($row->chat_number ?? 0));
+            if ($key !== '0') {
+                $allowed[$key] = true;
+            }
+        }
+
+        $result = [];
+        foreach ($normalized as $chatNumber) {
+            if (isset($allowed[$chatNumber])) {
+                $result[] = $chatNumber;
+            }
+        }
+
+        return array_slice($result, 0, self::SIDEBAR_CUSTOM_MAX_CHATS);
+    }
+
+    private function loadSidebarCustomChatNumbers(int $userId): array {
+        $raw = Setting::get($this->getSidebarCustomSettingKey($userId));
+        if (!is_string($raw) || trim($raw) === '') {
+            return [];
+        }
+
+        $decoded = json_decode($raw, true);
+        if (!is_array($decoded)) {
+            return [];
+        }
+
+        return $this->normalizeSidebarCustomChatNumbers($decoded);
+    }
+
+    private function saveSidebarCustomChatNumbers(int $userId, array $chatNumbers): array {
+        $sanitized = $this->getAccessibleSidebarCustomChatNumbers($userId, $chatNumbers);
+        Setting::set($this->getSidebarCustomSettingKey($userId), json_encode($sanitized));
+        return $sanitized;
     }
 
     private function clearPinnedMessageForChat(int $chatId): void {
@@ -478,6 +572,41 @@ class ApiController extends Controller {
         }
 
         $this->json(['chats' => $chats]);
+    }
+
+    public function getSidebarCustomChats() {
+        Auth::requireAuth();
+
+        $userId = (int)Auth::user()->id;
+        $existing = $this->loadSidebarCustomChatNumbers($userId);
+        $sanitized = $this->getAccessibleSidebarCustomChatNumbers($userId, $existing);
+
+        if (count($existing) !== count($sanitized) || implode(',', $existing) !== implode(',', $sanitized)) {
+            Setting::set($this->getSidebarCustomSettingKey($userId), json_encode($sanitized));
+        }
+
+        $this->json(['chat_numbers' => $sanitized]);
+    }
+
+    public function saveSidebarCustomChats() {
+        Auth::requireAuth();
+        Auth::csrfValidate();
+
+        $userId = (int)Auth::user()->id;
+        $raw = $_POST['chat_numbers'] ?? '[]';
+
+        $incoming = [];
+        if (is_array($raw)) {
+            $incoming = $raw;
+        } elseif (is_string($raw)) {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) {
+                $incoming = $decoded;
+            }
+        }
+
+        $saved = $this->saveSidebarCustomChatNumbers($userId, $incoming);
+        $this->json(['success' => true, 'chat_numbers' => $saved]);
     }
 
     public function getMessages($params) {

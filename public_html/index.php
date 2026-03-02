@@ -342,6 +342,8 @@ $router->group('/api', function($r) {
     $r->get('/users/search', 'ApiController@searchUsers');
     $r->get('/friends', 'ApiController@getFriends');
     $r->get('/chats', 'ApiController@getChats');
+    $r->get('/chats/sidebar-custom', 'ApiController@getSidebarCustomChats');
+    $r->post('/chats/sidebar-custom', 'ApiController@saveSidebarCustomChats');
     $r->get('/messages/search', 'ApiController@searchMessages');
     $r->get('/messages/{chat_id}', 'ApiController@getMessages');
     $r->get('/posts/search', 'ApiController@searchPosts');

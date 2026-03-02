@@ -201,16 +201,28 @@
                 <i class="fa-solid fa-comments text-2xl prologue-accent"></i>
                 <span class="text-2xl font-bold">Prologue</span>
             </a>
-            <div class="flex-1 min-h-0 p-4 flex flex-col gap-4">
-
-                <div class="min-h-0 flex flex-col max-h-1/2">
-                    <div class="px-3 pb-2 text-xs uppercase tracking-wide text-zinc-500">Private Chats</div>
-                    <div id="private-chat-list" class="space-y-1 overflow-y-auto min-h-0"></div>
+            <div class="flex-1 min-h-0 p-4 flex flex-col gap-3">
+                <div class="inline-flex self-start w-fit items-center rounded-lg border border-zinc-700 p-1 text-xs" id="chat-sidebar-mode-toggle">
+                    <button type="button" data-chat-sidebar-mode="all" class="px-2.5 py-1 rounded-md transition bg-zinc-700 text-zinc-100">All</button>
+                    <button type="button" data-chat-sidebar-mode="pm" class="px-2.5 py-1 rounded-md transition text-zinc-400 hover:text-zinc-200">PM</button>
+                    <button type="button" data-chat-sidebar-mode="group" class="px-2.5 py-1 rounded-md transition text-zinc-400 hover:text-zinc-200">Group</button>
+                    <button type="button" data-chat-sidebar-mode="custom" class="px-2.5 py-1 rounded-md transition text-zinc-400 hover:text-zinc-200">Custom</button>
                 </div>
 
                 <div class="flex-1 min-h-0 flex flex-col">
-                    <div class="px-3 pb-2 text-xs uppercase tracking-wide text-zinc-500">Group Chats</div>
-                    <div id="group-chat-list" class="space-y-1 overflow-y-auto min-h-0"></div>
+                    <div class="px-3 pb-2 text-xs uppercase tracking-wide text-zinc-500">Chats</div>
+                    <div id="chat-sidebar-list" class="space-y-1 overflow-y-auto min-h-0"></div>
+                </div>
+                <div id="chat-sidebar-custom-controls" class="hidden space-y-2">
+                    <div id="chat-sidebar-custom-count" class="px-1 text-xs uppercase tracking-wide text-zinc-500">Custom (0/8)</div>
+                    <div class="px-1 text-xs text-zinc-500">Add a chat to Custom by right clicking on it</div>
+                </div>
+                <div id="chat-sidebar-custom-menu" class="hidden fixed z-50 min-w-[14rem] bg-zinc-900 border border-zinc-700 rounded-xl p-1.5 shadow-lg">
+                    <button type="button" data-custom-menu-action="open" class="w-full text-left px-3 py-2 rounded-lg hover:bg-zinc-800 text-sm whitespace-nowrap">Open in new tab</button>
+                    <button type="button" data-custom-menu-action="add" class="w-full text-left px-3 py-2 rounded-lg hover:bg-zinc-800 text-sm whitespace-nowrap">Add to custom</button>
+                    <button type="button" data-custom-menu-action="copy-link" class="w-full text-left px-3 py-2 rounded-lg hover:bg-zinc-800 text-sm whitespace-nowrap">Copy link to group</button>
+                    <button type="button" data-custom-menu-action="copy-number" class="w-full text-left px-3 py-2 rounded-lg hover:bg-zinc-800 text-sm whitespace-nowrap">Copy group number</button>
+                    <button type="button" data-custom-menu-action="remove" class="w-full text-left px-3 py-2 rounded-lg hover:bg-zinc-800 text-sm text-red-300 whitespace-nowrap">Remove from custom list</button>
                 </div>
             </div>
             <div class="p-4 border-t border-zinc-700 text-sm text-zinc-400">

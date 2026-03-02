@@ -1443,94 +1443,710 @@ function bindAttachmentLightbox() {
 }
 
 
-async function loadSidebarChats() {
-    const privateList = document.getElementById('private-chat-list');
-    const groupList = document.getElementById('group-chat-list');
-    if (!privateList || !groupList) return;
+const SIDEBAR_CUSTOM_MAX_ITEMS = 8;
+const SIDEBAR_MODE_LOCALSTORAGE_KEY = 'prologue.sidebar.chatMode';
 
-    const res = await fetch('/api/chats');
-    const data = await res.json();
-    const chats = data.chats || [];
+let sidebarChatsCache = [];
+let sidebarCustomChatNumbers = [];
+let sidebarCustomConfigLoaded = false;
+let sidebarMode = 'all';
+let sidebarModeInitialized = false;
+let sidebarIsDraggingCustom = false;
+let sidebarCustomContextChatNumber = '';
 
-    const privateChats = chats.filter((chat) => normalizeChatType(chat.type) === 'personal');
-    const groupChats = chats.filter((chat) => normalizeChatType(chat.type) === 'group');
+function normalizeSidebarMode(value) {
+    const mode = String(value || '').trim().toLowerCase();
+    if (mode === 'pm' || mode === 'group' || mode === 'custom' || mode === 'all') {
+        return mode;
+    }
+    return 'all';
+}
 
-    const renderSidebarChatItems = (items) => items.map(chat => {
-        const type = normalizeChatType(chat.type);
-        const sidebarTitle = type === 'group'
-            ? (chat.chat_title || formatNumber(chat.chat_number))
-            : (chat.chat_title || `Chat ${formatNumber(chat.chat_number)}`);
-        const hasPersonalStatus = type === 'personal' && Boolean(chat.effective_status_label);
-        const showFavoriteStar = type === 'personal' && (Number(chat.is_favorite) === 1 || chat.is_favorite === true);
-        const unreadCount = Math.max(0, Number(chat.unread_count || 0));
-        const rawMessage = decodeStoredMentionsToPlainText(chat.last_message || '');
-        const secondaryLine = (() => {
-            if (!rawMessage) return 'No messages yet';
-            const senderId = Number(chat.last_message_user_id || 0);
-            const prefix = senderId && senderId === Number(currentUserId || 0)
-                ? 'You'
-                : (chat.last_message_sender_username || '');
-            return prefix ? `${prefix}: ${rawMessage}` : rawMessage;
-        })();
-        const item = document.createElement('a');
-        item.href = `/c/${formatNumber(chat.chat_number)}`;
-        item.className = 'block py-2 px-3 rounded-xl hover:bg-zinc-800 mb-1';
+function getStoredSidebarMode() {
+    try {
+        return normalizeSidebarMode(window.localStorage?.getItem(SIDEBAR_MODE_LOCALSTORAGE_KEY));
+    } catch {
+        return 'all';
+    }
+}
 
-        const primaryLine = document.createElement('div');
-        primaryLine.className = 'font-medium flex items-center gap-2 min-w-0';
+function setStoredSidebarMode(mode) {
+    try {
+        window.localStorage?.setItem(SIDEBAR_MODE_LOCALSTORAGE_KEY, normalizeSidebarMode(mode));
+    } catch {
+    }
+}
+
+function getSidebarElements() {
+    return {
+        modeToggle: document.getElementById('chat-sidebar-mode-toggle'),
+        list: document.getElementById('chat-sidebar-list'),
+        customControls: document.getElementById('chat-sidebar-custom-controls'),
+        customCount: document.getElementById('chat-sidebar-custom-count'),
+        customSearch: document.getElementById('chat-sidebar-custom-search'),
+        customTypeahead: document.getElementById('chat-sidebar-custom-typeahead'),
+        customMenu: document.getElementById('chat-sidebar-custom-menu')
+    };
+}
+
+function updateSidebarCustomCount() {
+    const { customCount } = getSidebarElements();
+    if (!customCount) return;
+    customCount.textContent = `Custom (${sidebarCustomChatNumbers.length}/${SIDEBAR_CUSTOM_MAX_ITEMS})`;
+}
+
+function getChatSidebarTitle(chat) {
+    const type = normalizeChatType(chat?.type);
+    if (type === 'group') {
+        return chat?.chat_title || formatNumber(chat?.chat_number || '');
+    }
+    return chat?.chat_title || `Chat ${formatNumber(chat?.chat_number || '')}`;
+}
+
+function hideSidebarCustomTypeahead() {
+    const { customTypeahead } = getSidebarElements();
+    if (!customTypeahead) return;
+    customTypeahead.replaceChildren();
+    customTypeahead.classList.add('hidden');
+}
+
+function getChatByNumber(chatNumber) {
+    const value = String(chatNumber || '');
+    return sidebarChatsCache.find((chat) => String(chat.chat_number || '') === value) || null;
+}
+
+function sanitizeCustomChatNumbers(chatNumbers, chats) {
+    const validChatNumbers = new Set((Array.isArray(chats) ? chats : []).map((chat) => String(chat.chat_number || '')));
+    const unique = [];
+    const seen = new Set();
+
+    (Array.isArray(chatNumbers) ? chatNumbers : []).forEach((value) => {
+        const number = String(value || '').trim();
+        if (!number || seen.has(number)) return;
+        if (!validChatNumbers.has(number)) return;
+        seen.add(number);
+        unique.push(number);
+    });
+
+    return unique.slice(0, SIDEBAR_CUSTOM_MAX_ITEMS);
+}
+
+async function fetchSidebarCustomConfig() {
+    if (sidebarCustomConfigLoaded) return;
+
+    try {
+        const response = await fetch('/api/chats/sidebar-custom');
+        if (!response.ok) {
+            throw new Error('Unable to load custom sidebar config');
+        }
+        const payload = await response.json();
+        const incoming = Array.isArray(payload?.chat_numbers) ? payload.chat_numbers : [];
+        sidebarCustomChatNumbers = incoming.map((value) => String(value || '').trim()).filter(Boolean).slice(0, SIDEBAR_CUSTOM_MAX_ITEMS);
+    } catch {
+        sidebarCustomChatNumbers = [];
+    }
+
+    sidebarCustomConfigLoaded = true;
+}
+
+async function persistSidebarCustomConfig() {
+    const payload = JSON.stringify(sidebarCustomChatNumbers.slice(0, SIDEBAR_CUSTOM_MAX_ITEMS));
+    const result = await postForm('/api/chats/sidebar-custom', {
+        csrf_token: getCsrfToken(),
+        chat_numbers: payload
+    });
+    if (!result || result.success !== true) {
+        throw new Error(result?.error || 'Unable to save custom sidebar config');
+    }
+}
+
+async function syncSidebarCustomChatNumbers(chats) {
+    const sanitized = sanitizeCustomChatNumbers(sidebarCustomChatNumbers, chats);
+    const changed = sanitized.length !== sidebarCustomChatNumbers.length
+        || sanitized.some((value, index) => value !== sidebarCustomChatNumbers[index]);
+
+    if (!changed) return;
+    sidebarCustomChatNumbers = sanitized;
+
+    if (!sidebarCustomConfigLoaded) return;
+
+    try {
+        await persistSidebarCustomConfig();
+    } catch {
+    }
+}
+
+function buildSidebarChatNode(chat, options = {}) {
+    const { customMode = false } = options;
+    const type = normalizeChatType(chat.type);
+    const unreadCount = Math.max(0, Number(chat.unread_count || 0));
+    const hasPersonalStatus = type === 'personal' && Boolean(chat.effective_status_label);
+    const showFavoriteStar = type === 'personal' && (Number(chat.is_favorite) === 1 || chat.is_favorite === true);
+    const sidebarTitle = getChatSidebarTitle(chat);
+    const rawMessage = decodeStoredMentionsToPlainText(chat.last_message || '');
+    const secondaryLine = (() => {
+        if (!rawMessage) return 'No messages yet';
+        const senderId = Number(chat.last_message_user_id || 0);
+        const prefix = senderId && senderId === Number(currentUserId || 0)
+            ? 'You'
+            : (chat.last_message_sender_username || '');
+        return prefix ? `${prefix}: ${rawMessage}` : rawMessage;
+    })();
+
+    const item = document.createElement('a');
+    item.href = `/c/${formatNumber(chat.chat_number)}`;
+    item.className = 'block py-2 px-3 rounded-xl hover:bg-zinc-800 mb-1';
+    item.dataset.sidebarChatNumber = String(chat.chat_number || '');
+    item.dataset.sidebarChatType = type;
+
+    if (window.location.pathname === item.getAttribute('href')) {
+        item.classList.add('bg-zinc-800/80');
+    }
+
+    if (customMode) {
+        item.draggable = true;
+        item.classList.add('cursor-move');
+        item.dataset.sidebarCustomItem = '1';
+    }
+
+    const primaryLine = document.createElement('div');
+    primaryLine.className = 'font-medium flex items-center gap-2 min-w-0';
+
+    const title = document.createElement('span');
+    title.className = 'truncate';
+    title.textContent = String(sidebarTitle);
+    primaryLine.appendChild(title);
+
+    const typeBadge = document.createElement('span');
+    typeBadge.className = type === 'group'
+        ? 'shrink-0 px-1.5 py-0.5 rounded-md text-[10px] uppercase tracking-wide border border-sky-500/30 bg-sky-500/10 text-sky-200'
+        : 'shrink-0 px-1.5 py-0.5 rounded-md text-[10px] uppercase tracking-wide border border-violet-500/30 bg-violet-500/10 text-violet-200';
+    typeBadge.textContent = type === 'group' ? 'Group' : 'PM';
+    primaryLine.appendChild(typeBadge);
+
+    if (showFavoriteStar) {
+        const star = document.createElement('i');
+        star.className = 'fa-solid fa-star text-amber-400 text-[11px]';
+        star.title = 'Favorite';
+        primaryLine.appendChild(star);
+    }
+
+    if (hasPersonalStatus) {
+        const statusDot = document.createElement('span');
+        statusDot.className = `inline-block w-2 h-2 rounded-full ${String(chat.effective_status_dot_class || 'bg-zinc-500')}`;
+        statusDot.title = String(chat.effective_status_label || 'Offline');
+        primaryLine.appendChild(statusDot);
+    }
+
+    if (customMode) {
+        const dragIcon = document.createElement('i');
+        dragIcon.className = 'fa-solid fa-grip-vertical text-zinc-500 text-[10px]';
+        dragIcon.title = 'Drag to reorder';
+        primaryLine.appendChild(dragIcon);
+    }
+
+    if (unreadCount > 0) {
+        const unreadBadge = document.createElement('span');
+        unreadBadge.className = 'ml-auto min-w-[1.25rem] h-5 px-1 rounded-full bg-emerald-600 text-white text-xs inline-flex items-center justify-center';
+        unreadBadge.textContent = String(formatCountBadgeValue(unreadCount));
+        primaryLine.appendChild(unreadBadge);
+    }
+
+    const secondary = document.createElement('div');
+    secondary.className = 'text-xs text-zinc-400 truncate';
+    secondary.textContent = String(secondaryLine);
+
+    item.appendChild(primaryLine);
+    item.appendChild(secondary);
+    return item;
+}
+
+function getVisibleSidebarChats() {
+    if (sidebarMode === 'pm') {
+        return sidebarChatsCache.filter((chat) => normalizeChatType(chat.type) === 'personal');
+    }
+
+    if (sidebarMode === 'group') {
+        return sidebarChatsCache.filter((chat) => normalizeChatType(chat.type) === 'group');
+    }
+
+    if (sidebarMode === 'custom') {
+        const chatByNumber = new Map(sidebarChatsCache.map((chat) => [String(chat.chat_number || ''), chat]));
+        return sidebarCustomChatNumbers
+            .map((chatNumber) => chatByNumber.get(chatNumber))
+            .filter(Boolean);
+    }
+
+    return sidebarChatsCache;
+}
+
+function updateSidebarModeButtons() {
+    const { modeToggle, customControls } = getSidebarElements();
+    if (!modeToggle) return;
+
+    const buttons = modeToggle.querySelectorAll('[data-chat-sidebar-mode]');
+    buttons.forEach((button) => {
+        if (!(button instanceof HTMLElement)) return;
+        const isActive = normalizeSidebarMode(button.dataset.chatSidebarMode) === sidebarMode;
+        button.classList.toggle('bg-zinc-700', isActive);
+        button.classList.toggle('text-zinc-100', isActive);
+        button.classList.toggle('text-zinc-400', !isActive);
+        button.classList.toggle('hover:text-zinc-200', !isActive);
+    });
+
+    if (customControls) {
+        customControls.classList.toggle('hidden', sidebarMode !== 'custom');
+    }
+}
+
+function clearSidebarDragIndicators() {
+    const { list } = getSidebarElements();
+    if (!list) return;
+    list.querySelectorAll('[data-sidebar-custom-item]').forEach((node) => {
+        node.classList.remove('ring-1', 'ring-emerald-500/60');
+    });
+}
+
+function renderSidebarList() {
+    const { list } = getSidebarElements();
+    if (!list) return;
+    updateSidebarCustomCount();
+
+    const chats = getVisibleSidebarChats();
+    const nodes = chats.map((chat) => buildSidebarChatNode(chat, { customMode: sidebarMode === 'custom' }));
+
+    if (nodes.length > 0) {
+        list.replaceChildren(...nodes);
+        return;
+    }
+
+    const empty = document.createElement('div');
+    empty.className = 'text-zinc-500 text-sm px-3 py-1';
+    empty.textContent = sidebarMode === 'custom'
+        ? 'Custom list is empty'
+        : 'No chats yet';
+    list.replaceChildren(empty);
+}
+
+function renderSidebarCustomTypeahead() {
+    const { customSearch, customTypeahead } = getSidebarElements();
+    if (!customSearch || !customTypeahead || sidebarMode !== 'custom') {
+        hideSidebarCustomTypeahead();
+        return;
+    }
+
+    const query = String(customSearch.value || '').trim().toLowerCase();
+    if (!query) {
+        hideSidebarCustomTypeahead();
+        return;
+    }
+
+    if (sidebarCustomChatNumbers.length >= SIDEBAR_CUSTOM_MAX_ITEMS) {
+        hideSidebarCustomTypeahead();
+        return;
+    }
+
+    const selected = new Set(sidebarCustomChatNumbers);
+    const matches = sidebarChatsCache.filter((chat) => {
+        const chatNumber = String(chat.chat_number || '');
+        if (selected.has(chatNumber)) return false;
+        const title = String(getChatSidebarTitle(chat)).toLowerCase();
+        const formatted = String(formatNumber(chatNumber)).toLowerCase();
+        return title.includes(query) || formatted.includes(query) || chatNumber.includes(query);
+    }).slice(0, 6);
+
+    if (matches.length === 0) {
+        hideSidebarCustomTypeahead();
+        return;
+    }
+
+    const buttons = matches.map((chat) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'w-full text-left px-3 py-2 hover:bg-zinc-800 text-sm flex items-center justify-between gap-2';
+        button.dataset.sidebarCustomTypeahead = String(chat.chat_number || '');
 
         const title = document.createElement('span');
         title.className = 'truncate';
-        title.textContent = String(sidebarTitle);
-        primaryLine.appendChild(title);
+        title.textContent = String(getChatSidebarTitle(chat));
 
-        if (showFavoriteStar) {
-            const star = document.createElement('i');
-            star.className = 'fa-solid fa-star text-amber-400 text-[11px]';
-            star.title = 'Favorite';
-            primaryLine.appendChild(star);
-        }
+        const badge = document.createElement('span');
+        badge.className = 'text-[10px] uppercase tracking-wide text-zinc-400 shrink-0';
+        badge.textContent = normalizeChatType(chat.type) === 'group' ? 'Group' : 'PM';
 
-        if (hasPersonalStatus) {
-            const statusDot = document.createElement('span');
-            statusDot.className = `inline-block w-2 h-2 rounded-full ${String(chat.effective_status_dot_class || 'bg-zinc-500')}`;
-            statusDot.title = String(chat.effective_status_label || 'Offline');
-            primaryLine.appendChild(statusDot);
-        }
-
-        if (unreadCount > 0) {
-            const unreadBadge = document.createElement('span');
-            unreadBadge.className = 'ml-auto min-w-[1.25rem] h-5 px-1 rounded-full bg-emerald-600 text-white text-xs inline-flex items-center justify-center';
-            unreadBadge.textContent = String(formatCountBadgeValue(unreadCount));
-            primaryLine.appendChild(unreadBadge);
-        }
-
-        const secondary = document.createElement('div');
-        secondary.className = 'text-xs text-zinc-400 truncate';
-        secondary.textContent = String(secondaryLine);
-
-        item.appendChild(primaryLine);
-        item.appendChild(secondary);
-        return item;
+        button.appendChild(title);
+        button.appendChild(badge);
+        return button;
     });
 
-    const makeEmptyState = (text) => {
-        const empty = document.createElement('div');
-        empty.className = 'text-zinc-500 text-sm px-3 py-1';
-        empty.textContent = text;
-        return empty;
-    };
+    customTypeahead.replaceChildren(...buttons);
+    customTypeahead.classList.remove('hidden');
+}
 
-    const privateNodes = renderSidebarChatItems(privateChats);
-    const groupNodes = renderSidebarChatItems(groupChats);
+async function addChatToCustomSidebar(chatNumber) {
+    const number = String(chatNumber || '').trim();
+    if (!number) return;
+    if (sidebarCustomChatNumbers.includes(number)) return;
 
-    privateList.replaceChildren(...(privateNodes.length
-        ? privateNodes
-        : [makeEmptyState('No private chats yet')]));
-    groupList.replaceChildren(...(groupNodes.length
-        ? groupNodes
-        : [makeEmptyState('No group chats yet')]));
+    if (sidebarCustomChatNumbers.length >= SIDEBAR_CUSTOM_MAX_ITEMS) {
+        showToast('Custom list can have up to 8 chats', 'error');
+        return;
+    }
 
+    if (!getChatByNumber(number)) {
+        showToast('Chat unavailable', 'error');
+        return;
+    }
+
+    sidebarCustomChatNumbers.push(number);
+
+    try {
+        await persistSidebarCustomConfig();
+        renderSidebarList();
+    } catch {
+        sidebarCustomChatNumbers = sidebarCustomChatNumbers.filter((value) => value !== number);
+        showToast('Unable to update custom list', 'error');
+    }
+}
+
+async function removeChatFromCustomSidebar(chatNumber) {
+    const number = String(chatNumber || '').trim();
+    if (!number) return;
+
+    const next = sidebarCustomChatNumbers.filter((value) => value !== number);
+    if (next.length === sidebarCustomChatNumbers.length) return;
+
+    const previous = [...sidebarCustomChatNumbers];
+    sidebarCustomChatNumbers = next;
+
+    try {
+        await persistSidebarCustomConfig();
+        renderSidebarList();
+    } catch {
+        sidebarCustomChatNumbers = previous;
+        showToast('Unable to update custom list', 'error');
+    }
+}
+
+async function reorderCustomSidebarChats(draggedChatNumber, targetChatNumber) {
+    const dragged = String(draggedChatNumber || '').trim();
+    const target = String(targetChatNumber || '').trim();
+    if (!dragged || !target || dragged === target) return;
+
+    const current = [...sidebarCustomChatNumbers];
+    const fromIndex = current.indexOf(dragged);
+    const toIndex = current.indexOf(target);
+    if (fromIndex < 0 || toIndex < 0) return;
+
+    current.splice(fromIndex, 1);
+    current.splice(toIndex, 0, dragged);
+
+    if (current.join(',') === sidebarCustomChatNumbers.join(',')) return;
+    const previous = [...sidebarCustomChatNumbers];
+    sidebarCustomChatNumbers = current;
+
+    try {
+        await persistSidebarCustomConfig();
+        renderSidebarList();
+    } catch {
+        sidebarCustomChatNumbers = previous;
+        renderSidebarList();
+        showToast('Unable to save custom order', 'error');
+    }
+}
+
+async function copyTextFallback(text) {
+    const value = String(text || '');
+    if (!value) return;
+    if (typeof window.copyTextToClipboard === 'function') {
+        await window.copyTextToClipboard(value);
+        return;
+    }
+
+    if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(value);
+        return;
+    }
+
+    const tempInput = document.createElement('textarea');
+    tempInput.value = value;
+    tempInput.setAttribute('readonly', '');
+    tempInput.style.position = 'absolute';
+    tempInput.style.left = '-9999px';
+    document.body.appendChild(tempInput);
+    tempInput.select();
+    document.execCommand('copy');
+    tempInput.remove();
+}
+
+function hideSidebarCustomContextMenu() {
+    const { customMenu } = getSidebarElements();
+    if (!customMenu) return;
+    customMenu.classList.add('hidden');
+    sidebarCustomContextChatNumber = '';
+}
+
+function setSidebarContextMenuButtonVisibility(action, visible) {
+    const { customMenu } = getSidebarElements();
+    if (!customMenu) return;
+
+    const button = customMenu.querySelector(`[data-custom-menu-action="${action}"]`);
+    if (!(button instanceof HTMLButtonElement)) return;
+
+    button.classList.toggle('hidden', !visible);
+}
+
+function showSidebarCustomContextMenu(event, chatNumber) {
+    const { customMenu } = getSidebarElements();
+    if (!customMenu) return;
+
+    const chat = getChatByNumber(chatNumber);
+    const isGroup = normalizeChatType(chat?.type) === 'group';
+    const number = String(chatNumber || '').trim();
+    const inCustomList = sidebarCustomChatNumbers.includes(number);
+    const canAddToCustom = !inCustomList && sidebarCustomChatNumbers.length < SIDEBAR_CUSTOM_MAX_ITEMS;
+
+    setSidebarContextMenuButtonVisibility('open', Boolean(chat));
+    setSidebarContextMenuButtonVisibility('add', canAddToCustom);
+    setSidebarContextMenuButtonVisibility('copy-link', isGroup);
+    setSidebarContextMenuButtonVisibility('copy-number', isGroup);
+    setSidebarContextMenuButtonVisibility('remove', inCustomList);
+
+    customMenu.style.left = `${event.clientX}px`;
+    customMenu.style.top = `${event.clientY}px`;
+    customMenu.classList.remove('hidden');
+    sidebarCustomContextChatNumber = String(chatNumber || '');
+
+    const rect = customMenu.getBoundingClientRect();
+    const maxLeft = window.innerWidth - rect.width - 8;
+    const maxTop = window.innerHeight - rect.height - 8;
+    customMenu.style.left = `${Math.max(8, Math.min(event.clientX, maxLeft))}px`;
+    customMenu.style.top = `${Math.max(8, Math.min(event.clientY, maxTop))}px`;
+}
+
+function bindSidebarCustomMenu() {
+    const { customMenu } = getSidebarElements();
+    if (!customMenu || customMenu.dataset.bound === '1') return;
+    customMenu.dataset.bound = '1';
+
+    customMenu.addEventListener('click', async (event) => {
+        const button = event.target.closest('[data-custom-menu-action]');
+        if (!(button instanceof HTMLButtonElement)) return;
+
+        const action = String(button.dataset.customMenuAction || '');
+        const chatNumber = String(sidebarCustomContextChatNumber || '');
+        const chat = getChatByNumber(chatNumber);
+        if (!chatNumber || !chat) {
+            hideSidebarCustomContextMenu();
+            return;
+        }
+
+        if ((action === 'copy-link' || action === 'copy-number') && normalizeChatType(chat.type) !== 'group') {
+            hideSidebarCustomContextMenu();
+            return;
+        }
+
+        try {
+            if (action === 'open') {
+                window.open(`/c/${formatNumber(chatNumber)}`, '_blank', 'noopener');
+            } else if (action === 'add') {
+                await addChatToCustomSidebar(chatNumber);
+            } else if (action === 'copy-link') {
+                await copyTextFallback(`${window.location.origin}/c/${formatNumber(chatNumber)}`);
+                showToast('Group link copied', 'success');
+            } else if (action === 'copy-number') {
+                await copyTextFallback(formatNumber(chatNumber));
+                showToast('Group number copied', 'success');
+            } else if (action === 'remove') {
+                await removeChatFromCustomSidebar(chatNumber);
+            }
+        } catch {
+            showToast('Unable to complete action', 'error');
+        }
+
+        hideSidebarCustomContextMenu();
+    });
+
+    document.addEventListener('click', (event) => {
+        if (customMenu.classList.contains('hidden')) return;
+        if (customMenu.contains(event.target)) return;
+        hideSidebarCustomContextMenu();
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return;
+        if (customMenu.classList.contains('hidden')) return;
+        hideSidebarCustomContextMenu();
+    });
+}
+
+function bindSidebarControls() {
+    const { modeToggle, customSearch, customTypeahead, list } = getSidebarElements();
+    if (!modeToggle || !list) return;
+    if (modeToggle.dataset.bound === '1') return;
+    modeToggle.dataset.bound = '1';
+
+    modeToggle.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-chat-sidebar-mode]');
+        if (!(button instanceof HTMLButtonElement)) return;
+        const nextMode = normalizeSidebarMode(button.dataset.chatSidebarMode);
+        if (nextMode === sidebarMode) return;
+
+        sidebarMode = nextMode;
+        setStoredSidebarMode(nextMode);
+        updateSidebarModeButtons();
+        hideSidebarCustomTypeahead();
+        hideSidebarCustomContextMenu();
+        renderSidebarList();
+
+        if (customSearch && sidebarMode === 'custom') {
+            customSearch.focus();
+        }
+    });
+
+    if (customSearch) {
+        customSearch.addEventListener('input', () => {
+            renderSidebarCustomTypeahead();
+        });
+
+        customSearch.addEventListener('focus', () => {
+            renderSidebarCustomTypeahead();
+        });
+
+        customSearch.addEventListener('keydown', async (event) => {
+            if (event.key !== 'Enter') return;
+            if (!customTypeahead || customTypeahead.classList.contains('hidden')) return;
+            const options = customTypeahead.querySelectorAll('[data-sidebar-custom-typeahead]');
+            if (options.length !== 1) return;
+            event.preventDefault();
+            const chatNumber = String(options[0].getAttribute('data-sidebar-custom-typeahead') || '').trim();
+            if (!chatNumber) return;
+            await addChatToCustomSidebar(chatNumber);
+            customSearch.value = '';
+            hideSidebarCustomTypeahead();
+        });
+    }
+
+    if (customTypeahead) {
+        customTypeahead.addEventListener('click', async (event) => {
+            const button = event.target.closest('[data-sidebar-custom-typeahead]');
+            if (!(button instanceof HTMLElement)) return;
+            const chatNumber = String(button.dataset.sidebarCustomTypeahead || '').trim();
+            if (!chatNumber) return;
+            await addChatToCustomSidebar(chatNumber);
+            if (customSearch) {
+                customSearch.value = '';
+            }
+            hideSidebarCustomTypeahead();
+        });
+    }
+
+    list.addEventListener('dragstart', (event) => {
+        if (sidebarMode !== 'custom') return;
+        const target = event.target.closest('[data-sidebar-custom-item]');
+        if (!(target instanceof HTMLElement)) return;
+        const chatNumber = String(target.dataset.sidebarChatNumber || '');
+        if (!chatNumber) return;
+
+        sidebarIsDraggingCustom = true;
+        target.classList.add('opacity-60');
+        event.dataTransfer?.setData('text/plain', chatNumber);
+        if (event.dataTransfer) {
+            event.dataTransfer.effectAllowed = 'move';
+        }
+    });
+
+    list.addEventListener('dragover', (event) => {
+        if (sidebarMode !== 'custom') return;
+        event.preventDefault();
+
+        const target = event.target.closest('[data-sidebar-custom-item]');
+        if (!(target instanceof HTMLElement)) return;
+        clearSidebarDragIndicators();
+        target.classList.add('ring-1', 'ring-emerald-500/60');
+    });
+
+    list.addEventListener('dragleave', (event) => {
+        const target = event.target.closest?.('[data-sidebar-custom-item]');
+        if (!(target instanceof HTMLElement)) return;
+        target.classList.remove('ring-1', 'ring-emerald-500/60');
+    });
+
+    list.addEventListener('drop', async (event) => {
+        if (sidebarMode !== 'custom') return;
+        event.preventDefault();
+
+        const droppedOn = event.target.closest('[data-sidebar-custom-item]');
+        const draggedChatNumber = String(event.dataTransfer?.getData('text/plain') || '').trim();
+        const targetChatNumber = droppedOn instanceof HTMLElement
+            ? String(droppedOn.dataset.sidebarChatNumber || '').trim()
+            : '';
+
+        clearSidebarDragIndicators();
+        if (draggedChatNumber && targetChatNumber && draggedChatNumber !== targetChatNumber) {
+            await reorderCustomSidebarChats(draggedChatNumber, targetChatNumber);
+        }
+    });
+
+    list.addEventListener('dragend', (event) => {
+        sidebarIsDraggingCustom = false;
+        clearSidebarDragIndicators();
+        const target = event.target.closest?.('[data-sidebar-custom-item]');
+        if (target instanceof HTMLElement) {
+            target.classList.remove('opacity-60');
+        }
+    });
+
+    list.addEventListener('contextmenu', (event) => {
+        const target = event.target.closest('[data-sidebar-chat-number]');
+        if (!(target instanceof HTMLElement)) return;
+        const chatNumber = String(target.dataset.sidebarChatNumber || '').trim();
+        if (!chatNumber) return;
+
+        event.preventDefault();
+        showSidebarCustomContextMenu(event, chatNumber);
+    });
+
+    document.addEventListener('click', (event) => {
+        if (!customSearch || !customTypeahead) return;
+        if (customTypeahead.classList.contains('hidden')) return;
+        if (!customSearch.contains(event.target) && !customTypeahead.contains(event.target)) {
+            hideSidebarCustomTypeahead();
+        }
+    });
+
+    bindSidebarCustomMenu();
+}
+
+
+async function loadSidebarChats() {
+    const { list } = getSidebarElements();
+    if (!list) return;
+
+    if (!sidebarCustomConfigLoaded) {
+        await fetchSidebarCustomConfig();
+    }
+
+    if (!sidebarModeInitialized) {
+        sidebarMode = getStoredSidebarMode();
+        sidebarModeInitialized = true;
+    }
+
+    const res = await fetch('/api/chats');
+    const data = await res.json();
+    const chats = Array.isArray(data.chats) ? data.chats : [];
+
+    sidebarChatsCache = chats;
+    await syncSidebarCustomChatNumbers(chats);
+
+    bindSidebarControls();
+    updateSidebarModeButtons();
+
+    if (!sidebarIsDraggingCustom) {
+        renderSidebarList();
+    }
+
+    renderSidebarCustomTypeahead();
 }
 
 async function createGroupChat() {
