@@ -1495,6 +1495,17 @@ function updateSidebarCustomCount() {
     customCount.textContent = `Custom (${sidebarCustomChatNumbers.length}/${SIDEBAR_CUSTOM_MAX_ITEMS})`;
 }
 
+function getSidebarUnreadFlags() {
+    const hasUnreadIn = (items) => items.some((chat) => Number(chat?.unread_count || 0) > 0);
+    const customChatNumbers = new Set(sidebarCustomChatNumbers);
+
+    return {
+        pm: hasUnreadIn(sidebarChatsCache.filter((chat) => normalizeChatType(chat?.type) === 'personal')),
+        group: hasUnreadIn(sidebarChatsCache.filter((chat) => normalizeChatType(chat?.type) === 'group')),
+        custom: hasUnreadIn(sidebarChatsCache.filter((chat) => customChatNumbers.has(String(chat?.chat_number || ''))))
+    };
+}
+
 function getChatSidebarTitle(chat) {
     const type = normalizeChatType(chat?.type);
     if (type === 'group') {
@@ -1683,15 +1694,30 @@ function getVisibleSidebarChats() {
 function updateSidebarModeButtons() {
     const { modeToggle, customControls } = getSidebarElements();
     if (!modeToggle) return;
+    const unreadFlags = getSidebarUnreadFlags();
 
     const buttons = modeToggle.querySelectorAll('[data-chat-sidebar-mode]');
     buttons.forEach((button) => {
         if (!(button instanceof HTMLElement)) return;
-        const isActive = normalizeSidebarMode(button.dataset.chatSidebarMode) === sidebarMode;
+        const mode = normalizeSidebarMode(button.dataset.chatSidebarMode);
+        const isActive = mode === sidebarMode;
+        const shouldHighlightUnread = mode !== 'all' && unreadFlags[mode] === true;
+
+        button.classList.remove('bg-emerald-600', 'bg-emerald-600/25', 'text-emerald-100', 'text-emerald-200');
         button.classList.toggle('bg-zinc-700', isActive);
         button.classList.toggle('text-zinc-100', isActive);
         button.classList.toggle('text-zinc-400', !isActive);
         button.classList.toggle('hover:text-zinc-200', !isActive);
+
+        if (shouldHighlightUnread) {
+            if (isActive) {
+                button.classList.remove('bg-zinc-700', 'text-zinc-100');
+                button.classList.add('bg-emerald-600', 'text-emerald-100');
+            } else {
+                button.classList.remove('text-zinc-400');
+                button.classList.add('bg-emerald-600', 'text-emerald-100');
+            }
+        }
     });
 
     if (customControls) {
@@ -1711,6 +1737,7 @@ function renderSidebarList() {
     const { list } = getSidebarElements();
     if (!list) return;
     updateSidebarCustomCount();
+    updateSidebarModeButtons();
 
     const chats = getVisibleSidebarChats();
     const nodes = chats.map((chat) => buildSidebarChatNode(chat, { customMode: sidebarMode === 'custom' }));
