@@ -15,6 +15,10 @@ class EmailTwoFAProvider implements TwoFAProviderInterface {
         return 'Email';
     }
 
+    public function getPriority(): int {
+        return 10;
+    }
+
     public function isAvailable(int $userId): bool {
         $mailHost = trim((string)(Setting::get('mail_host') ?? ''));
         $mailUser = trim((string)(Setting::get('mail_user') ?? ''));

@@ -124,12 +124,19 @@ class AuthController extends Controller {
             $this->redirect('/login');
         }
 
-        if (!preg_match('/^\d{6}$/', $code)) {
-            $this->flash('error', 'invalid');
-            $this->redirect('/2fa');
-        }
-
         $providerName = $_SESSION['2fa_provider'] ?? '';
+
+        if ($providerName === 'totp') {
+            if (!preg_match('/^[a-zA-Z0-9]{6,8}$/', $code)) {
+                $this->flash('error', 'invalid');
+                $this->redirect('/2fa');
+            }
+        } else {
+            if (!preg_match('/^\d{6}$/', $code)) {
+                $this->flash('error', 'invalid');
+                $this->redirect('/2fa');
+            }
+        }
         $provider = TwoFAManager::getProviderByName($providerName);
 
         if (!$provider || !$provider->verifyCode((int)$userId, $code, $ip)) {

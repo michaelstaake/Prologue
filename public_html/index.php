@@ -332,6 +332,9 @@ $router->post('/settings/timezone', 'HomeController@saveTimezoneSettings');
 $router->post('/settings/invites/generate', 'HomeController@generateInvite');
 $router->post('/settings/invites/delete', 'HomeController@deleteInvite');
 $router->post('/settings/sessions/exit', 'HomeController@exitSession');
+$router->post('/settings/2fa/totp/setup', 'HomeController@totpSetupBegin');
+$router->post('/settings/2fa/totp/confirm', 'HomeController@totpSetupConfirm');
+$router->post('/settings/2fa/totp/disable', 'HomeController@totpDisable');
 
 // API routes (JSON only)
 $router->group('/api', function($r) {

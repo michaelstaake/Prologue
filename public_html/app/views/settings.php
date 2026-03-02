@@ -156,6 +156,30 @@
         } elseif ($flashError === 'storage_recalculate_failed') {
             $toastMessage = 'Could not recalculate storage size right now.';
             $toastKind = 'error';
+        } elseif ($flashSuccess === 'totp_setup_started') {
+            $autoOpenModalId = 'cp-2fa-modal';
+        } elseif ($flashSuccess === 'totp_enabled') {
+            $toastMessage = 'Authenticator app enabled successfully.';
+            $toastKind = 'success';
+            $autoOpenModalId = 'cp-2fa-modal';
+        } elseif ($flashSuccess === 'totp_disabled') {
+            $toastMessage = 'Authenticator app disabled.';
+            $toastKind = 'success';
+        } elseif ($flashError === 'totp_already_enabled') {
+            $toastMessage = 'Authenticator app is already enabled.';
+            $toastKind = 'error';
+        } elseif ($flashError === 'totp_setup_expired') {
+            $toastMessage = 'Setup session expired. Please try again.';
+            $toastKind = 'error';
+            $autoOpenModalId = 'cp-2fa-modal';
+        } elseif ($flashError === 'totp_invalid_code') {
+            $toastMessage = 'Invalid code. Please try again.';
+            $toastKind = 'error';
+            $autoOpenModalId = 'cp-2fa-modal';
+        } elseif ($flashError === 'totp_password_invalid') {
+            $toastMessage = 'Incorrect password.';
+            $toastKind = 'error';
+            $autoOpenModalId = 'cp-2fa-modal';
         }
     ?>
 
@@ -287,10 +311,10 @@
                 <i class="fa-solid fa-right-from-bracket text-2xl text-emerald-400"></i>
                 <span class="text-sm text-zinc-200 font-medium">Sessions</span>
             </button>
-            <!-- <button type="button" data-modal-open="cp-2fa-modal" class="bg-zinc-900 border border-zinc-700 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 hover:bg-zinc-800 transition cursor-pointer aspect-[2/1]">
+            <button type="button" data-modal-open="cp-2fa-modal" class="bg-zinc-900 border border-zinc-700 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 hover:bg-zinc-800 transition cursor-pointer aspect-[2/1]">
                 <i class="fa-solid fa-mobile-screen text-2xl text-emerald-400"></i>
                 <span class="text-sm text-zinc-200 font-medium">2FA</span>
-            </button> -->
+            </button>
             <button type="button" data-modal-open="cp-notifications-modal" class="bg-zinc-900 border border-zinc-700 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 hover:bg-zinc-800 transition cursor-pointer aspect-[2/1]">
                 <i class="fa-solid fa-bell text-2xl text-emerald-400"></i>
                 <span class="text-sm text-zinc-200 font-medium">Notifications</span>
@@ -998,7 +1022,75 @@
                 <h3 class="text-xl font-semibold">Two-Factor Authentication</h3>
                 <button type="button" data-modal-close="cp-2fa-modal" class="rounded-lg px-2 py-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200">&times;</button>
             </div>
-            <p class="text-zinc-400">The ability to select which 2FA method you would like to use is coming soon!</p>
+
+            <?php if (!empty($totpRecoveryCodes)): ?>
+                <!-- Recovery codes display (shown once after setup) -->
+                <div class="space-y-4">
+                    <p class="text-zinc-300">Save these recovery codes in a safe place. Each code can only be used once.</p>
+                    <div class="bg-zinc-950 border border-zinc-700 rounded-xl p-4 font-mono text-sm grid grid-cols-2 gap-2" id="recovery-codes-grid">
+                        <?php foreach ($totpRecoveryCodes as $code): ?>
+                            <span class="text-zinc-200"><?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?></span>
+                        <?php endforeach; ?>
+                    </div>
+                    <button type="button" onclick="
+                        const codes = Array.from(document.querySelectorAll('#recovery-codes-grid span')).map(el => el.textContent).join('\n');
+                        navigator.clipboard.writeText(codes);
+                        this.textContent = 'Copied!';
+                        setTimeout(() => this.textContent = 'Copy all codes', 2000);
+                    " class="w-full bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 py-2.5 rounded-xl text-sm font-medium transition">Copy all codes</button>
+                </div>
+
+            <?php elseif ($totpSetupPending): ?>
+                <!-- Setup in progress: show QR code and confirmation -->
+                <div class="space-y-4">
+                    <p class="text-zinc-400">Scan this QR code with your authenticator app (Google Authenticator, Duo, Authy, etc.).</p>
+                    <?php if ($totpQrDataUri !== ''): ?>
+                        <div class="flex justify-center">
+                            <img src="<?= htmlspecialchars($totpQrDataUri, ENT_QUOTES, 'UTF-8') ?>" alt="TOTP QR Code" class="rounded-xl bg-white p-2" width="228" height="228">
+                        </div>
+                    <?php endif; ?>
+                    <div>
+                        <p class="text-xs text-zinc-500 mb-1">Or enter this key manually:</p>
+                        <div class="bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 font-mono text-sm text-zinc-300 break-all select-all"><?= htmlspecialchars($totpSecretDisplay, ENT_QUOTES, 'UTF-8') ?></div>
+                    </div>
+                    <form method="POST" action="<?= htmlspecialchars(base_url('/settings/2fa/totp/confirm'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-3">
+                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
+                        <div>
+                            <label class="block text-sm text-zinc-400 mb-1">Enter the 6-digit code from your app to confirm</label>
+                            <input type="text" name="totp_code" maxlength="6" pattern="\d{6}" inputmode="numeric" autocomplete="one-time-code" placeholder="123456" required class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-center text-2xl tracking-widest focus:outline-none focus:border-emerald-500">
+                        </div>
+                        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 py-3 rounded-xl font-semibold transition">Verify and enable</button>
+                    </form>
+                </div>
+
+            <?php elseif ($totpEnabled): ?>
+                <!-- TOTP is active -->
+                <div class="space-y-4">
+                    <div class="flex items-center gap-3 bg-emerald-950/40 border border-emerald-800 rounded-xl px-4 py-3">
+                        <i class="fa-solid fa-circle-check text-emerald-400"></i>
+                        <span class="text-emerald-300 font-medium">Authenticator app is enabled</span>
+                    </div>
+                    <p class="text-sm text-zinc-400">
+                        Recovery codes remaining: <span class="text-zinc-200 font-medium"><?= $totpRecoveryCodesRemaining ?></span> of 8
+                    </p>
+                    <form method="POST" action="<?= htmlspecialchars(base_url('/settings/2fa/totp/disable'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-3 border-t border-zinc-700 pt-4">
+                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
+                        <p class="text-sm text-zinc-400">To disable, enter your current password:</p>
+                        <input type="password" name="password" placeholder="Current password" required class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 focus:outline-none focus:border-emerald-500">
+                        <button type="submit" class="w-full bg-red-600 hover:bg-red-500 py-3 rounded-xl font-semibold transition">Disable authenticator app</button>
+                    </form>
+                </div>
+
+            <?php else: ?>
+                <!-- TOTP not configured -->
+                <div class="space-y-4">
+                    <p class="text-zinc-400">Add an extra layer of security by using an authenticator app like Google Authenticator, Duo, or Authy.</p>
+                    <form method="POST" action="<?= htmlspecialchars(base_url('/settings/2fa/totp/setup'), ENT_QUOTES, 'UTF-8') ?>">
+                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
+                        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 py-3 rounded-xl font-semibold transition">Set up authenticator app</button>
+                    </form>
+                </div>
+            <?php endif; ?>
         </div>
     </div>
 </div>

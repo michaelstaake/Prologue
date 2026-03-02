@@ -10,10 +10,19 @@
     <?php if ($toastMessage !== ''): ?>
         <div id="page-toast" data-toast-message="<?= htmlspecialchars($toastMessage, ENT_QUOTES, 'UTF-8') ?>" data-toast-kind="<?= htmlspecialchars($toastKind, ENT_QUOTES, 'UTF-8') ?>" class="hidden" aria-hidden="true"></div>
     <?php endif; ?>
-    <p class="mb-8 text-zinc-400">Enter the 6-digit code<?php if (($providerLabel ?? '') === 'Email'): ?> sent to your email<?php endif; ?></p>
+    <?php if (($providerLabel ?? '') === 'Authenticator App'): ?>
+        <p class="mb-6 text-zinc-400">Enter the 6-digit code from your authenticator app</p>
+    <?php elseif (($providerLabel ?? '') === 'Email'): ?>
+        <p class="mb-6 text-zinc-400">Enter the 6-digit code sent to your email</p>
+    <?php else: ?>
+        <p class="mb-6 text-zinc-400">Enter the 6-digit code</p>
+    <?php endif; ?>
     <form method="POST" action="<?= htmlspecialchars(base_url('/2fa'), ENT_QUOTES, 'UTF-8') ?>">
         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
-        <input type="text" name="code" maxlength="6" placeholder="123456" class="w-64 text-center text-4xl tracking-widest bg-zinc-800 border border-zinc-700 rounded-2xl px-8 py-6" required>
+        <input type="text" name="code" maxlength="8" placeholder="123456" class="w-64 text-center text-4xl tracking-widest bg-zinc-800 border border-zinc-700 rounded-2xl px-8 py-6" required>
+        <?php if (($providerLabel ?? '') === 'Authenticator App'): ?>
+            <p class="mt-3 text-sm text-zinc-500">You can also use a recovery code</p>
+        <?php endif; ?>
         <button type="submit" class="mt-8 w-full bg-emerald-600 hover:bg-emerald-500 py-4 rounded-2xl font-semibold">Verify</button>
     </form>
 </div>

@@ -6,4 +6,5 @@ interface TwoFAProviderInterface {
     public function sendChallenge(int $userId, string $ip): bool;
     public function verifyCode(int $userId, string $code, string $ip): bool;
     public function cleanup(int $userId): void;
+    public function getPriority(): int;
 }

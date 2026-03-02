@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../modules/2fa/totp/TOTP.php';
+require_once __DIR__ . '/../../vendor/phpqrcode/qrcode.php';
 require_once __DIR__ . '/../../vendor/phpmailer/src/PHPMailer.php';
 require_once __DIR__ . '/../../vendor/phpmailer/src/SMTP.php';
 require_once __DIR__ . '/../../vendor/phpmailer/src/Exception.php';
@@ -869,5 +871,108 @@ class HomeController extends Controller {
         } catch (Exception $e) {
             // log error in production
         }
+    }
+
+    public function totpSetupBegin() {
+        Auth::requireAuth();
+        Auth::csrfValidate();
+
+        $user = Auth::user();
+        $userId = (int)$user->id;
+
+        // Check if already confirmed
+        $existing = Database::query(
+            "SELECT id FROM totp_secrets WHERE user_id = ? AND confirmed_at IS NOT NULL",
+            [$userId]
+        )->fetch();
+
+        if ($existing) {
+            $this->flash('error', 'totp_already_enabled');
+            $this->redirect('/settings');
+        }
+
+        $secret = TOTP::generateSecret();
+        $encrypted = TOTP::encrypt($secret);
+
+        // Remove any unconfirmed secret and insert new one
+        Database::query("DELETE FROM totp_secrets WHERE user_id = ? AND confirmed_at IS NULL", [$userId]);
+        Database::query(
+            "INSERT INTO totp_secrets (user_id, secret_encrypted) VALUES (?, ?)",
+            [$userId, $encrypted]
+        );
+
+        $_SESSION['totp_setup_secret'] = $secret;
+        $this->flash('success', 'totp_setup_started');
+        $this->redirect('/settings');
+    }
+
+    public function totpSetupConfirm() {
+        Auth::requireAuth();
+        Auth::csrfValidate();
+
+        $user = Auth::user();
+        $userId = (int)$user->id;
+
+        $secret = $_SESSION['totp_setup_secret'] ?? '';
+        if ($secret === '') {
+            $this->flash('error', 'totp_setup_expired');
+            $this->redirect('/settings');
+        }
+
+        $code = trim($_POST['totp_code'] ?? '');
+        if (!preg_match('/^\d{6}$/', $code)) {
+            $this->flash('error', 'totp_invalid_code');
+            $this->redirect('/settings');
+        }
+
+        if (!TOTP::verify($secret, $code, 1)) {
+            $this->flash('error', 'totp_invalid_code');
+            $this->redirect('/settings');
+        }
+
+        // Confirm the secret
+        Database::query(
+            "UPDATE totp_secrets SET confirmed_at = NOW() WHERE user_id = ? AND confirmed_at IS NULL",
+            [$userId]
+        );
+
+        // Generate recovery codes
+        $codes = TOTP::generateRecoveryCodes(8);
+
+        // Clear any old recovery codes
+        Database::query("DELETE FROM totp_recovery_codes WHERE user_id = ?", [$userId]);
+
+        // Store hashed recovery codes
+        foreach ($codes as $code) {
+            Database::query(
+                "INSERT INTO totp_recovery_codes (user_id, code_hash) VALUES (?, ?)",
+                [$userId, hash('sha256', $code)]
+            );
+        }
+
+        unset($_SESSION['totp_setup_secret']);
+        $_SESSION['totp_recovery_codes'] = $codes;
+        $this->flash('success', 'totp_enabled');
+        $this->redirect('/settings');
+    }
+
+    public function totpDisable() {
+        Auth::requireAuth();
+        Auth::csrfValidate();
+
+        $user = Auth::user();
+        $userId = (int)$user->id;
+
+        $password = $_POST['password'] ?? '';
+        if (!password_verify($password, (string)$user->password)) {
+            $this->flash('error', 'totp_password_invalid');
+            $this->redirect('/settings');
+        }
+
+        Database::query("DELETE FROM totp_secrets WHERE user_id = ?", [$userId]);
+        Database::query("DELETE FROM totp_recovery_codes WHERE user_id = ?", [$userId]);
+
+        $this->flash('success', 'totp_disabled');
+        $this->redirect('/settings');
     }
 }

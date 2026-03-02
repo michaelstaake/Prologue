@@ -44,6 +44,26 @@ class UpdateController extends Controller {
                 )",
                 "ALTER TABLE messages ADD COLUMN bot_name VARCHAR(100) NULL AFTER quoted_content",
             ],
+            '0.1.1' => [
+                "CREATE TABLE IF NOT EXISTS totp_secrets (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    user_id INT NOT NULL,
+                    secret_encrypted TEXT NOT NULL,
+                    confirmed_at TIMESTAMP NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                    UNIQUE KEY (user_id)
+                )",
+                "CREATE TABLE IF NOT EXISTS totp_recovery_codes (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    user_id INT NOT NULL,
+                    code_hash CHAR(64) NOT NULL,
+                    used_at TIMESTAMP NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                    KEY idx_totp_recovery_user (user_id)
+                )",
+            ],
         ];
     }
 

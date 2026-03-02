@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../modules/2fa/totp/TOTP.php';
+require_once __DIR__ . '/../../vendor/phpqrcode/qrcode.php';
 
 class SettingsController extends Controller {
     public function index() {
@@ -38,6 +40,42 @@ class SettingsController extends Controller {
 
         $userTimezone = (string)(Setting::get('timezone_' . $settingPrefix) ?? 'UTC+0');
 
+        // TOTP 2FA data
+        $totpEnabled = (bool)Database::query(
+            "SELECT id FROM totp_secrets WHERE user_id = ? AND confirmed_at IS NOT NULL",
+            [$userId]
+        )->fetch();
+
+        $totpSetupPending = isset($_SESSION['totp_setup_secret']);
+
+        $totpRecoveryCodesRemaining = 0;
+        if ($totpEnabled) {
+            $totpRecoveryCodesRemaining = (int)Database::query(
+                "SELECT COUNT(*) FROM totp_recovery_codes WHERE user_id = ? AND used_at IS NULL",
+                [$userId]
+            )->fetchColumn();
+        }
+
+        $totpQrDataUri = '';
+        $totpSecretDisplay = '';
+        if ($totpSetupPending) {
+            $secret = $_SESSION['totp_setup_secret'];
+            $totpSecretDisplay = $secret;
+            $uri = TOTP::getProvisioningUri($secret, $user->email, APP_NAME);
+            ob_start();
+            $qr = new QRCode($uri, ['s' => 'qrm', 'sf' => 6]);
+            $image = $qr->render_image();
+            imagepng($image);
+            imagedestroy($image);
+            $pngData = ob_get_clean();
+            $totpQrDataUri = 'data:image/png;base64,' . base64_encode($pngData);
+        }
+
+        $totpRecoveryCodes = $_SESSION['totp_recovery_codes'] ?? null;
+        if ($totpRecoveryCodes !== null) {
+            unset($_SESSION['totp_recovery_codes']);
+        }
+
         $viewData = [
             'user' => $user,
             'isAdmin' => $isAdmin,
@@ -56,6 +94,12 @@ class SettingsController extends Controller {
             'invites' => $invites,
             'sessions' => $sessions,
             'pendingEmailChange' => $pendingEmailChange,
+            'totpEnabled' => $totpEnabled,
+            'totpSetupPending' => $totpSetupPending,
+            'totpQrDataUri' => $totpQrDataUri,
+            'totpSecretDisplay' => $totpSecretDisplay,
+            'totpRecoveryCodesRemaining' => $totpRecoveryCodesRemaining,
+            'totpRecoveryCodes' => $totpRecoveryCodes,
         ];
 
         // --- Admin data ---

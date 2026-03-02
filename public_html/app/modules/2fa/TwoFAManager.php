@@ -44,6 +44,8 @@ class TwoFAManager {
             }
         }
 
+        usort(self::$providers, fn($a, $b) => $b->getPriority() - $a->getPriority());
+
         return self::$providers;
     }
 
