@@ -460,6 +460,22 @@
                     </div>
                     <input type="checkbox" name="new_user_notification" value="1" <?= !empty($new_user_notification) ? 'checked' : '' ?> class="w-5 h-5 accent-emerald-500 shrink-0">
                 </label>
+                <div>
+                    <label for="new_user_auto_join_group" class="block text-sm text-zinc-400 mb-1">Auto-join new users to group chat</label>
+                    <select id="new_user_auto_join_group" name="new_user_auto_join_group" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-zinc-100">
+                        <option value="">None</option>
+                        <?php foreach (($all_group_chats ?? []) as $gc): ?>
+                            <?php
+                                $gcTitle = trim((string)($gc->title ?? ''));
+                                $gcLabel = $gcTitle !== '' ? $gcTitle : User::formatUserNumber($gc->chat_number);
+                            ?>
+                            <option value="<?= (int)$gc->id ?>" <?= ((string)($new_user_auto_join_group ?? '') === (string)$gc->id) ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($gcLabel, ENT_QUOTES, 'UTF-8') ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <p class="text-xs text-zinc-500 mt-1">Automatically add new users to this group chat after registration.</p>
+                </div>
                 <div class="pt-2">
                     <button type="submit" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-medium transition">Save account settings</button>
                 </div>

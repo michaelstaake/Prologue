@@ -27,6 +27,17 @@ class AdminController extends Controller {
         Setting::set('email_verification_required', isset($_POST['email_verification_required']) ? '1' : '0');
         Setting::set('new_user_notification', isset($_POST['new_user_notification']) ? '1' : '0');
 
+        $autoJoinGroup = trim((string)($_POST['new_user_auto_join_group'] ?? ''));
+        if ($autoJoinGroup !== '') {
+            $validChat = Database::query(
+                "SELECT id FROM chats WHERE id = ? AND type = 'group'",
+                [(int)$autoJoinGroup]
+            )->fetch();
+            Setting::set('new_user_auto_join_group', $validChat ? (string)$validChat->id : '');
+        } else {
+            Setting::set('new_user_auto_join_group', '');
+        }
+
         $this->flash('success', 'accounts_saved');
         $this->redirect('/settings');
     }

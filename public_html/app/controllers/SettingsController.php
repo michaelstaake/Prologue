@@ -129,6 +129,14 @@ class SettingsController extends Controller {
                     : 0.0;
             }
 
+            $groupChatQuery = "SELECT id, title, chat_number FROM chats WHERE type = 'group'";
+            if (Chat::supportsSoftDelete()) {
+                $groupChatQuery .= " AND deleted_at IS NULL";
+            }
+            $groupChatQuery .= " ORDER BY title ASC, created_at DESC";
+            $allGroupChats = Database::query($groupChatQuery)->fetchAll();
+            $newUserAutoJoinGroup = (string)(Setting::get('new_user_auto_join_group') ?? '');
+
             $viewData = array_merge($viewData, [
                 'pendingReportCount' => $pendingReportCount,
                 'announcement_message' => (string)(Setting::get('announcement_message') ?? ''),
@@ -147,6 +155,8 @@ class SettingsController extends Controller {
                 'attachment_logging' => (string)(Setting::get('attachment_logging') ?? '0') === '1',
                 'check_for_updates' => (string)(Setting::get('check_for_updates') ?? '0') === '1',
                 'new_user_notification' => (string)(Setting::get('new_user_notification') ?? '0') === '1',
+                'all_group_chats' => $allGroupChats,
+                'new_user_auto_join_group' => $newUserAutoJoinGroup,
                 'failed_login_attempts_24h' => $bruteForceProtection['failed_login_attempts_24h'],
                 'failed_registration_attempts_24h' => $bruteForceProtection['failed_registration_attempts_24h'],
                 'active_banned_ips' => $bruteForceProtection['active_banned_ips'],

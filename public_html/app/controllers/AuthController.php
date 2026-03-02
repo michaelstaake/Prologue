@@ -273,6 +273,7 @@ class AuthController extends Controller {
             Attachment::cleanupPendingForUser($newUser);
         }
         $_SESSION['last_activity_touch_at'] = time();
+        $this->autoJoinNewUserToGroup($newUserId, $username);
         $this->redirect('/');
     }
 
@@ -366,6 +367,7 @@ class AuthController extends Controller {
         $this->createSafariDesktopLoginNotice((int)$pendingUserId, $userAgent);
         $this->checkForAvailableUpdateOnAdminLogin((int)$pendingUserId);
         $_SESSION['last_activity_touch_at'] = time();
+        $this->autoJoinNewUserToGroup((int)$pendingUserId, (string)($pendingUser->username ?? ''));
         $this->redirect('/');
     }
 
@@ -698,5 +700,50 @@ class AuthController extends Controller {
         Database::query(
             "DELETE FROM auth_attempt_limits WHERE created_at < (NOW() - INTERVAL 1 MINUTE)"
         );
+    }
+
+    private function autoJoinNewUserToGroup(int $userId, string $username): void {
+        $autoJoinGroupId = (string)(Setting::get('new_user_auto_join_group') ?? '');
+        if ($autoJoinGroupId === '' || $autoJoinGroupId === '0') {
+            return;
+        }
+
+        $chatId = (int)$autoJoinGroupId;
+
+        $chatQuery = "SELECT id FROM chats WHERE id = ? AND type = 'group'";
+        if (Chat::supportsSoftDelete()) {
+            $chatQuery .= " AND deleted_at IS NULL";
+        }
+        $chat = Database::query($chatQuery, [$chatId])->fetch();
+        if (!$chat) {
+            return;
+        }
+
+        $memberCount = (int)Database::query(
+            "SELECT COUNT(*) FROM chat_members WHERE chat_id = ?",
+            [$chatId]
+        )->fetchColumn();
+        if ($memberCount >= 200) {
+            return;
+        }
+
+        Database::query(
+            "INSERT IGNORE INTO chat_members (chat_id, user_id) VALUES (?, ?)",
+            [$chatId, $userId]
+        );
+
+        $supportsSystemEvents = (int)Database::query(
+            "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'chat_system_events'"
+        )->fetchColumn() > 0;
+
+        if ($supportsSystemEvents) {
+            $normalizedUsername = User::normalizeUsername($username);
+            if ($normalizedUsername !== '') {
+                Database::query(
+                    "INSERT INTO chat_system_events (chat_id, event_type, content) VALUES (?, 'user_auto_joined', ?)",
+                    [$chatId, $normalizedUsername . ' joined via auto-join']
+                );
+            }
+        }
     }
 }
