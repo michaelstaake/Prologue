@@ -305,6 +305,8 @@ $router->get('/controlpanel', 'ControlPanelController@index');
 $router->get('/apikeys', 'ApiKeyController@index');
 $router->post('/apikeys/create', 'ApiKeyController@create');
 $router->post('/apikeys/expire', 'ApiKeyController@expire');
+$router->post('/apikeys/update', 'ApiKeyController@update');
+$router->post('/apikeys/view-key', 'ApiKeyController@viewKey');
 $router->get('/apikeys/docs', 'ApiKeyController@docs');
 
 // Admin (admin only)

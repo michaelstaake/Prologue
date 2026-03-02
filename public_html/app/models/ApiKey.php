@@ -99,4 +99,25 @@ class ApiKey extends Model {
             [$userId]
         )->fetchColumn();
     }
+
+    public static function getById(int $keyId, int $userId) {
+        return self::query(
+            "SELECT * FROM api_keys WHERE id = ? AND user_id = ?",
+            [$keyId, $userId]
+        )->fetch();
+    }
+
+    public static function updateChats(int $keyId, int $userId, ?string $allowedChats): void {
+        self::query(
+            "UPDATE api_keys SET allowed_chats = ? WHERE id = ? AND user_id = ? AND status = 'active'",
+            [$allowedChats, $keyId, $userId]
+        );
+    }
+
+    public static function updateIps(int $keyId, int $userId, ?string $allowedIps): void {
+        self::query(
+            "UPDATE api_keys SET allowed_ips = ? WHERE id = ? AND user_id = ? AND status = 'active'",
+            [$allowedIps, $keyId, $userId]
+        );
+    }
 }

@@ -134,6 +134,110 @@ class ApiKeyController extends Controller {
         $this->json(['success' => true]);
     }
 
+    public function update() {
+        Auth::requireAuth();
+        Auth::csrfValidate();
+
+        $userId = (int)Auth::user()->id;
+        $keyId = (int)($_POST['key_id'] ?? 0);
+
+        if ($keyId <= 0) {
+            $this->json(['error' => 'Invalid key'], 400);
+            return;
+        }
+
+        $key = ApiKey::getById($keyId, $userId);
+        if (!$key) {
+            $this->json(['error' => 'Key not found'], 404);
+            return;
+        }
+        if ($key->status !== 'active') {
+            $this->json(['error' => 'Cannot update an expired key'], 400);
+            return;
+        }
+
+        // Validate and clean IPs
+        $allowedIps = trim($_POST['allowed_ips'] ?? '');
+        $cleanedIps = null;
+        if ($allowedIps !== '') {
+            $ipParts = array_map('trim', explode(',', $allowedIps));
+            $ipParts = array_filter($ipParts, fn($ip) => $ip !== '');
+            foreach ($ipParts as $ip) {
+                if (!filter_var($ip, FILTER_VALIDATE_IP)) {
+                    $this->json(['error' => 'Invalid IP address: ' . $ip], 400);
+                    return;
+                }
+            }
+            $cleanedIps = implode(',', $ipParts);
+        }
+
+        // Validate and clean chats (for bot keys)
+        $allowedChats = null;
+        if ($key->type === 'bot') {
+            $chatIds = $_POST['chat_ids'] ?? [];
+            if (!is_array($chatIds)) {
+                $chatIds = array_filter(array_map('trim', explode(',', (string)$chatIds)));
+            }
+            $chatIds = array_map('intval', $chatIds);
+            $chatIds = array_filter($chatIds, fn($id) => $id > 0);
+
+            if (empty($chatIds)) {
+                $this->json(['error' => 'Bot keys require at least one chat'], 400);
+                return;
+            }
+
+            foreach ($chatIds as $chatId) {
+                $owned = Database::query(
+                    "SELECT c.id FROM chats c
+                     JOIN chat_members cm ON cm.chat_id = c.id AND cm.user_id = ?
+                     WHERE c.id = ? AND c.type = 'group' AND c.created_by = ? AND c.deleted_at IS NULL",
+                    [$userId, $chatId, $userId]
+                )->fetch();
+                if (!$owned) {
+                    $this->json(['error' => 'You can only grant bot access to group chats you own'], 403);
+                    return;
+                }
+            }
+            $allowedChats = implode(',', $chatIds);
+        }
+
+        ApiKey::updateIps($keyId, $userId, $cleanedIps);
+        if ($key->type === 'bot') {
+            ApiKey::updateChats($keyId, $userId, $allowedChats);
+        }
+
+        $this->json(['success' => true]);
+    }
+
+    public function viewKey() {
+        Auth::requireAuth();
+        Auth::csrfValidate();
+
+        $userId = (int)Auth::user()->id;
+        $keyId = (int)($_POST['key_id'] ?? 0);
+
+        if ($keyId <= 0) {
+            $this->json(['error' => 'Invalid key'], 400);
+            return;
+        }
+
+        $key = ApiKey::getById($keyId, $userId);
+        if (!$key) {
+            $this->json(['error' => 'Key not found'], 404);
+            return;
+        }
+
+        if ($key->type !== 'bot') {
+            $this->json(['error' => 'User keys cannot be viewed after creation for security reasons'], 403);
+            return;
+        }
+
+        $this->json([
+            'success' => true,
+            'api_key' => $key->api_key,
+        ]);
+    }
+
     public function docs() {
         Auth::requireAuth();
         $this->view('apikeys_docs', [

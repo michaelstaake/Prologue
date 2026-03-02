@@ -35,9 +35,7 @@
     </div>
 
     <p class="text-sm text-zinc-400">
-        API keys allow external applications to interact with your account.
-        <strong>Bot</strong> keys can send messages to group chats you own.
-        <strong>User</strong> keys have full access to your chats.
+        API keys allow you to integrate your Prologue account with other applications and systems. Build something fun!
     </p>
 
     <?php if (empty($keyList)): ?>
@@ -81,12 +79,29 @@
                             </div>
                         </div>
                         <?php if ($isActive): ?>
-                            <button type="button"
-                                    onclick="expireKey(<?= (int)$key->id ?>, '<?= htmlspecialchars(addslashes($key->name)) ?>')"
-                                    class="shrink-0 inline-flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-400 hover:bg-red-500/20 transition">
-                                <i class="fa-solid fa-ban"></i>
-                                Expire
-                            </button>
+                            <div class="flex gap-2 shrink-0">
+                                <?php if ($key->type === 'bot'): ?>
+                                    <button type="button"
+                                            onclick="viewApiKey(<?= (int)$key->id ?>)"
+                                            class="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-700 transition"
+                                            title="View API Key">
+                                        <i class="fa-solid fa-eye"></i>
+                                        View Key
+                                    </button>
+                                <?php endif; ?>
+                                <button type="button"
+                                        onclick="manageKey(<?= (int)$key->id ?>, '<?= htmlspecialchars(addslashes($key->name)) ?>', '<?= htmlspecialchars(addslashes($key->allowed_chats ?? '')) ?>', '<?= htmlspecialchars(addslashes($key->allowed_ips ?? '')) ?>', '<?= htmlspecialchars($key->type) ?>')"
+                                        class="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-300 hover:bg-zinc-700 transition">
+                                    <i class="fa-solid fa-gear"></i>
+                                    Manage
+                                </button>
+                                <button type="button"
+                                        onclick="expireKey(<?= (int)$key->id ?>, '<?= htmlspecialchars(addslashes($key->name)) ?>')"
+                                        class="inline-flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-400 hover:bg-red-500/20 transition">
+                                    <i class="fa-solid fa-ban"></i>
+                                    Expire
+                                </button>
+                            </div>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -112,7 +127,7 @@
                 <div>
                     <label class="block text-sm text-zinc-300 mb-1">Name</label>
                     <input type="text" name="name" maxlength="100" required data-modal-autofocus
-                           placeholder="e.g. My Bot, Webhook Integration"
+                           placeholder="e.g. Fabulous Bot"
                            class="w-full rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-3 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500">
                 </div>
 
@@ -124,15 +139,15 @@
                             <div class="rounded-xl border border-zinc-700 bg-zinc-800 p-3 text-center peer-checked:border-emerald-500 peer-checked:bg-emerald-500/10 transition">
                                 <i class="fa-solid fa-robot text-lg text-blue-400 mb-1"></i>
                                 <div class="text-sm font-medium">Bot</div>
-                                <div class="text-xs text-zinc-400 mt-0.5">Send messages to your group chats</div>
+                                <div class="text-xs text-zinc-400 mt-0.5">Send messages to specific chats</div>
                             </div>
                         </label>
-                        <label class="flex-1 cursor-pointer">
-                            <input type="radio" name="type" value="user" class="peer hidden">
-                            <div class="rounded-xl border border-zinc-700 bg-zinc-800 p-3 text-center peer-checked:border-emerald-500 peer-checked:bg-emerald-500/10 transition">
+                        <label class="flex-1 cursor-not-allowed opacity-50" title="Coming soon">
+                            <input type="radio" name="type" value="user" class="peer hidden" disabled>
+                            <div class="rounded-xl border border-zinc-700 bg-zinc-800 p-3 text-center transition">
                                 <i class="fa-solid fa-user text-lg text-purple-400 mb-1"></i>
                                 <div class="text-sm font-medium">User</div>
-                                <div class="text-xs text-zinc-400 mt-0.5">Full access to all your chats</div>
+                                <div class="text-xs text-zinc-500 mt-0.5">Coming soon</div>
                             </div>
                         </label>
                     </div>
@@ -224,6 +239,100 @@
                         class="flex-1 rounded-xl bg-emerald-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-emerald-500 transition">
                     Done
                 </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Manage API Key Modal -->
+<div id="ak-manage-modal" class="<?= $modalOverlayClass ?>" role="dialog" aria-modal="true">
+    <div class="<?= $modalBackdropClass ?>" data-modal-close="ak-manage-modal"></div>
+    <div class="<?= $modalCenterClass ?>">
+        <div class="<?= $modalBoxClass ?>" data-modal-box>
+            <div class="mb-4 flex items-center justify-between">
+                <h3 class="text-xl font-semibold">Manage: <span id="ak-manage-key-name"></span></h3>
+                <button type="button" data-modal-close="ak-manage-modal" class="rounded-lg px-2 py-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200">&times;</button>
+            </div>
+
+            <form id="ak-manage-form" class="space-y-4">
+                <input type="hidden" name="key_id" id="ak-manage-key-id" value="">
+
+                <div id="ak-manage-chat-selector">
+                    <label class="block text-sm text-zinc-300 mb-1">Allowed Group Chats</label>
+                    <p class="text-xs text-zinc-400 mb-2">Select which group chats this bot can send messages to.</p>
+                    <?php if (empty($chatList)): ?>
+                        <p class="text-sm text-zinc-500 italic">You don't own any group chats yet.</p>
+                    <?php else: ?>
+                        <div class="max-h-48 overflow-y-auto space-y-1 rounded-xl border border-zinc-700 bg-zinc-800 p-3">
+                            <?php foreach ($chatList as $gc): ?>
+                                <label class="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-zinc-700/50 cursor-pointer">
+                                    <input type="checkbox" name="chat_ids[]" value="<?= (int)$gc->id ?>"
+                                           class="ak-manage-chat-cb rounded border-zinc-600 bg-zinc-700 text-emerald-500 focus:ring-emerald-500">
+                                    <span class="text-sm text-zinc-200 truncate"><?= htmlspecialchars($gc->title ?: 'Unnamed Group') ?></span>
+                                    <span class="text-xs text-zinc-500 ml-auto shrink-0"><?= htmlspecialchars(User::formatUserNumber($gc->chat_number)) ?></span>
+                                </label>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
+
+                <div>
+                    <label class="block text-sm text-zinc-300 mb-1">IP Restrictions <span class="text-zinc-500">(optional)</span></label>
+                    <input type="text" name="allowed_ips" id="ak-manage-ips"
+                           placeholder="e.g. 192.168.1.1, 2001:db8::1"
+                           class="w-full rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-3 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    <p class="text-xs text-zinc-400 mt-1">Comma-separated IPv4 or IPv6 addresses. Leave blank to allow any IP.</p>
+                </div>
+
+                <div class="flex gap-2 pt-2">
+                    <button type="submit"
+                            class="flex-1 rounded-xl bg-emerald-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-emerald-500 transition">
+                        Save Changes
+                    </button>
+                    <button type="button" data-modal-close="ak-manage-modal"
+                            class="rounded-xl bg-zinc-700 px-6 py-2.5 text-sm font-medium text-zinc-200 hover:bg-zinc-600 transition">
+                        Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- View API Key Modal -->
+<div id="ak-view-key-modal" class="<?= $modalOverlayClass ?>" role="dialog" aria-modal="true">
+    <div class="<?= $modalBackdropClass ?>" data-modal-close="ak-view-key-modal"></div>
+    <div class="<?= $modalCenterClass ?>">
+        <div class="<?= $modalBoxClass ?>" data-modal-box>
+            <div class="mb-4 flex items-center justify-between">
+                <h3 class="text-xl font-semibold">API Key</h3>
+                <button type="button" data-modal-close="ak-view-key-modal" class="rounded-lg px-2 py-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200">&times;</button>
+            </div>
+
+            <div id="ak-view-key-loading" class="text-center py-4">
+                <i class="fa-solid fa-spinner fa-spin text-zinc-400"></i>
+                <p class="text-sm text-zinc-400 mt-2">Loading...</p>
+            </div>
+
+            <div id="ak-view-key-content" class="hidden">
+                <div class="mb-4">
+                    <label class="block text-sm text-zinc-300 mb-1">Your API Key</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="ak-view-key-display" readonly
+                               class="flex-1 rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-3 font-mono text-sm text-zinc-100 select-all focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        <button type="button" id="ak-view-copy-btn" onclick="copyViewKey()"
+                                class="shrink-0 rounded-xl bg-zinc-700 px-4 py-3 text-sm text-zinc-200 hover:bg-zinc-600 transition">
+                            <i class="fa-regular fa-copy"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="flex gap-2">
+                    <button type="button" data-modal-close="ak-view-key-modal"
+                            class="flex-1 rounded-xl bg-zinc-700 px-6 py-2.5 text-sm font-medium text-zinc-200 hover:bg-zinc-600 transition">
+                        Close
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -427,6 +536,114 @@
             });
         });
     }
+
+    // ---- Manage key ----
+    window.manageKey = function (keyId, keyName, allowedChats, allowedIps, keyType) {
+        document.getElementById('ak-manage-key-id').value = keyId;
+        document.getElementById('ak-manage-key-name').textContent = keyName;
+        document.getElementById('ak-manage-ips').value = allowedIps || '';
+
+        // Show/hide chat selector based on key type
+        var chatSelector = document.getElementById('ak-manage-chat-selector');
+        if (chatSelector) {
+            chatSelector.style.display = (keyType === 'bot') ? '' : 'none';
+        }
+
+        // Pre-check the appropriate chat checkboxes
+        var chatCbs = document.querySelectorAll('.ak-manage-chat-cb');
+        var allowedArr = allowedChats ? allowedChats.split(',').map(function (s) { return s.trim(); }) : [];
+        chatCbs.forEach(function (cb) {
+            cb.checked = allowedArr.indexOf(cb.value) !== -1;
+        });
+
+        openModal('ak-manage-modal');
+    };
+
+    var manageForm = document.getElementById('ak-manage-form');
+    if (manageForm) {
+        manageForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+
+            var formData = new FormData(manageForm);
+            var body = new URLSearchParams();
+            body.append('csrf_token', getCsrfToken());
+            body.append('key_id', formData.get('key_id') || '');
+            body.append('allowed_ips', formData.get('allowed_ips') || '');
+
+            var chatIds = formData.getAll('chat_ids[]');
+            chatIds.forEach(function (id) {
+                body.append('chat_ids[]', id);
+            });
+
+            fetch(<?= json_encode(base_url('/apikeys/update')) ?>, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: body.toString()
+            })
+            .then(function (res) { return res.json(); })
+            .then(function (result) {
+                if (result.success) {
+                    closeModal('ak-manage-modal');
+                    showToast('API key updated successfully', 'success');
+                    setTimeout(function () { location.reload(); }, 800);
+                } else {
+                    showToast(result.error || 'Failed to update API key', 'error');
+                }
+            })
+            .catch(function () {
+                showToast('An error occurred', 'error');
+            });
+        });
+    }
+
+    // ---- View key (bot only) ----
+    window.viewApiKey = function (keyId) {
+        var loading = document.getElementById('ak-view-key-loading');
+        var content = document.getElementById('ak-view-key-content');
+        var display = document.getElementById('ak-view-key-display');
+
+        if (loading) loading.classList.remove('hidden');
+        if (content) content.classList.add('hidden');
+        if (display) display.value = '';
+
+        openModal('ak-view-key-modal');
+
+        postForm(<?= json_encode(base_url('/apikeys/view-key')) ?>, {
+            csrf_token: getCsrfToken(),
+            key_id: String(keyId)
+        }).then(function (result) {
+            if (result.success) {
+                if (display) display.value = result.api_key;
+                if (loading) loading.classList.add('hidden');
+                if (content) content.classList.remove('hidden');
+            } else {
+                closeModal('ak-view-key-modal');
+                showToast(result.error || 'Failed to retrieve key', 'error');
+            }
+        }).catch(function () {
+            closeModal('ak-view-key-modal');
+            showToast('An error occurred', 'error');
+        });
+    };
+
+    window.copyViewKey = function () {
+        var keyDisplay = document.getElementById('ak-view-key-display');
+        var copyBtn = document.getElementById('ak-view-copy-btn');
+        if (!keyDisplay) return;
+
+        navigator.clipboard.writeText(keyDisplay.value).then(function () {
+            if (copyBtn) {
+                copyBtn.innerHTML = '<i class="fa-solid fa-check"></i>';
+                setTimeout(function () {
+                    copyBtn.innerHTML = '<i class="fa-regular fa-copy"></i>';
+                }, 2000);
+            }
+        });
+    };
 
     // ---- Copy key ----
     window.copyNewKey = function () {
