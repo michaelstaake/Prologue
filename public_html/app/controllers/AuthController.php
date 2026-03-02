@@ -28,7 +28,7 @@ class AuthController extends Controller {
 
         Auth::csrfValidate();
         $this->verifyCaptchaOrFail('/login');
-        $email = trim($_POST['email'] ?? '');
+        $identifier = trim($_POST['identifier'] ?? '');
         $password = $_POST['password'] ?? '';
         $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
 
@@ -37,13 +37,15 @@ class AuthController extends Controller {
             $this->redirect('/login');
         }
 
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL) || $password === '') {
+        if ($identifier === '' || $password === '') {
             $this->recordAuthAttempt($ip, self::AUTH_ATTEMPT_LOGIN_FAILED);
             $this->flash('error', 'invalid');
             $this->redirect('/login');
         }
 
-        $user = User::findByEmail($email);
+        $user = str_contains($identifier, '@')
+            ? User::findByEmail($identifier)
+            : User::findByUsername($identifier);
         if (!$user || !password_verify($password, $user->password)) {
             $this->recordAuthAttempt($ip, self::AUTH_ATTEMPT_LOGIN_FAILED);
             $this->flash('error', 'invalid');
