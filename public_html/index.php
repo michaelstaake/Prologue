@@ -300,8 +300,8 @@ $router->get('/trash', 'TrashController@index');
 $router->get('/trash/{chat_number}', 'TrashController@show');
 $router->post('/trash/delete', 'TrashController@delete');
 
-// Control Panel
-$router->get('/controlpanel', 'ControlPanelController@index');
+// Settings
+$router->get('/settings', 'SettingsController@index');
 $router->get('/apikeys', 'ApiKeyController@index');
 $router->post('/apikeys/create', 'ApiKeyController@create');
 $router->post('/apikeys/expire', 'ApiKeyController@expire');

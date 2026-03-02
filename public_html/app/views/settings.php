@@ -1,5 +1,5 @@
 <div class="p-8 overflow-auto space-y-8">
-    <h1 class="text-3xl font-bold">Control Panel</h1>
+    <h1 class="text-3xl font-bold">Settings</h1>
 
     <?php
         $toastMessage = '';

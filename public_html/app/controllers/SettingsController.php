@@ -1,6 +1,6 @@
 <?php
 
-class ControlPanelController extends Controller {
+class SettingsController extends Controller {
     public function index() {
         Auth::requireAuth();
         $user = Auth::user();
@@ -124,7 +124,7 @@ class ControlPanelController extends Controller {
             ]);
         }
 
-        $this->view('controlpanel', $viewData);
+        $this->view('settings', $viewData);
     }
 
     private function usernameChangeAvailableAt($user) {

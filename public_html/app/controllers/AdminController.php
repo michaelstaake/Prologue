@@ -28,7 +28,7 @@ class AdminController extends Controller {
         Setting::set('new_user_notification', isset($_POST['new_user_notification']) ? '1' : '0');
 
         $this->flash('success', 'accounts_saved');
-        $this->redirect('/controlpanel');
+        $this->redirect('/settings');
     }
 
     public function saveAnnouncementSettings() {
@@ -46,7 +46,7 @@ class AdminController extends Controller {
         Setting::set('announcement_message', $announcement);
 
         $this->flash('success', 'announcement_saved');
-        $this->redirect('/controlpanel');
+        $this->redirect('/settings');
     }
 
     public function saveMoreSettings() {
@@ -59,7 +59,7 @@ class AdminController extends Controller {
         Setting::set('check_for_updates', isset($_POST['check_for_updates']) ? '1' : '0');
 
         $this->flash('success', 'more_saved');
-        $this->redirect('/controlpanel');
+        $this->redirect('/settings');
     }
 
     public function saveCaptchaSettings() {
@@ -85,7 +85,7 @@ class AdminController extends Controller {
         }
 
         $this->flash('success', 'captcha_saved');
-        $this->redirect('/controlpanel');
+        $this->redirect('/settings');
     }
 
     public function saveAttachmentSettings() {
@@ -104,7 +104,7 @@ class AdminController extends Controller {
         Setting::set('attachments_maximum_file_size_mb', (string)$maxMb);
 
         $this->flash('success', 'attachments_saved');
-        $this->redirect('/controlpanel');
+        $this->redirect('/settings');
     }
 
     public function saveMailSettings() {
@@ -128,7 +128,7 @@ class AdminController extends Controller {
         Setting::set('mail_from_name', $mailFromName);
 
         $this->flash('success', 'mail_saved');
-        $this->redirect('/controlpanel');
+        $this->redirect('/settings');
     }
 
     public function sendTestMail() {
@@ -140,7 +140,7 @@ class AdminController extends Controller {
 
         if ($mailHost === '' || $mailUser === '') {
             $this->flash('mail_test_error', 'Mail host and username must be configured before sending a test email.');
-            $this->redirect('/controlpanel');
+            $this->redirect('/settings');
         }
 
         $mailPort = (int)(Setting::get('mail_port') ?? 587);
@@ -170,7 +170,7 @@ class AdminController extends Controller {
             $this->flash('mail_test_error', $e->getMessage());
         }
 
-        $this->redirect('/controlpanel');
+        $this->redirect('/settings');
     }
 
         public function recalculateStorageStats() {
@@ -189,7 +189,7 @@ class AdminController extends Controller {
                 $this->flash('error', 'storage_recalculate_failed');
             }
 
-            $this->redirect('/controlpanel');
+            $this->redirect('/settings');
         }
 
     public function checkForUpdatesNow() {
@@ -201,16 +201,16 @@ class AdminController extends Controller {
         if (($result['status'] ?? '') === 'update_available') {
             $latestVersion = (string)($result['latest_version'] ?? '');
             $this->flash('success', 'update_check_update_available:' . $latestVersion);
-            $this->redirect('/controlpanel');
+            $this->redirect('/settings');
         }
 
         if (($result['status'] ?? '') === 'up_to_date') {
             $this->flash('success', 'update_check_up_to_date');
-            $this->redirect('/controlpanel');
+            $this->redirect('/settings');
         }
 
         $this->flash('error', 'update_check_failed');
-        $this->redirect('/controlpanel');
+        $this->redirect('/settings');
     }
 
     private function storageRoot(): string {
