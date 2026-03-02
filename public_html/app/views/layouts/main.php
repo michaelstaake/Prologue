@@ -381,6 +381,13 @@
                         <option value="">Loading devices...</option>
                     </select>
                 </div>
+                <div>
+                    <label class="block text-sm font-medium text-zinc-300 mb-1.5">Microphone Volume</label>
+                    <input id="call-settings-volume" type="range" min="0" max="100" value="100" class="w-full accent-emerald-500 h-1.5 bg-zinc-700 rounded-full appearance-none cursor-pointer">
+                    <div class="mt-2 w-full h-1 bg-zinc-800 rounded-full overflow-hidden">
+                        <div id="call-settings-level" class="h-full bg-emerald-500 rounded-full transition-none" style="width: 0%"></div>
+                    </div>
+                </div>
                 <div id="call-settings-camera-wrap" class="hidden">
                     <label for="call-settings-camera" class="block text-sm font-medium text-zinc-300 mb-1.5">Camera</label>
                     <select id="call-settings-camera" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-sm text-zinc-100 focus:outline-none focus:border-zinc-500 disabled:opacity-50 disabled:cursor-not-allowed">

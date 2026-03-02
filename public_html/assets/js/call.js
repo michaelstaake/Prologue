@@ -9,7 +9,13 @@ const CALL_SESSION_STORAGE_KEY = 'prologue.activeCallSession';
 const CALL_OVERLAY_STORAGE_KEY = 'prologue.activeCallOverlayMode';
 const CALL_PREFERRED_MIC_KEY = 'prologue.preferredMicDeviceId';
 const CALL_PREFERRED_CAMERA_KEY = 'prologue.preferredCameraDeviceId';
+const CALL_MIC_VOLUME_KEY = 'prologue.micVolume';
 const CALL_SELF_FOCUS_PEER_ID = -1;
+let micGainNode = null;
+let micGainSource = null;
+let micGainDestination = null;
+let settingsLevelRaf = null;
+let settingsLevelAnalyser = null;
 let callParticipantsRenderSignature = '';
 let callConnectingOverlayTimeout = null;
 
@@ -535,6 +541,8 @@ async function cleanupLocalCallSession(options = {}) {
     if (localStream) {
         localStream.getTracks().forEach(track => track.stop());
     }
+    teardownMicGainPipeline();
+    stopSettingsLevelMeter();
 
     const callIdBeforeCleanup = Number(currentCallId || 0);
     localStream = null;
@@ -915,7 +923,9 @@ async function startVoiceCall(options = {}) {
         setChatCallStatusBar('ringing');
         syncCallRingingState({ state: 'ringing', callId: Number(currentCallId || 0), ringingDirection: 'outgoing', incomingAlert: false });
     }
-    localStream = await navigator.mediaDevices.getUserMedia(getSavedAudioConstraints());
+    const rawMicStream = await navigator.mediaDevices.getUserMedia(getSavedAudioConstraints());
+    const processedStream = setupMicGainPipeline(rawMicStream);
+    localStream = new MediaStream(processedStream.getAudioTracks());
     bindCallAudioUnlockHandlers();
     startLocalSpeakingDetection();
     const localVideo = document.getElementById('local-video');
@@ -1432,6 +1442,75 @@ function closeScreenShareModal() {
     document.getElementById('screenshare-modal')?.classList.add('hidden');
 }
 
+// ── Mic gain pipeline ─────────────────────────────────────────────────────────
+
+function getSavedMicVolume() {
+    const saved = localStorage.getItem(CALL_MIC_VOLUME_KEY);
+    if (saved !== null) return parseFloat(saved);
+    return 1.0;
+}
+
+function setupMicGainPipeline(rawStream) {
+    teardownMicGainPipeline();
+    const ctx = getOrCreateAudioContext();
+    const source = ctx.createMediaStreamSource(rawStream);
+    const gain = ctx.createGain();
+    gain.gain.value = getSavedMicVolume();
+    const dest = ctx.createMediaStreamDestination();
+    source.connect(gain);
+    gain.connect(dest);
+    micGainNode = gain;
+    micGainSource = source;
+    micGainDestination = dest;
+    return dest.stream;
+}
+
+function teardownMicGainPipeline() {
+    if (micGainSource) { try { micGainSource.disconnect(); } catch(e) {} micGainSource = null; }
+    if (micGainNode) { try { micGainNode.disconnect(); } catch(e) {} micGainNode = null; }
+    micGainDestination = null;
+}
+
+function startSettingsLevelMeter() {
+    stopSettingsLevelMeter();
+    if (!localStream || !localStream.getAudioTracks().length) return;
+
+    const ctx = getOrCreateAudioContext();
+    const source = ctx.createMediaStreamSource(localStream);
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.5;
+    source.connect(analyser);
+    settingsLevelAnalyser = { source, analyser };
+
+    const data = new Uint8Array(analyser.fftSize);
+    const bar = document.getElementById('call-settings-level');
+
+    function tick() {
+        settingsLevelRaf = requestAnimationFrame(tick);
+        analyser.getByteTimeDomainData(data);
+        let sum = 0;
+        for (let i = 0; i < data.length; i++) {
+            const s = (data[i] - 128) / 128;
+            sum += s * s;
+        }
+        const rms = Math.sqrt(sum / data.length);
+        const pct = Math.min(100, rms * 400);
+        if (bar) bar.style.width = pct + '%';
+    }
+    tick();
+}
+
+function stopSettingsLevelMeter() {
+    if (settingsLevelRaf) { cancelAnimationFrame(settingsLevelRaf); settingsLevelRaf = null; }
+    if (settingsLevelAnalyser) {
+        try { settingsLevelAnalyser.source.disconnect(); } catch(e) {}
+        settingsLevelAnalyser = null;
+    }
+    const bar = document.getElementById('call-settings-level');
+    if (bar) bar.style.width = '0%';
+}
+
 // ── Call settings modal ─────────────────────────────────────────────────────
 
 function getSavedAudioConstraints() {
@@ -1455,9 +1534,21 @@ function openCallSettingsModal() {
     if (!modal) return;
     modal.classList.remove('hidden');
     populateCallSettingsDevices();
+
+    const volumeSlider = document.getElementById('call-settings-volume');
+    if (volumeSlider) {
+        volumeSlider.value = Math.round(getSavedMicVolume() * 100);
+        volumeSlider.oninput = function() {
+            const vol = this.value / 100;
+            localStorage.setItem(CALL_MIC_VOLUME_KEY, String(vol));
+            if (micGainNode) micGainNode.gain.value = vol;
+        };
+    }
+    startSettingsLevelMeter();
 }
 
 function closeCallSettingsModal() {
+    stopSettingsLevelMeter();
     document.getElementById('call-settings-modal')?.classList.add('hidden');
 }
 
@@ -1545,11 +1636,12 @@ async function handleMicChange() {
     if (!localStream) return;
 
     try {
-        const newStream = await navigator.mediaDevices.getUserMedia({
+        const rawStream = await navigator.mediaDevices.getUserMedia({
             audio: { deviceId: { exact: deviceId } },
             video: false
         });
-        const newAudioTrack = newStream.getAudioTracks()[0];
+        const processedStream = setupMicGainPipeline(rawStream);
+        const newAudioTrack = processedStream.getAudioTracks()[0];
         if (!newAudioTrack) return;
 
         localStream.getAudioTracks().forEach(track => {
@@ -1565,6 +1657,11 @@ async function handleMicChange() {
         });
 
         startLocalSpeakingDetection();
+
+        const modal = document.getElementById('call-settings-modal');
+        if (modal && !modal.classList.contains('hidden')) {
+            startSettingsLevelMeter();
+        }
     } catch (e) {
         showToast('Could not switch microphone', 'error');
     }
