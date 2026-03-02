@@ -33,22 +33,21 @@ class CloudflareTurnstileCaptchaProvider implements CaptchaProviderInterface {
             return false;
         }
 
-        $postData = http_build_query([
-            'secret' => $secretKey,
-            'response' => $token,
-            'remoteip' => $ip,
+        $ch = curl_init('https://challenges.cloudflare.com/turnstile/v0/siteverify');
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => http_build_query([
+                'secret' => $secretKey,
+                'response' => $token,
+                'remoteip' => $ip,
+            ]),
+            CURLOPT_TIMEOUT => 10,
         ]);
 
-        $context = stream_context_create([
-            'http' => [
-                'method' => 'POST',
-                'header' => "Content-Type: application/x-www-form-urlencoded\r\n",
-                'content' => $postData,
-                'timeout' => 10,
-            ],
-        ]);
+        $response = curl_exec($ch);
+        curl_close($ch);
 
-        $response = @file_get_contents('https://challenges.cloudflare.com/turnstile/v0/siteverify', false, $context);
         if ($response === false) {
             return false;
         }
