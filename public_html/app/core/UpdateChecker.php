@@ -20,7 +20,7 @@ class UpdateChecker {
         }
 
         $currentVersion = self::normalizeVersionString((string)APP_VERSION);
-        if ($latestVersion === $currentVersion) {
+        if (version_compare($latestVersion, $currentVersion, '<=')) {
             return ['status' => 'up_to_date', 'latest_version' => $latestVersion];
         }
 
