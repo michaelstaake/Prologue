@@ -1192,3 +1192,52 @@ function clearAcceptedCallNotifications() {
 
     renderToastHistory();
 }
+
+function setTwofaSettingsStatus(text, kind) {
+    var statusEl = document.getElementById('twofa-settings-status');
+    if (!statusEl) return;
+
+    var kindClassMap = {
+        info: 'text-zinc-500',
+        success: 'text-emerald-400',
+        error: 'text-red-400'
+    };
+
+    statusEl.classList.remove('text-zinc-500', 'text-emerald-400', 'text-red-400');
+    statusEl.classList.add(kindClassMap[kind] || kindClassMap.info);
+    statusEl.textContent = text;
+}
+
+function bindTwofaFrequencyRadios() {
+    const radios = Array.from(document.querySelectorAll('[data-twofa-frequency]'));
+    if (radios.length === 0) return;
+
+    radios.forEach((radio) => {
+        radio.addEventListener('change', async () => {
+            const frequency = radio.value;
+            radios.forEach((r) => { r.disabled = true; });
+            setTwofaSettingsStatus('Saving…', 'info');
+
+            try {
+                const result = await postForm('/settings/2fa/frequency', {
+                    csrf_token: getCsrfToken(),
+                    frequency
+                });
+
+                if (!result.success) {
+                    throw new Error(result.error || 'Unable to save 2FA frequency');
+                }
+
+                setTwofaSettingsStatus('Saved', 'success');
+            } catch (error) {
+                const previous = frequency === 'always' ? 'trusted' : 'always';
+                const previousRadio = radios.find((r) => r.value === previous);
+                if (previousRadio) previousRadio.checked = true;
+                setTwofaSettingsStatus('Failed to save', 'error');
+                showToast(error.message || 'Unable to save 2FA frequency', 'error');
+            } finally {
+                radios.forEach((r) => { r.disabled = false; });
+            }
+        });
+    });
+}

@@ -335,6 +335,7 @@ $router->post('/settings/sessions/exit', 'HomeController@exitSession');
 $router->post('/settings/2fa/totp/setup', 'HomeController@totpSetupBegin');
 $router->post('/settings/2fa/totp/confirm', 'HomeController@totpSetupConfirm');
 $router->post('/settings/2fa/totp/disable', 'HomeController@totpDisable');
+$router->post('/settings/2fa/frequency', 'HomeController@saveTwofaFrequency');
 
 // API routes (JSON only)
 $router->group('/api', function($r) {

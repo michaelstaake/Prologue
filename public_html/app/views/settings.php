@@ -1065,15 +1065,41 @@
 
             <?php elseif ($totpEnabled): ?>
                 <!-- TOTP is active -->
-                <div class="space-y-4">
+                <div class="space-y-5">
                     <div class="flex items-center gap-3 bg-emerald-950/40 border border-emerald-800 rounded-xl px-4 py-3">
                         <i class="fa-solid fa-circle-check text-emerald-400"></i>
                         <span class="text-emerald-300 font-medium">Authenticator app is enabled</span>
                     </div>
-                    <p class="text-sm text-zinc-400">
-                        Recovery codes remaining: <span class="text-zinc-200 font-medium"><?= $totpRecoveryCodesRemaining ?></span> of 8
-                    </p>
-                    <form method="POST" action="<?= htmlspecialchars(base_url('/settings/2fa/totp/disable'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-3 border-t border-zinc-700 pt-4">
+
+                    <div>
+                        <div class="flex items-center justify-between mb-2">
+                            <p class="text-sm text-zinc-400">Verification frequency</p>
+                            <p id="twofa-settings-status" class="text-xs text-zinc-500" aria-live="polite"></p>
+                        </div>
+                        <div class="space-y-2">
+                            <label class="flex items-center gap-3 rounded-xl border border-zinc-700 bg-zinc-800/30 px-4 py-3 cursor-pointer">
+                                <input type="radio" name="twofa_frequency" value="trusted" data-twofa-frequency <?= $twofaFrequency === 'trusted' ? 'checked' : '' ?> class="w-4 h-4 accent-emerald-500 shrink-0">
+                                <div>
+                                    <span class="block text-zinc-100">Trusted devices</span>
+                                    <span class="block text-xs text-zinc-500 mt-0.5">Skip verification for devices used in the last 14 days</span>
+                                </div>
+                            </label>
+                            <label class="flex items-center gap-3 rounded-xl border border-zinc-700 bg-zinc-800/30 px-4 py-3 cursor-pointer">
+                                <input type="radio" name="twofa_frequency" value="always" data-twofa-frequency <?= $twofaFrequency === 'always' ? 'checked' : '' ?> class="w-4 h-4 accent-emerald-500 shrink-0">
+                                <div>
+                                    <span class="block text-zinc-100">Every login</span>
+                                    <span class="block text-xs text-zinc-500 mt-0.5">Require verification every time you sign in</span>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="rounded-xl border border-zinc-700 bg-zinc-800/30 px-4 py-3 flex items-center justify-between gap-4">
+                        <span class="text-sm text-zinc-400">Recovery codes remaining</span>
+                        <span class="text-zinc-200 font-medium"><?= $totpRecoveryCodesRemaining ?> <span class="text-zinc-500 font-normal">of 8</span></span>
+                    </div>
+
+                    <form method="POST" action="<?= htmlspecialchars(base_url('/settings/2fa/totp/disable'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-3 border-t border-zinc-700 pt-5">
                         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
                         <p class="text-sm text-zinc-400">To disable, enter your current password:</p>
                         <input type="password" name="password" placeholder="Current password" required class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 focus:outline-none focus:border-emerald-500">

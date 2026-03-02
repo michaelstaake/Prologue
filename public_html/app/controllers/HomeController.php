@@ -971,8 +971,34 @@ class HomeController extends Controller {
 
         Database::query("DELETE FROM totp_secrets WHERE user_id = ?", [$userId]);
         Database::query("DELETE FROM totp_recovery_codes WHERE user_id = ?", [$userId]);
+        Database::query("DELETE FROM settings WHERE `key` = ?", ['twofa_frequency_' . $userId]);
 
         $this->flash('success', 'totp_disabled');
         $this->redirect('/settings');
+    }
+
+    public function saveTwofaFrequency() {
+        Auth::requireAuth();
+        Auth::csrfValidate();
+
+        $userId = (int)Auth::user()->id;
+
+        $totpEnabled = (bool)Database::query(
+            "SELECT id FROM totp_secrets WHERE user_id = ? AND confirmed_at IS NOT NULL",
+            [$userId]
+        )->fetch();
+
+        if (!$totpEnabled) {
+            $this->json(['error' => '2FA is not enabled'], 400);
+        }
+
+        $frequency = trim((string)($_POST['frequency'] ?? ''));
+        if (!in_array($frequency, ['always', 'trusted'], true)) {
+            $this->json(['error' => 'Invalid frequency'], 400);
+        }
+
+        Setting::set('twofa_frequency_' . $userId, $frequency);
+
+        $this->json(['success' => true, 'frequency' => $frequency]);
     }
 }

@@ -67,6 +67,10 @@ class Auth {
     }
 
     public static function needs2FA($userId, $ip) {
+        $frequency = (string)(Setting::get('twofa_frequency_' . $userId) ?? 'trusted');
+        if ($frequency === 'always') {
+            return true;
+        }
         $stmt = Database::query("SELECT id FROM user_trusted_ips WHERE user_id = ? AND ip = ? AND last_login > NOW() - INTERVAL 14 DAY", [$userId, $ip]);
         return $stmt->rowCount() === 0;
     }

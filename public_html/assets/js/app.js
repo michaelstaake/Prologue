@@ -688,6 +688,7 @@ async function init() {
     bindTimezoneSuggestionModal();
     bindStatusMenu();
     bindNotificationSettingsToggles();
+    bindTwofaFrequencyRadios();
     bindNotificationSoundPreviewButtons();
     bindBrowserPermissionChecks();
 

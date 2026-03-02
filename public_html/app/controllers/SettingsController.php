@@ -76,6 +76,8 @@ class SettingsController extends Controller {
             unset($_SESSION['totp_recovery_codes']);
         }
 
+        $twofaFrequency = (string)(Setting::get('twofa_frequency_' . $userId) ?? 'trusted');
+
         $viewData = [
             'user' => $user,
             'isAdmin' => $isAdmin,
@@ -100,6 +102,7 @@ class SettingsController extends Controller {
             'totpSecretDisplay' => $totpSecretDisplay,
             'totpRecoveryCodesRemaining' => $totpRecoveryCodesRemaining,
             'totpRecoveryCodes' => $totpRecoveryCodes,
+            'twofaFrequency' => $twofaFrequency,
         ];
 
         // --- Admin data ---
