@@ -7,6 +7,8 @@ let localParticipantSpeaking = false;
 const remoteAnalysers = new Map();
 const CALL_SESSION_STORAGE_KEY = 'prologue.activeCallSession';
 const CALL_OVERLAY_STORAGE_KEY = 'prologue.activeCallOverlayMode';
+const CALL_PREFERRED_MIC_KEY = 'prologue.preferredMicDeviceId';
+const CALL_PREFERRED_CAMERA_KEY = 'prologue.preferredCameraDeviceId';
 const CALL_SELF_FOCUS_PEER_ID = -1;
 let callParticipantsRenderSignature = '';
 let callConnectingOverlayTimeout = null;
@@ -913,7 +915,7 @@ async function startVoiceCall(options = {}) {
         setChatCallStatusBar('ringing');
         syncCallRingingState({ state: 'ringing', callId: Number(currentCallId || 0), ringingDirection: 'outgoing', incomingAlert: false });
     }
-    localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    localStream = await navigator.mediaDevices.getUserMedia(getSavedAudioConstraints());
     bindCallAudioUnlockHandlers();
     startLocalSpeakingDetection();
     const localVideo = document.getElementById('local-video');
@@ -1058,7 +1060,7 @@ async function toggleVideoInCall() {
 
     if (!isVideoEnabled) {
         try {
-            const cameraStream = await navigator.mediaDevices.getUserMedia({ video: true });
+            const cameraStream = await navigator.mediaDevices.getUserMedia(getSavedVideoConstraints());
             const videoTrack = cameraStream.getVideoTracks()[0];
             if (!videoTrack) return;
 
@@ -1430,6 +1432,187 @@ function closeScreenShareModal() {
     document.getElementById('screenshare-modal')?.classList.add('hidden');
 }
 
+// ── Call settings modal ─────────────────────────────────────────────────────
+
+function getSavedAudioConstraints() {
+    const savedMicId = localStorage.getItem(CALL_PREFERRED_MIC_KEY);
+    if (savedMicId) {
+        return { audio: { deviceId: { ideal: savedMicId } }, video: false };
+    }
+    return { audio: true, video: false };
+}
+
+function getSavedVideoConstraints() {
+    const savedCameraId = localStorage.getItem(CALL_PREFERRED_CAMERA_KEY);
+    if (savedCameraId) {
+        return { video: { deviceId: { ideal: savedCameraId } } };
+    }
+    return { video: true };
+}
+
+function openCallSettingsModal() {
+    const modal = document.getElementById('call-settings-modal');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    populateCallSettingsDevices();
+}
+
+function closeCallSettingsModal() {
+    document.getElementById('call-settings-modal')?.classList.add('hidden');
+}
+
+async function populateCallSettingsDevices() {
+    let devices;
+    try {
+        devices = await navigator.mediaDevices.enumerateDevices();
+    } catch (e) {
+        showToast('Could not list media devices', 'error');
+        return;
+    }
+
+    const mics = devices.filter(d => d.kind === 'audioinput');
+    const cameras = devices.filter(d => d.kind === 'videoinput');
+
+    const savedMicId = localStorage.getItem(CALL_PREFERRED_MIC_KEY) || '';
+    const savedCameraId = localStorage.getItem(CALL_PREFERRED_CAMERA_KEY) || '';
+
+    // Determine currently active device IDs from the live stream
+    let activeMicId = '';
+    let activeCameraId = '';
+    if (localStream) {
+        const audioTrack = localStream.getAudioTracks().find(t => t.readyState === 'live');
+        if (audioTrack) activeMicId = audioTrack.getSettings().deviceId || '';
+        const videoTrack = localStream.getVideoTracks().find(t => t.readyState === 'live');
+        if (videoTrack) activeCameraId = videoTrack.getSettings().deviceId || '';
+    }
+
+    const micSelect = document.getElementById('call-settings-mic');
+    if (micSelect) {
+        micSelect.innerHTML = '';
+        if (mics.length === 0) {
+            micSelect.innerHTML = '<option value="">No microphones found</option>';
+            micSelect.disabled = true;
+        } else {
+            mics.forEach((mic, i) => {
+                const opt = document.createElement('option');
+                opt.value = mic.deviceId;
+                opt.textContent = mic.label || ('Microphone ' + (i + 1));
+                // Prefer active device, fall back to saved preference
+                if (activeMicId && mic.deviceId === activeMicId) opt.selected = true;
+                else if (!activeMicId && mic.deviceId === savedMicId) opt.selected = true;
+                micSelect.appendChild(opt);
+            });
+            micSelect.disabled = (mics.length <= 1);
+        }
+        micSelect.onchange = handleMicChange;
+    }
+
+    const cameraWrap = document.getElementById('call-settings-camera-wrap');
+    const cameraSelect = document.getElementById('call-settings-camera');
+    if (cameraWrap && cameraSelect) {
+        if (isVideoEnabled) {
+            cameraWrap.classList.remove('hidden');
+            cameraSelect.innerHTML = '';
+            if (cameras.length === 0) {
+                cameraSelect.innerHTML = '<option value="">No cameras found</option>';
+                cameraSelect.disabled = true;
+            } else {
+                cameras.forEach((cam, i) => {
+                    const opt = document.createElement('option');
+                    opt.value = cam.deviceId;
+                    opt.textContent = cam.label || ('Camera ' + (i + 1));
+                    if (activeCameraId && cam.deviceId === activeCameraId) opt.selected = true;
+                    else if (!activeCameraId && cam.deviceId === savedCameraId) opt.selected = true;
+                    cameraSelect.appendChild(opt);
+                });
+                cameraSelect.disabled = (cameras.length <= 1);
+            }
+            cameraSelect.onchange = handleCameraChange;
+        } else {
+            cameraWrap.classList.add('hidden');
+        }
+    }
+}
+
+async function handleMicChange() {
+    const micSelect = document.getElementById('call-settings-mic');
+    if (!micSelect) return;
+    const deviceId = micSelect.value;
+    if (!deviceId) return;
+
+    localStorage.setItem(CALL_PREFERRED_MIC_KEY, deviceId);
+
+    if (!localStream) return;
+
+    try {
+        const newStream = await navigator.mediaDevices.getUserMedia({
+            audio: { deviceId: { exact: deviceId } },
+            video: false
+        });
+        const newAudioTrack = newStream.getAudioTracks()[0];
+        if (!newAudioTrack) return;
+
+        localStream.getAudioTracks().forEach(track => {
+            track.stop();
+            localStream.removeTrack(track);
+        });
+
+        localStream.addTrack(newAudioTrack);
+        newAudioTrack.enabled = !isMuted;
+
+        forEachCallPeerConnection((pc) => {
+            ensureOutgoingAudioTrackOnPeerConnection(pc);
+        });
+
+        startLocalSpeakingDetection();
+    } catch (e) {
+        showToast('Could not switch microphone', 'error');
+    }
+}
+
+async function handleCameraChange() {
+    const cameraSelect = document.getElementById('call-settings-camera');
+    if (!cameraSelect) return;
+    const deviceId = cameraSelect.value;
+    if (!deviceId) return;
+
+    localStorage.setItem(CALL_PREFERRED_CAMERA_KEY, deviceId);
+
+    if (!localStream || !isVideoEnabled) return;
+
+    try {
+        const newStream = await navigator.mediaDevices.getUserMedia({
+            video: { deviceId: { exact: deviceId } }
+        });
+        const newVideoTrack = newStream.getVideoTracks()[0];
+        if (!newVideoTrack) return;
+
+        localStream.getVideoTracks().forEach(track => {
+            if (screenStream && screenStream.getVideoTracks().some(st => st.id === track.id)) {
+                return;
+            }
+            track.stop();
+            localStream.removeTrack(track);
+        });
+
+        localStream.addTrack(newVideoTrack);
+
+        const localVideo = document.getElementById('local-video');
+        if (localVideo) localVideo.srcObject = localStream;
+
+        syncOutgoingVideoTracksAcrossPeers();
+    } catch (e) {
+        showToast('Could not switch camera', 'error');
+    }
+}
+
+navigator.mediaDevices.addEventListener('devicechange', () => {
+    const modal = document.getElementById('call-settings-modal');
+    if (modal && !modal.classList.contains('hidden')) {
+        populateCallSettingsDevices();
+    }
+});
+
 async function startScreenShare(quality) {
     if (isMobileDevice()) {
         return;
@@ -1497,7 +1680,7 @@ async function stopScreenShare(restoreCamera = true) {
 
     if (restoreCamera && isVideoEnabled && localStream) {
         try {
-            const cameraStream = await navigator.mediaDevices.getUserMedia({ video: true });
+            const cameraStream = await navigator.mediaDevices.getUserMedia(getSavedVideoConstraints());
             const cameraTrack = cameraStream.getVideoTracks()[0];
             if (cameraTrack) {
                 localStream.getVideoTracks().forEach(t => { t.stop(); localStream.removeTrack(t); });

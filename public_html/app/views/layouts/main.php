@@ -290,6 +290,7 @@
             </div>
             <div class="flex items-center gap-1.5">
                 <button onclick="toggleCallParticipantsPanel()" id="call-participants-toggle-btn" class="hidden h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 text-xs px-2.5" title="Show participants panel" aria-label="Toggle participants panel" aria-expanded="false"><i class="fa-solid fa-users"></i></button>
+                <button onclick="openCallSettingsModal()" id="call-settings-btn" class="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 text-xs" title="Call settings"><i class="fa-solid fa-gear"></i></button>
                 <button onclick="setCallOverlayMode('hidden')" id="call-overlay-hidden-btn" class="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 text-xs" title="Hide call window (reopen from Call in progress bar)"><i class="fa-solid fa-chevron-up"></i></button>
                 <button onclick="setCallOverlayMode('half')" id="call-overlay-half-btn" class="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 text-xs" title="Split screen"><i class="fa-solid fa-down-left-and-up-right-to-center"></i></button>
                 <button onclick="setCallOverlayMode('full')" id="call-overlay-full-btn" class="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 text-xs" title="Full size"><i class="fa-solid fa-up-right-and-down-left-from-center"></i></button>
@@ -366,6 +367,28 @@
                 </button>
             </div>
             <button onclick="closeScreenShareModal()" class="mt-4 w-full text-center text-sm text-zinc-400 hover:text-zinc-200 py-2">Cancel</button>
+        </div>
+    </div>
+
+    <div id="call-settings-modal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+        <div class="w-full max-w-sm bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl p-6">
+            <h3 class="text-lg font-semibold text-zinc-100 mb-1">Call Settings</h3>
+            <p class="text-sm text-zinc-400 mb-5">Select your audio and video devices.</p>
+            <div class="space-y-4">
+                <div>
+                    <label for="call-settings-mic" class="block text-sm font-medium text-zinc-300 mb-1.5">Microphone</label>
+                    <select id="call-settings-mic" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-sm text-zinc-100 focus:outline-none focus:border-zinc-500 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <option value="">Loading devices...</option>
+                    </select>
+                </div>
+                <div id="call-settings-camera-wrap" class="hidden">
+                    <label for="call-settings-camera" class="block text-sm font-medium text-zinc-300 mb-1.5">Camera</label>
+                    <select id="call-settings-camera" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-sm text-zinc-100 focus:outline-none focus:border-zinc-500 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <option value="">Loading devices...</option>
+                    </select>
+                </div>
+            </div>
+            <button onclick="closeCallSettingsModal()" class="mt-5 w-full text-center text-sm text-zinc-400 hover:text-zinc-200 py-2">Close</button>
         </div>
     </div>
     </div>
