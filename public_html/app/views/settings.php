@@ -334,7 +334,7 @@
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <button type="button" data-modal-open="cp-browser-modal" class="bg-zinc-900 border border-zinc-700 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 hover:bg-zinc-800 transition cursor-pointer aspect-[2/1]">
                 <i class="fa-solid fa-globe text-2xl text-emerald-400"></i>
-                <span class="text-sm text-zinc-200 font-medium">Browser Permissions</span>
+                <span class="text-sm text-zinc-200 font-medium">Test Browser Features</span>
             </button>
             <button type="button" data-modal-open="cp-licensing-modal" class="bg-zinc-900 border border-zinc-700 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 hover:bg-zinc-800 transition cursor-pointer aspect-[2/1]">
                 <i class="fa-solid fa-scale-balanced text-2xl text-emerald-400"></i>
@@ -1172,13 +1172,13 @@
 
 <!-- ==================== MORE MODALS ==================== -->
 
-<!-- Browser Permissions Modal -->
+<!-- Test Browser Features Modal -->
 <div id="cp-browser-modal" class="<?= $modalOverlayClass ?>" role="dialog" aria-modal="true">
     <div class="<?= $modalBackdropClass ?>" data-modal-close="cp-browser-modal"></div>
     <div class="<?= $modalCenterClass ?>">
         <div class="<?= $modalBoxClass ?>" data-modal-box>
             <div class="mb-4 flex items-center justify-between">
-                <h3 class="text-xl font-semibold">Browser Permissions</h3>
+                <h3 class="text-xl font-semibold">Test Browser Features</h3>
                 <button type="button" data-modal-close="cp-browser-modal" class="rounded-lg px-2 py-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200">&times;</button>
             </div>
             <p class="text-sm text-zinc-400 mb-5">This applies to your current browser/device only.</p>
