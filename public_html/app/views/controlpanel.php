@@ -287,10 +287,10 @@
                 <i class="fa-solid fa-right-from-bracket text-2xl text-emerald-400"></i>
                 <span class="text-sm text-zinc-200 font-medium">Sessions</span>
             </button>
-            <button type="button" data-modal-open="cp-2fa-modal" class="bg-zinc-900 border border-zinc-700 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 hover:bg-zinc-800 transition cursor-pointer aspect-[2/1]">
+            <!-- <button type="button" data-modal-open="cp-2fa-modal" class="bg-zinc-900 border border-zinc-700 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 hover:bg-zinc-800 transition cursor-pointer aspect-[2/1]">
                 <i class="fa-solid fa-mobile-screen text-2xl text-emerald-400"></i>
                 <span class="text-sm text-zinc-200 font-medium">2FA</span>
-            </button>
+            </button> -->
             <button type="button" data-modal-open="cp-notifications-modal" class="bg-zinc-900 border border-zinc-700 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 hover:bg-zinc-800 transition cursor-pointer aspect-[2/1]">
                 <i class="fa-solid fa-bell text-2xl text-emerald-400"></i>
                 <span class="text-sm text-zinc-200 font-medium">Notifications</span>
@@ -998,7 +998,7 @@
                 <h3 class="text-xl font-semibold">Two-Factor Authentication</h3>
                 <button type="button" data-modal-close="cp-2fa-modal" class="rounded-lg px-2 py-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200">&times;</button>
             </div>
-            <p class="text-zinc-400">Coming soon.</p>
+            <p class="text-zinc-400">The ability to select which 2FA method you would like to use is coming soon!</p>
         </div>
     </div>
 </div>

@@ -711,7 +711,7 @@ function mapPermissionStateToBadge(state) {
 }
 
 async function updateBrowserPermissionsStatuses() {
-    const sectionNode = document.getElementById('browser-permissions-section');
+    const sectionNode = document.getElementById('browser-permissions-list');
     if (!sectionNode) return;
 
     const soundState = await getSoundPlaybackPermissionState();
@@ -772,7 +772,7 @@ async function testBrowserPermission(type) {
 }
 
 function bindBrowserPermissionChecks() {
-    const sectionNode = document.getElementById('browser-permissions-section');
+    const sectionNode = document.getElementById('browser-permissions-list');
     if (!sectionNode) return;
 
     const testButtons = Array.from(document.querySelectorAll('[data-browser-permission-test]'));
