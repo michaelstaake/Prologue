@@ -219,6 +219,7 @@ CREATE TABLE chats (
 	chat_number CHAR(16) UNIQUE NOT NULL,
 	type ENUM('personal','group') DEFAULT 'personal',
 	title VARCHAR(80) NULL,
+	non_member_visibility ENUM('none','requestable','public') NOT NULL DEFAULT 'none',
 	created_by INT NOT NULL,
 	deleted_at TIMESTAMP NULL,
 	deleted_by INT NULL,
@@ -233,11 +234,34 @@ CREATE TABLE chat_members (
 	id INT AUTO_INCREMENT PRIMARY KEY,
 	chat_id INT NOT NULL,
 	user_id INT NOT NULL,
+	role ENUM('member','moderator') NOT NULL DEFAULT 'member',
+	is_muted TINYINT(1) NOT NULL DEFAULT 0,
+	muted_by INT NULL,
+	muted_at TIMESTAMP NULL,
 	last_seen_message_id INT NULL,
 	joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 	FOREIGN KEY (chat_id) REFERENCES chats(id) ON DELETE CASCADE,
 	FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+	FOREIGN KEY (muted_by) REFERENCES users(id) ON DELETE SET NULL,
+	KEY idx_chat_members_role (chat_id, role),
 	UNIQUE KEY (chat_id, user_id)
+);
+
+-- Group join requests
+CREATE TABLE group_join_requests (
+	id BIGINT AUTO_INCREMENT PRIMARY KEY,
+	chat_id INT NOT NULL,
+	requester_user_id INT NOT NULL,
+	status ENUM('pending','approved','denied','cancelled') NOT NULL DEFAULT 'pending',
+	handled_by INT NULL,
+	handled_at TIMESTAMP NULL,
+	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+	FOREIGN KEY (chat_id) REFERENCES chats(id) ON DELETE CASCADE,
+	FOREIGN KEY (requester_user_id) REFERENCES users(id) ON DELETE CASCADE,
+	FOREIGN KEY (handled_by) REFERENCES users(id) ON DELETE SET NULL,
+	UNIQUE KEY uniq_group_join_requests_chat_user (chat_id, requester_user_id),
+	KEY idx_group_join_requests_status (chat_id, status)
 );
 
 -- Messages

@@ -763,6 +763,9 @@ async function init() {
             can_start_calls: String(chatView.dataset.canStartCalls || '1') === '1',
             user_in_active_call: String(chatView.dataset.userInActiveCall || '0') === '1',
             is_admin: String(chatView.dataset.isAdmin || '0') === '1',
+            is_group_member: String(chatView.dataset.isGroupMember || '1') === '1',
+            is_group_moderator: String(chatView.dataset.isGroupModerator || '0') === '1',
+            group_visibility: String(chatView.dataset.groupVisibility || 'none'),
             group_edit_window: String(chatView.dataset.groupEditWindow || 'never'),
             group_delete_window: String(chatView.dataset.groupDeleteWindow || 'never')
         };
@@ -789,6 +792,8 @@ async function init() {
         bindDeleteGroupModal();
         bindTakeOwnershipModal();
         bindMessageSettingsModal();
+        bindGroupJoinRequestButtons();
+        bindGroupMemberActionMenus();
         bindDeleteMessageModal();
         bindMessageEditAndDelete();
         bindChatHeaderMenu();
@@ -801,7 +806,9 @@ async function init() {
         if (chatPollIntervalId) {
             clearInterval(chatPollIntervalId);
         }
-        chatPollIntervalId = setInterval(pollMessages, 3000);
+        if (document.getElementById('messages')) {
+            chatPollIntervalId = setInterval(pollMessages, 3000);
+        }
     }
 
     if (Number(currentUserId || 0) > 0) {
@@ -822,6 +829,10 @@ async function init() {
                 return;
             }
             if (normalizeChatType(currentChat.type) === 'personal' && currentChat.can_send_messages === false) {
+                showToast(getPersonalChatMessageRestrictionToast(currentChat.message_restriction_reason), 'error');
+                return;
+            }
+            if (normalizeChatType(currentChat.type) === 'group' && currentChat.can_send_messages === false) {
                 showToast(getPersonalChatMessageRestrictionToast(currentChat.message_restriction_reason), 'error');
                 return;
             }

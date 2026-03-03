@@ -41,17 +41,48 @@ $attachmentFileInputAccept = implode(',', array_map(fn($ext) => '.' . $ext, $att
 
 $isGroupChat = (($chat->type ?? 'personal') === 'group');
 $isPersonalChat = !$isGroupChat;
+$isGroupMember = (bool)($isGroupMember ?? true);
+$isReadOnlyPublicViewer = (bool)($isReadOnlyPublicViewer ?? false);
+$isRequestablePreview = (bool)($isRequestablePreview ?? false);
+$groupVisibility = strtolower((string)($groupVisibility ?? 'none'));
+$currentUserJoinRequestStatus = strtolower((string)($currentUserJoinRequestStatus ?? ''));
+$canApproveJoinRequests = (bool)($canApproveJoinRequests ?? false);
+$pendingGroupJoinRequests = is_array($pendingGroupJoinRequests ?? null) ? $pendingGroupJoinRequests : [];
+$groupMemberCount = (int)($groupMemberCount ?? 0);
+$groupMessageCount = (int)($groupMessageCount ?? 0);
 $canSendMessages = (bool)($canSendMessages ?? true);
 $messageRestrictionReason = (string)($messageRestrictionReason ?? '');
 $canStartCalls = (bool)($canStartCalls ?? true);
-$messageDisabledNoticeText = $messageRestrictionReason === 'banned_user'
-    ? "You can't send messages to a banned user."
-    : 'Messaging is disabled in this private chat until you add each other as friends again.';
+$messageDisabledNoticeText = 'Messaging is currently disabled.';
+if ($messageRestrictionReason === 'banned_user') {
+    $messageDisabledNoticeText = "You can't send messages to a banned user.";
+} elseif ($messageRestrictionReason === 'not_friends') {
+    $messageDisabledNoticeText = 'Messaging is disabled in this private chat until you add each other as friends again.';
+} elseif ($messageRestrictionReason === 'group_muted') {
+    $messageDisabledNoticeText = 'You are muted in this group.';
+} elseif ($messageRestrictionReason === 'group_members_only') {
+    $messageDisabledNoticeText = 'Join this group to send messages.';
+} elseif ($messageRestrictionReason === 'group_read_only_public') {
+    $messageDisabledNoticeText = 'This is a public read-only view. Join the group to participate.';
+}
 $canReportChat = ((int)$chat->created_by !== (int)$currentUserId);
 $isGroupOwner = $isGroupChat && ((int)$chat->created_by === (int)$currentUserId);
 $isCurrentUserAdmin = (bool)($isCurrentUserAdmin ?? false);
 $canTakeGroupOwnership = $isGroupChat && !$isGroupOwner && $isCurrentUserAdmin;
-$hasChatActions = $isGroupChat || $canReportChat;
+$isGroupModerator = false;
+if ($isGroupChat && $isGroupMember) {
+    foreach (($members ?? []) as $member) {
+        if ((int)($member->id ?? 0) !== (int)$currentUserId) {
+            continue;
+        }
+        $isGroupModerator = strtolower((string)($member->group_role ?? 'member')) === 'moderator';
+        break;
+    }
+}
+$canManageGroupSettings = $isGroupChat && ($isGroupOwner || $isCurrentUserAdmin);
+$canModerateMembers = $isGroupChat && $isGroupMember && ($isGroupOwner || $isGroupModerator || $isCurrentUserAdmin);
+$canAddUsers = $isGroupChat && $canManageGroupSettings && $isGroupMember;
+$hasChatActions = ($isGroupChat && ($isGroupMember || $isCurrentUserAdmin)) || $canReportChat;
 $pinnedMessage = $pinnedMessage ?? null;
 $personalChatUserId = 0;
 $personalChatUserNumber = '';
@@ -146,7 +177,7 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
 };
 ?>
 
-    <div class="flex-1 flex flex-col h-full" id="chat-view" data-chat-id="<?= (int)$chat->id ?>" data-chat-number="<?= htmlspecialchars($chat->chat_number, ENT_QUOTES, 'UTF-8') ?>" data-chat-type="<?= htmlspecialchars($chat->type ?? 'personal', ENT_QUOTES, 'UTF-8') ?>" data-chat-owner-id="<?= (int)$chat->created_by ?>" data-current-user-id="<?= (int)$currentUserId ?>" data-first-unseen-message-id="<?= (int)($firstUnseenMessageId ?? 0) ?>" data-personal-user-id="<?= (int)$personalChatUserId ?>" data-can-send-messages="<?= $canSendMessages ? '1' : '0' ?>" data-message-restriction-reason="<?= htmlspecialchars($messageRestrictionReason, ENT_QUOTES, 'UTF-8') ?>" data-can-start-calls="<?= $canStartCalls ? '1' : '0' ?>" data-user-in-active-call="<?= !empty($isUserInActiveCall) ? '1' : '0' ?>" data-current-username="<?= htmlspecialchars($currentUserUsername, ENT_QUOTES, 'UTF-8') ?>" data-peer-username="<?= htmlspecialchars($personalChatPeerUsername, ENT_QUOTES, 'UTF-8') ?>" data-is-admin="<?= $isCurrentUserAdmin ? '1' : '0' ?>" data-group-edit-window="<?= htmlspecialchars($groupEditWindow ?? 'never', ENT_QUOTES, 'UTF-8') ?>" data-group-delete-window="<?= htmlspecialchars($groupDeleteWindow ?? 'never', ENT_QUOTES, 'UTF-8') ?>">
+    <div class="flex-1 flex flex-col h-full" id="chat-view" data-chat-id="<?= (int)$chat->id ?>" data-chat-number="<?= htmlspecialchars($chat->chat_number, ENT_QUOTES, 'UTF-8') ?>" data-chat-type="<?= htmlspecialchars($chat->type ?? 'personal', ENT_QUOTES, 'UTF-8') ?>" data-chat-owner-id="<?= (int)$chat->created_by ?>" data-current-user-id="<?= (int)$currentUserId ?>" data-first-unseen-message-id="<?= (int)($firstUnseenMessageId ?? 0) ?>" data-personal-user-id="<?= (int)$personalChatUserId ?>" data-can-send-messages="<?= $canSendMessages ? '1' : '0' ?>" data-message-restriction-reason="<?= htmlspecialchars($messageRestrictionReason, ENT_QUOTES, 'UTF-8') ?>" data-can-start-calls="<?= $canStartCalls ? '1' : '0' ?>" data-user-in-active-call="<?= !empty($isUserInActiveCall) ? '1' : '0' ?>" data-current-username="<?= htmlspecialchars($currentUserUsername, ENT_QUOTES, 'UTF-8') ?>" data-peer-username="<?= htmlspecialchars($personalChatPeerUsername, ENT_QUOTES, 'UTF-8') ?>" data-is-admin="<?= $isCurrentUserAdmin ? '1' : '0' ?>" data-group-edit-window="<?= htmlspecialchars($groupEditWindow ?? 'never', ENT_QUOTES, 'UTF-8') ?>" data-group-delete-window="<?= htmlspecialchars($groupDeleteWindow ?? 'never', ENT_QUOTES, 'UTF-8') ?>" data-group-visibility="<?= htmlspecialchars($groupVisibility, ENT_QUOTES, 'UTF-8') ?>" data-is-group-member="<?= $isGroupMember ? '1' : '0' ?>" data-is-group-moderator="<?= $isGroupModerator ? '1' : '0' ?>">
     <div class="h-16 border-b border-zinc-800 flex items-center px-6 justify-between">
         <div class="flex items-center gap-4 relative">
             <div class="flex items-center gap-2">
@@ -167,18 +198,22 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
             </button>
             <div id="chat-header-menu" class="hidden absolute top-full left-0 mt-2 min-w-44 bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl p-1 z-30">
                 <?php if ($isGroupChat): ?>
+                <?php if ($canAddUsers): ?>
                 <button type="button" data-chat-action="add-user" class="w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-zinc-800">Add User</button>
-                <?php if ($isGroupOwner): ?>
+                <?php endif; ?>
+                <?php if ($canManageGroupSettings): ?>
                 <button type="button" data-chat-action="rename-chat" class="w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-zinc-800">Rename Chat</button>
                 <?php endif; ?>
-                <?php if ($isGroupOwner || $isCurrentUserAdmin): ?>
-                <button type="button" data-chat-action="message-settings" class="w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-zinc-800">Message Settings</button>
+                <?php if ($canManageGroupSettings): ?>
+                <button type="button" data-chat-action="group-settings" class="w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-zinc-800">Group Settings</button>
                 <?php endif; ?>
                 <?php if ($canTakeGroupOwnership): ?>
                 <button type="button" data-chat-action="take-ownership" class="w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-zinc-800">Take Ownership</button>
                 <?php endif; ?>
+                <?php if ($isGroupMember): ?>
                 <button type="button" data-chat-action="leave-group" class="w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-zinc-800 text-red-300">Leave Group</button>
-                <?php if ($isGroupOwner): ?>
+                <?php endif; ?>
+                <?php if ($canManageGroupSettings): ?>
                 <button type="button" data-chat-action="delete-group" class="w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-zinc-800 text-red-300">Delete Group</button>
                 <?php endif; ?>
                 <?php endif; ?>
@@ -192,26 +227,141 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
             <button id="start-voice-call-button" onclick="startVoiceCall()" class="prologue-accent hover:text-emerald-300 <?= $canStartCalls ? '' : 'opacity-50 cursor-not-allowed' ?> <?= !empty($isUserInActiveCall) ? 'hidden' : '' ?>" <?= $canStartCalls ? '' : 'disabled title="You can\'t call a banned user"' ?>><i class="fa fa-phone text-2xl"></i></button>
         </div>
     </div>
-    <?php if ($isGroupChat): ?>
+    <?php if ($isGroupChat && $isRequestablePreview): ?>
+    <div class="px-6 py-4 border-b border-zinc-800">
+        <div class="bg-zinc-900 border border-zinc-700 rounded-2xl p-4">
+            <div class="text-sm text-zinc-300">This group is requestable.</div>
+            <div class="mt-2 text-sm text-zinc-400">Members: <?= (int)$groupMemberCount ?> · Messages: <?= (int)$groupMessageCount ?></div>
+            <div class="mt-4 flex items-center gap-3">
+                <?php if ($currentUserJoinRequestStatus === 'pending'): ?>
+                    <button type="button" id="cancel-group-join-request" class="px-4 py-2 rounded-xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-zinc-100">Cancel Request</button>
+                    <span class="text-xs text-zinc-500">Request pending approval</span>
+                <?php else: ?>
+                    <button type="button" id="request-group-join" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white">Request Access</button>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+    <?php if ($isGroupChat && $isReadOnlyPublicViewer): ?>
+    <div class="px-6 py-3 border-b border-zinc-800 text-sm text-zinc-400">
+        Public read-only view. Join the group to post messages and interact.
+        <div class="mt-2 flex items-center gap-3">
+            <?php if ($currentUserJoinRequestStatus === 'pending'): ?>
+                <button type="button" id="cancel-group-join-request" class="px-3 py-1.5 rounded-lg bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-zinc-100 text-xs">Cancel Request</button>
+            <?php else: ?>
+                <button type="button" id="request-group-join" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs">Request to Join</button>
+            <?php endif; ?>
+        </div>
+    </div>
+    <?php endif; ?>
+    <?php if ($isGroupChat && $canApproveJoinRequests && count($pendingGroupJoinRequests) > 0): ?>
+    <div class="px-6 py-3 border-b border-zinc-800 text-sm">
+        <div class="text-xs uppercase tracking-wide text-zinc-400 mb-2">Pending Join Requests</div>
+        <div class="flex flex-wrap gap-2">
+            <?php foreach ($pendingGroupJoinRequests as $pendingJoin): ?>
+                <span class="inline-flex items-center gap-2 bg-zinc-800 border border-zinc-700 rounded-full px-3 py-1" data-join-request-user-id="<?= (int)$pendingJoin->requester_user_id ?>">
+                    <span class="text-zinc-200"><?= htmlspecialchars((string)$pendingJoin->username, ENT_QUOTES, 'UTF-8') ?></span>
+                    <button type="button" class="text-emerald-300 hover:text-emerald-200" onclick="approveGroupJoinRequest(<?= (int)$pendingJoin->requester_user_id ?>)">Approve</button>
+                    <button type="button" class="text-red-300 hover:text-red-200" onclick="denyGroupJoinRequest(<?= (int)$pendingJoin->requester_user_id ?>)">Deny</button>
+                </span>
+            <?php endforeach; ?>
+        </div>
+    </div>
+    <?php endif; ?>
+    <?php if ($isGroupChat && ($isGroupMember || $isReadOnlyPublicViewer)): ?>
     <?php $otherMembersCount = count(array_filter($members ?? [], fn($m) => (int)$m->id !== (int)$currentUserId)); ?>
+    <?php
+        $groupMembersOrdered = [];
+        $groupMembers = is_array($members ?? null) ? $members : [];
+        $selfMember = null;
+        foreach ($groupMembers as $groupMember) {
+            if ((int)($groupMember->id ?? 0) === (int)$currentUserId) {
+                $selfMember = $groupMember;
+                continue;
+            }
+            $groupMembersOrdered[] = $groupMember;
+        }
+        if ($selfMember) {
+            array_unshift($groupMembersOrdered, $selfMember);
+        }
+    ?>
     <div class="px-6 py-3 border-b border-zinc-800 text-sm">
         <div class="text-xs uppercase tracking-wide text-zinc-400 mb-2">Users in Group</div>
         <div class="flex flex-wrap items-center gap-2">
-            <?php foreach (($members ?? []) as $member): ?>
-                <?php if ((int)$member->id === (int)$currentUserId) { continue; } ?>
-                <?php $friendLabel = ((int)($member->is_friend ?? 0) === 1) ? 'Friend' : 'Not Friend'; ?>
-                <span class="inline-flex items-center gap-2 bg-zinc-800 border border-zinc-700 rounded-full px-3 py-1" data-group-member-user-id="<?= (int)$member->id ?>" data-group-member-username="<?= htmlspecialchars((string)$member->username, ENT_QUOTES, 'UTF-8') ?>">
+            <?php foreach ($groupMembersOrdered as $member): ?>
+                <?php $memberIsSelf = (int)($member->id ?? 0) === (int)$currentUserId; ?>
+                <?php $friendLabel = $memberIsSelf ? 'You' : (((int)($member->is_friend ?? 0) === 1) ? 'Friend' : 'Not Friend'); ?>
+                <span class="inline-flex items-center gap-2 rounded-full px-3 py-1 border <?= $memberIsSelf ? 'bg-zinc-700 border-zinc-600' : 'bg-zinc-800 border-zinc-700' ?>" data-group-member-user-id="<?= (int)$member->id ?>" data-group-member-username="<?= htmlspecialchars((string)$member->username, ENT_QUOTES, 'UTF-8') ?>">
+                    <span class="inline-block w-1.5 h-1.5 rounded-full <?= htmlspecialchars($member->effective_status_dot_class ?? 'bg-zinc-500', ENT_QUOTES, 'UTF-8') ?>" title="<?= htmlspecialchars($member->effective_status_label ?? 'Offline', ENT_QUOTES, 'UTF-8') ?>"></span>
                     <a href="<?= htmlspecialchars(base_url('/u/' . User::formatUserNumber($member->user_number)), ENT_QUOTES, 'UTF-8') ?>" class="hover:underline underline-offset-2" title="<?= htmlspecialchars($friendLabel, ENT_QUOTES, 'UTF-8') ?>" aria-label="<?= htmlspecialchars($friendLabel, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($member->username, ENT_QUOTES, 'UTF-8') ?></a>
                     <?php if ((int)$member->id === (int)$chat->created_by): ?>
                     <i class="fa-solid fa-crown prologue-accent" title="Group owner" aria-label="Group owner"></i>
+                    <?php elseif (strtolower((string)($member->group_role ?? 'member')) === 'moderator'): ?>
+                    <i class="fa-solid fa-shield-halved text-sky-300" title="Moderator" aria-label="Moderator"></i>
                     <?php endif; ?>
-                    <span class="inline-block w-1.5 h-1.5 rounded-full <?= htmlspecialchars($member->effective_status_dot_class ?? 'bg-zinc-500', ENT_QUOTES, 'UTF-8') ?>" title="<?= htmlspecialchars($member->effective_status_label ?? 'Offline', ENT_QUOTES, 'UTF-8') ?>"></span>
-                    <?php if ((int)$member->id !== (int)$chat->created_by): ?>
-                    <button onclick='removeGroupMember(<?= (int)$member->id ?>, <?= json_encode((string)$member->username, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>)' class="text-red-300 hover:text-red-200">×</button>
+                    <?php if ((int)($member->is_group_muted ?? 0) === 1): ?>
+                    <i class="fa-solid fa-volume-xmark text-amber-300" title="Muted" aria-label="Muted"></i>
+                    <?php endif; ?>
+                    <?php
+                        $memberId = (int)$member->id;
+                        $memberUsernameJson = json_encode((string)$member->username, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT);
+                        $memberIsSelf = $memberId === (int)$currentUserId;
+                        $memberIsOwner = $memberId === (int)$chat->created_by;
+                        $memberIsModerator = strtolower((string)($member->group_role ?? 'member')) === 'moderator';
+                        $canRoleManageMember = $canManageGroupSettings && !$memberIsOwner && !$memberIsSelf;
+                        $canMuteManageMember = $canModerateMembers && !$memberIsOwner && !$memberIsModerator && !$memberIsSelf;
+                        $canRemoveMember = $canModerateMembers && !$memberIsOwner && !$memberIsSelf;
+                        $hasMemberManageActions = $canRoleManageMember || $canMuteManageMember || $canRemoveMember;
+                    ?>
+                    <?php if ($hasMemberManageActions): ?>
+                    <span class="relative inline-flex items-center">
+                        <button
+                            type="button"
+                            class="inline-flex items-center text-zinc-300 hover:text-zinc-100"
+                            title="User actions"
+                            aria-label="User actions"
+                            aria-expanded="false"
+                            aria-controls="group-member-menu-<?= $memberId ?>"
+                            data-group-member-menu-toggle
+                            data-menu-id="group-member-menu-<?= $memberId ?>"
+                        >
+                            <i class="fa-solid fa-ellipsis-vertical" aria-hidden="true"></i>
+                        </button>
+                        <div id="group-member-menu-<?= $memberId ?>" data-group-member-menu class="hidden absolute right-0 top-full mt-2 min-w-36 bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl p-1.5 z-30">
+                            <?php if ($canRoleManageMember): ?>
+                                <?php if ($memberIsModerator): ?>
+                                <button type="button" data-group-member-action class="w-full text-left px-2.5 py-2 rounded-lg hover:bg-zinc-800 text-sm text-sky-300" onclick='demoteGroupModerator(<?= $memberId ?>, <?= $memberUsernameJson ?>)'>
+                                    <i class="fa-solid fa-user-minus mr-2" aria-hidden="true"></i>Demote
+                                </button>
+                                <?php else: ?>
+                                <button type="button" data-group-member-action class="w-full text-left px-2.5 py-2 rounded-lg hover:bg-zinc-800 text-sm text-sky-300" onclick='promoteGroupModerator(<?= $memberId ?>, <?= $memberUsernameJson ?>)'>
+                                    <i class="fa-solid fa-user-shield mr-2" aria-hidden="true"></i>Promote
+                                </button>
+                                <?php endif; ?>
+                            <?php endif; ?>
+                            <?php if ($canMuteManageMember): ?>
+                                <?php if ((int)($member->is_group_muted ?? 0) === 1): ?>
+                                <button type="button" data-group-member-action class="w-full text-left px-2.5 py-2 rounded-lg hover:bg-zinc-800 text-sm text-amber-300" onclick='unmuteGroupMember(<?= $memberId ?>, <?= $memberUsernameJson ?>)'>
+                                    <i class="fa-solid fa-volume-high mr-2" aria-hidden="true"></i>Unmute
+                                </button>
+                                <?php else: ?>
+                                <button type="button" data-group-member-action class="w-full text-left px-2.5 py-2 rounded-lg hover:bg-zinc-800 text-sm text-amber-300" onclick='muteGroupMember(<?= $memberId ?>, <?= $memberUsernameJson ?>)'>
+                                    <i class="fa-solid fa-volume-xmark mr-2" aria-hidden="true"></i>Mute
+                                </button>
+                                <?php endif; ?>
+                            <?php endif; ?>
+                            <?php if ($canRemoveMember): ?>
+                                <button type="button" data-group-member-action class="w-full text-left px-2.5 py-2 rounded-lg hover:bg-zinc-800 text-sm text-red-300" onclick='removeGroupMember(<?= $memberId ?>, <?= $memberUsernameJson ?>)'>
+                                    <i class="fa-solid fa-trash mr-2" aria-hidden="true"></i>Delete
+                                </button>
+                            <?php endif; ?>
+                        </div>
+                    </span>
                     <?php endif; ?>
                 </span>
             <?php endforeach; ?>
-            <?php if ($otherMembersCount === 0): ?>
+            <?php if ($otherMembersCount === 0 && $canAddUsers): ?>
                 <button type="button" onclick="openAddUserModal()" class="inline-flex items-center gap-1.5 bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 rounded-full px-3 py-1 text-zinc-300 hover:text-zinc-100">
                     <i class="fa-solid fa-plus text-xs"></i> Add User
                 </button>
@@ -219,6 +369,7 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
         </div>
     </div>
     <?php endif; ?>
+    <?php if (!$isRequestablePreview): ?>
     <?php
         $initialPinnedMessageId = (int)($pinnedMessage->id ?? 0);
         $initialPinnedMessageUsername = (string)($pinnedMessage->username ?? 'Unknown user');
@@ -456,6 +607,7 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                             <?php if (!empty($message->edited_at)): ?>
                                 <span class="text-zinc-500 italic">(edited)</span>
                             <?php endif; ?>
+                            <?php if (!$isReadOnlyPublicViewer): ?>
                             <div class="flex items-center gap-3 md:opacity-0 md:group-hover:opacity-100 md:pointer-events-none md:group-hover:pointer-events-auto md:transition-opacity md:duration-150 md:ease-out">
                                 <button type="button" class="text-zinc-400 hover:text-zinc-300 js-quote-link" title="Quote" aria-label="Quote" data-quote-message-id="<?= (int)$message->id ?>" data-quote-username="<?= htmlspecialchars((string)$message->username, ENT_QUOTES, 'UTF-8') ?>" data-quote-user-number="<?= htmlspecialchars((string)$message->user_number, ENT_QUOTES, 'UTF-8') ?>" data-quote-content="<?= htmlspecialchars((string)$message->content, ENT_QUOTES, 'UTF-8') ?>" data-quote-mention-map="<?= htmlspecialchars($mentionMapJson, ENT_QUOTES, 'UTF-8') ?>"><i class="fa-solid fa-reply" aria-hidden="true"></i></button>
                                 <?php if (empty($message->is_quoted)): ?>
@@ -495,6 +647,7 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                                 <button type="button" class="text-zinc-400 hover:text-zinc-300 js-pin-link" title="Pin" aria-label="Pin" data-pin-message-id="<?= (int)$message->id ?>"><i class="fa-solid fa-thumbtack" aria-hidden="true"></i></button>
                                 <button type="button" class="text-zinc-400 hover:text-zinc-300 js-react-link" title="React" aria-label="React" data-react-message-id="<?= (int)$message->id ?>"><i class="fa-solid fa-thumbs-up" aria-hidden="true"></i></button>
                             </div>
+                            <?php endif; ?>
                             <?php $messageReactions = is_array($message->reactions ?? null) ? $message->reactions : []; ?>
                             <?php if (!empty($messageReactions)): ?>
                                 <div class="flex items-center gap-1.5">
@@ -531,6 +684,7 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
         <?php endforeach; ?>
     </div>
     <div id="typing-indicator" class="px-6 pb-2 text-sm text-zinc-400 min-h-6 hidden" aria-live="polite"></div>
+    <?php if (!$isReadOnlyPublicViewer): ?>
     <form id="message-form" class="p-6 border-t border-zinc-800 flex gap-4 relative">
         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
         <input type="hidden" id="quoted-message-id" value="">
@@ -588,7 +742,9 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
         </div>
         <?php endif; ?>
     </form>
+    <?php endif; ?>
 </div>
+<?php endif; ?>
 
 <script>
     window.PENDING_ATTACHMENTS = <?= json_encode($pendingAttachments ?? [], JSON_UNESCAPED_SLASHES) ?>;
@@ -701,13 +857,23 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
     </div>
 </div>
 
-<?php if ($isGroupOwner || $isCurrentUserAdmin): ?>
+<?php if ($canManageGroupSettings): ?>
 <div id="message-settings-modal" class="hidden fixed inset-0 bg-black/70 z-50 p-4 md:p-6" aria-hidden="true">
     <div class="h-full w-full flex items-center justify-center">
         <div class="w-full max-w-md bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl p-6" role="dialog" aria-modal="true" aria-labelledby="message-settings-modal-title">
-            <h2 id="message-settings-modal-title" class="text-lg font-semibold text-zinc-100">Message Settings</h2>
-            <p class="mt-2 text-sm text-zinc-400">Control how long members can edit or delete their messages.</p>
+            <h2 id="message-settings-modal-title" class="text-lg font-semibold text-zinc-100">Group Settings</h2>
+            <p class="mt-2 text-sm text-zinc-400">Manage group access and message permissions.</p>
             <form id="message-settings-form" class="mt-4 space-y-4">
+                <div class="text-xs uppercase tracking-wide text-zinc-400">Group</div>
+                <div>
+                    <label for="group-settings-visibility" class="block text-sm text-zinc-300 mb-1">Non-member Visibility</label>
+                    <select id="group-settings-visibility" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-zinc-100">
+                        <option value="none">None</option>
+                        <option value="requestable">Requestable</option>
+                        <option value="public">Public</option>
+                    </select>
+                </div>
+                <div class="text-xs uppercase tracking-wide text-zinc-400 pt-1">Messages</div>
                 <div>
                     <label for="message-settings-edit-window" class="block text-sm text-zinc-300 mb-1">Edit Messages</label>
                     <select id="message-settings-edit-window" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-zinc-100">

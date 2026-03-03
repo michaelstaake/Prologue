@@ -2,6 +2,185 @@
 class ChatController extends Controller {
     private const GROUP_CHAT_USER_LIMIT = 200;
     private const USER_LIMIT_REACHED_MESSAGE = 'User limit reached. Please try again later.';
+    private const GROUP_VISIBILITY_NONE = 'none';
+    private const GROUP_VISIBILITY_REQUESTABLE = 'requestable';
+    private const GROUP_VISIBILITY_PUBLIC = 'public';
+
+    private function supportsChatMemberRole(): bool {
+        static $supports = null;
+        if ($supports !== null) {
+            return $supports;
+        }
+
+        $result = Database::query(
+            "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'chat_members' AND COLUMN_NAME = 'role'"
+        )->fetchColumn();
+
+        $supports = ((int)$result) > 0;
+        return $supports;
+    }
+
+    private function supportsChatMemberMute(): bool {
+        static $supports = null;
+        if ($supports !== null) {
+            return $supports;
+        }
+
+        $result = Database::query(
+            "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'chat_members' AND COLUMN_NAME = 'is_muted'"
+        )->fetchColumn();
+
+        $supports = ((int)$result) > 0;
+        return $supports;
+    }
+
+    private function supportsGroupVisibility(): bool {
+        static $supports = null;
+        if ($supports !== null) {
+            return $supports;
+        }
+
+        $result = Database::query(
+            "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'chats' AND COLUMN_NAME = 'non_member_visibility'"
+        )->fetchColumn();
+
+        $supports = ((int)$result) > 0;
+        return $supports;
+    }
+
+    private function supportsGroupJoinRequests(): bool {
+        static $supports = null;
+        if ($supports !== null) {
+            return $supports;
+        }
+
+        $result = Database::query(
+            "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'group_join_requests'"
+        )->fetchColumn();
+
+        $supports = ((int)$result) > 0;
+        return $supports;
+    }
+
+    private function getGroupVisibility($chat): string {
+        $value = strtolower(trim((string)($chat->non_member_visibility ?? self::GROUP_VISIBILITY_NONE)));
+        if ($value === self::GROUP_VISIBILITY_REQUESTABLE || $value === self::GROUP_VISIBILITY_PUBLIC) {
+            return $value;
+        }
+
+        return self::GROUP_VISIBILITY_NONE;
+    }
+
+    private function getGroupMember(int $chatId, int $userId) {
+        if ($chatId <= 0 || $userId <= 0) {
+            return null;
+        }
+
+        return Database::query(
+            "SELECT * FROM chat_members WHERE chat_id = ? AND user_id = ? LIMIT 1",
+            [$chatId, $userId]
+        )->fetch();
+    }
+
+    private function isGroupOwner($chat, int $userId): bool {
+        if (!$chat || $userId <= 0) {
+            return false;
+        }
+
+        return (int)($chat->created_by ?? 0) === $userId;
+    }
+
+    private function isGroupModeratorByMember($member): bool {
+        if (!$member || !$this->supportsChatMemberRole()) {
+            return false;
+        }
+
+        return strtolower(trim((string)($member->role ?? 'member'))) === 'moderator';
+    }
+
+    private function canManageGroupSettings($chat, int $userId, bool $isAdmin): bool {
+        return $isAdmin || $this->isGroupOwner($chat, $userId);
+    }
+
+    private function canModerateGroupMembers($chat, int $userId, bool $isAdmin): bool {
+        if ($isAdmin || $this->isGroupOwner($chat, $userId)) {
+            return true;
+        }
+
+        $member = $this->getGroupMember((int)($chat->id ?? 0), $userId);
+        return $this->isGroupModeratorByMember($member);
+    }
+
+    private function canApproveGroupJoinRequests($chat, int $userId, bool $isAdmin): bool {
+        return $this->canModerateGroupMembers($chat, $userId, $isAdmin);
+    }
+
+    private function canAddGroupMembers($chat, int $userId, bool $isAdmin): bool {
+        return $this->canManageGroupSettings($chat, $userId, $isAdmin);
+    }
+
+    private function isGroupMemberMuted(int $chatId, int $userId): bool {
+        if (!$this->supportsChatMemberMute() || $chatId <= 0 || $userId <= 0) {
+            return false;
+        }
+
+        $isMuted = (int)Database::query(
+            "SELECT is_muted FROM chat_members WHERE chat_id = ? AND user_id = ? LIMIT 1",
+            [$chatId, $userId]
+        )->fetchColumn();
+
+        return $isMuted === 1;
+    }
+
+    private function getGroupJoinRequestStatus(int $chatId, int $userId): string {
+        if (!$this->supportsGroupJoinRequests() || $chatId <= 0 || $userId <= 0) {
+            return '';
+        }
+
+        $status = (string)Database::query(
+            "SELECT status FROM group_join_requests WHERE chat_id = ? AND requester_user_id = ? LIMIT 1",
+            [$chatId, $userId]
+        )->fetchColumn();
+
+        return strtolower(trim($status));
+    }
+
+    private function getPendingGroupJoinRequests(int $chatId): array {
+        if (!$this->supportsGroupJoinRequests() || $chatId <= 0) {
+            return [];
+        }
+
+        return Database::query(
+            "SELECT gjr.id, gjr.chat_id, gjr.requester_user_id, gjr.status, gjr.created_at,
+                    u.username, u.user_number, u.avatar_filename
+             FROM group_join_requests gjr
+             JOIN users u ON u.id = gjr.requester_user_id
+             WHERE gjr.chat_id = ? AND gjr.status = 'pending'
+             ORDER BY gjr.created_at ASC",
+            [$chatId]
+        )->fetchAll();
+    }
+
+    private function getGroupStats(int $chatId): array {
+        if ($chatId <= 0) {
+            return ['member_count' => 0, 'message_count' => 0];
+        }
+
+        $memberCount = (int)Database::query(
+            "SELECT COUNT(*) FROM chat_members WHERE chat_id = ?",
+            [$chatId]
+        )->fetchColumn();
+
+        $messageCount = (int)Database::query(
+            "SELECT COUNT(*) FROM messages WHERE chat_id = ?",
+            [$chatId]
+        )->fetchColumn();
+
+        return [
+            'member_count' => max(0, $memberCount),
+            'message_count' => max(0, $messageCount),
+        ];
+    }
 
     private function getPinnedMessageSettingKey(int $chatId): string {
         return 'pinned_message_chat_' . $chatId;
@@ -279,39 +458,64 @@ class ChatController extends Controller {
         $supportsLastSeen = $this->supportsLastSeenMessageId();
         $supportsChatTitle = $this->supportsChatTitle();
 
+        $isGroupChat = Chat::isGroupType($chat->type ?? null);
+        $groupVisibility = $isGroupChat && $this->supportsGroupVisibility()
+            ? $this->getGroupVisibility($chat)
+            : self::GROUP_VISIBILITY_NONE;
+
         $userId = $currentUserId;
-        $member = Database::query("SELECT * FROM chat_members WHERE chat_id = ? AND user_id = ?", [$chat->id, $userId])->fetch();
-        if (!$member) {
-            $this->flash('error', 'invalid_chat');
-            $this->redirect('/');
+        $member = $this->getGroupMember((int)$chat->id, $userId);
+        $isMember = (bool)$member;
+        $isReadOnlyPublicViewer = false;
+        $isRequestablePreview = false;
+
+        if (!$isMember) {
+            if (!$isGroupChat) {
+                $this->flash('error', 'invalid_chat');
+                $this->redirect('/');
+            }
+
+            if ($groupVisibility === self::GROUP_VISIBILITY_PUBLIC) {
+                $isReadOnlyPublicViewer = true;
+            } elseif ($groupVisibility === self::GROUP_VISIBILITY_REQUESTABLE) {
+                $isRequestablePreview = true;
+            } else {
+                $this->flash('error', 'invalid_chat');
+                $this->redirect('/');
+            }
         }
 
-        $lastSeenMessageId = $supportsLastSeen ? (int)($member->last_seen_message_id ?? 0) : 0;
-        $firstUnseenMessageId = $supportsLastSeen ? $this->getFirstUnseenMessageId((int)$chat->id, $lastSeenMessageId) : 0;
+        $lastSeenMessageId = ($isMember && $supportsLastSeen) ? (int)($member->last_seen_message_id ?? 0) : 0;
+        $firstUnseenMessageId = ($isMember && $supportsLastSeen) ? $this->getFirstUnseenMessageId((int)$chat->id, $lastSeenMessageId) : 0;
 
-        $members = Database::query(
-            "SELECT u.id, u.username, u.user_number, u.avatar_filename, u.presence_status, u.last_active_at,
-                    CASE
-                        WHEN u.id = ? THEN 0
-                        WHEN af.id IS NULL THEN 0
-                        ELSE 1
-                    END AS is_friend
-             FROM chat_members cm
-             JOIN users u ON u.id = cm.user_id
-             LEFT JOIN friends af
-               ON (
-                    ((af.user_id = ? AND af.friend_id = u.id)
-                     OR (af.friend_id = ? AND af.user_id = u.id))
-                    AND af.status = 'accepted'
-                  )
-             WHERE cm.chat_id = ?
-                         ORDER BY CASE WHEN u.id = ? THEN 0 ELSE 1 END ASC, u.username ASC",
-                        [$currentUserId, $currentUserId, $currentUserId, $chat->id, (int)$chat->created_by]
-        )->fetchAll();
-        foreach ($members as $m) {
-            $m->formatted_user_number = User::formatUserNumber($m->user_number);
-            $m->avatar_url = User::avatarUrl($m);
-            User::attachEffectiveStatus($m);
+        $members = [];
+        if ($isMember || $isReadOnlyPublicViewer) {
+            $members = Database::query(
+                "SELECT u.id, u.username, u.user_number, u.avatar_filename, u.presence_status, u.last_active_at,
+                        cm.role AS group_role,
+                        cm.is_muted AS is_group_muted,
+                        CASE
+                            WHEN u.id = ? THEN 0
+                            WHEN af.id IS NULL THEN 0
+                            ELSE 1
+                        END AS is_friend
+                 FROM chat_members cm
+                 JOIN users u ON u.id = cm.user_id
+                 LEFT JOIN friends af
+                   ON (
+                        ((af.user_id = ? AND af.friend_id = u.id)
+                         OR (af.friend_id = ? AND af.user_id = u.id))
+                        AND af.status = 'accepted'
+                      )
+                 WHERE cm.chat_id = ?
+                             ORDER BY CASE WHEN u.id = ? THEN 0 ELSE 1 END ASC, u.username ASC",
+                            [$currentUserId, $currentUserId, $currentUserId, $chat->id, (int)$chat->created_by]
+            )->fetchAll();
+            foreach ($members as $m) {
+                $m->formatted_user_number = User::formatUserNumber($m->user_number);
+                $m->avatar_url = User::avatarUrl($m);
+                User::attachEffectiveStatus($m);
+            }
         }
 
         $chatTitle = 'Chat #' . User::formatUserNumber($chat->chat_number);
@@ -341,34 +545,37 @@ class ChatController extends Controller {
             }
         }
 
-        try {
-            $messages = Database::query(
-                "SELECT m.*, u.username, u.email AS user_email, u.user_number, u.avatar_filename, u.presence_status, u.last_active_at,
-                        qu.username AS quoted_username, qu.user_number AS quoted_user_number
-                 FROM messages m
-                 JOIN users u ON m.user_id = u.id
-                 LEFT JOIN users qu ON qu.id = m.quoted_user_id
-                 WHERE m.chat_id = ?
-                 ORDER BY m.created_at DESC
-                 LIMIT 100",
-                [$chat->id]
-            )->fetchAll();
-        } catch (Throwable $e) {
-            if (stripos($e->getMessage(), 'avatar_filename') === false) {
-                throw $e;
-            }
+        $messages = [];
+        if ($isMember || $isReadOnlyPublicViewer) {
+            try {
+                $messages = Database::query(
+                    "SELECT m.*, u.username, u.email AS user_email, u.user_number, u.avatar_filename, u.presence_status, u.last_active_at,
+                            qu.username AS quoted_username, qu.user_number AS quoted_user_number
+                     FROM messages m
+                     JOIN users u ON m.user_id = u.id
+                     LEFT JOIN users qu ON qu.id = m.quoted_user_id
+                     WHERE m.chat_id = ?
+                     ORDER BY m.created_at DESC
+                     LIMIT 100",
+                    [$chat->id]
+                )->fetchAll();
+            } catch (Throwable $e) {
+                if (stripos($e->getMessage(), 'avatar_filename') === false) {
+                    throw $e;
+                }
 
-            $messages = Database::query(
-                "SELECT m.*, u.username, u.email AS user_email, u.user_number, u.presence_status, u.last_active_at,
-                        qu.username AS quoted_username, qu.user_number AS quoted_user_number
-                 FROM messages m
-                 JOIN users u ON m.user_id = u.id
-                 LEFT JOIN users qu ON qu.id = m.quoted_user_id
-                 WHERE m.chat_id = ?
-                 ORDER BY m.created_at DESC
-                 LIMIT 100",
-                [$chat->id]
-            )->fetchAll();
+                $messages = Database::query(
+                    "SELECT m.*, u.username, u.email AS user_email, u.user_number, u.presence_status, u.last_active_at,
+                            qu.username AS quoted_username, qu.user_number AS quoted_user_number
+                     FROM messages m
+                     JOIN users u ON m.user_id = u.id
+                     LEFT JOIN users qu ON qu.id = m.quoted_user_id
+                     WHERE m.chat_id = ?
+                     ORDER BY m.created_at DESC
+                     LIMIT 100",
+                    [$chat->id]
+                )->fetchAll();
+            }
         }
         foreach ($messages as $message) {
             if (!empty($message->bot_name)) {
@@ -400,21 +607,55 @@ class ChatController extends Controller {
         $messageRestrictionReason = $this->getPersonalChatMessageRestrictionReason((int)$chat->id, (int)$currentUserId);
         $canSendMessages = $messageRestrictionReason === null;
         $canStartCalls = $messageRestrictionReason !== 'banned_user';
+        if ($isGroupChat) {
+            $messageRestrictionReason = '';
+            $canStartCalls = $isMember;
+
+            if (!$isMember) {
+                $canSendMessages = false;
+                $messageRestrictionReason = $isReadOnlyPublicViewer
+                    ? 'group_read_only_public'
+                    : 'group_members_only';
+            } else {
+                $isMuted = $this->isGroupMemberMuted((int)$chat->id, (int)$currentUserId);
+                $canSendMessages = !$isMuted;
+                if ($isMuted) {
+                    $messageRestrictionReason = 'group_muted';
+                }
+            }
+        }
         $isUserInActiveCall = $this->isUserInJoinedActiveCall((int)$currentUserId);
 
-        if ($supportsLastSeen) {
+        if ($supportsLastSeen && $isMember) {
             $latestMessageId = $this->getLatestMessageId((int)$chat->id);
             $this->markChatSeenUpToMessageId((int)$chat->id, (int)$currentUserId, $latestMessageId);
         }
 
-        $pendingAttachments = Attachment::listPendingForChatUser((int)$chat->id, (int)$currentUserId);
-        $pinnedMessage = $this->getPinnedMessageForChat((int)$chat->id);
+        $pendingAttachments = $isMember
+            ? Attachment::listPendingForChatUser((int)$chat->id, (int)$currentUserId)
+            : [];
+        $pinnedMessage = ($isMember || $isReadOnlyPublicViewer)
+            ? $this->getPinnedMessageForChat((int)$chat->id)
+            : null;
 
         $groupEditWindow = 'never';
         $groupDeleteWindow = 'never';
         if (Chat::isGroupType($chat->type ?? null)) {
             $groupEditWindow = $this->getGroupMessageWindow('edit', (int)$chat->id);
             $groupDeleteWindow = $this->getGroupMessageWindow('delete', (int)$chat->id);
+        }
+
+        $currentUserJoinRequestStatus = '';
+        $pendingGroupJoinRequests = [];
+        $canApproveJoinRequests = false;
+        $groupStats = $this->getGroupStats((int)$chat->id);
+
+        if ($isGroupChat) {
+            $currentUserJoinRequestStatus = $this->getGroupJoinRequestStatus((int)$chat->id, (int)$currentUserId);
+            $canApproveJoinRequests = $isMember && $this->canApproveGroupJoinRequests($chat, (int)$currentUserId, $isCurrentUserAdmin);
+            if ($canApproveJoinRequests) {
+                $pendingGroupJoinRequests = $this->getPendingGroupJoinRequests((int)$chat->id);
+            }
         }
 
         $quotedIds = Database::query(
@@ -437,6 +678,15 @@ class ChatController extends Controller {
             'pendingAttachments' => $pendingAttachments,
             'currentUserId' => $currentUserId,
             'isCurrentUserAdmin' => $isCurrentUserAdmin,
+            'isGroupMember' => $isMember,
+            'groupVisibility' => $groupVisibility,
+            'isReadOnlyPublicViewer' => $isReadOnlyPublicViewer,
+            'isRequestablePreview' => $isRequestablePreview,
+            'currentUserJoinRequestStatus' => $currentUserJoinRequestStatus,
+            'canApproveJoinRequests' => $canApproveJoinRequests,
+            'pendingGroupJoinRequests' => $pendingGroupJoinRequests,
+            'groupMemberCount' => (int)($groupStats['member_count'] ?? 0),
+            'groupMessageCount' => (int)($groupStats['message_count'] ?? 0),
             'firstUnseenMessageId' => $firstUnseenMessageId,
             'canSendMessages' => $canSendMessages,
             'messageRestrictionReason' => $messageRestrictionReason,
@@ -472,8 +722,8 @@ class ChatController extends Controller {
         }
 
         $chatSelect = $this->supportsChatSoftDelete()
-            ? "SELECT chat_number, deleted_at FROM chats WHERE id = ?"
-            : "SELECT chat_number FROM chats WHERE id = ?";
+            ? "SELECT chat_number, type, deleted_at FROM chats WHERE id = ?"
+            : "SELECT chat_number, type FROM chats WHERE id = ?";
         $chat = Database::query($chatSelect, [$chatId])->fetch();
         if (!$chat) {
             $this->json(['error' => 'Chat not found'], 404);
@@ -481,6 +731,10 @@ class ChatController extends Controller {
 
         if ($this->chatIsSoftDeleted($chat)) {
             $this->json(['error' => 'Chat not found'], 404);
+        }
+
+        if (Chat::isGroupType($chat->type ?? null) && $this->isGroupMemberMuted($chatId, (int)$userId)) {
+            $this->json(['error' => 'You are muted in this group'], 403);
         }
 
         $messageRestrictionReason = $this->getPersonalChatMessageRestrictionReason($chatId, (int)$userId);
@@ -538,7 +792,10 @@ class ChatController extends Controller {
             if (mb_strlen($rawContent) > 20) {
                 $notificationPreview .= '…';
             }
-            Notification::create($m->user_id, 'message', $senderUsername . ' sent you a message', $notificationPreview, '/c/' . User::formatUserNumber($chat->chat_number));
+            $notificationTitle = Chat::isGroupType($chat->type ?? null)
+                ? ($senderUsername . ' new message')
+                : ($senderUsername . ' sent you a message');
+            Notification::create($m->user_id, 'message', $notificationTitle, $notificationPreview, '/c/' . User::formatUserNumber($chat->chat_number));
         }
 
         $this->json(['success' => true]);
@@ -562,10 +819,16 @@ class ChatController extends Controller {
         }
 
         if ($this->supportsChatSoftDelete()) {
-            $chat = Database::query("SELECT id, deleted_at FROM chats WHERE id = ?", [$chatId])->fetch();
+            $chat = Database::query("SELECT id, type, deleted_at FROM chats WHERE id = ?", [$chatId])->fetch();
             if (!$chat || $this->chatIsSoftDeleted($chat)) {
                 $this->json(['error' => 'Chat not found'], 404);
             }
+        } else {
+            $chat = Database::query("SELECT id, type FROM chats WHERE id = ?", [$chatId])->fetch();
+        }
+
+        if ($chat && Chat::isGroupType($chat->type ?? null) && $this->isGroupMemberMuted($chatId, $userId)) {
+            $this->json(['error' => 'You are muted in this group'], 403);
         }
 
         $messageRestrictionReason = $this->getPersonalChatMessageRestrictionReason($chatId, $userId);
@@ -779,6 +1042,7 @@ class ChatController extends Controller {
 
         $authUser = Auth::user();
         $currentUserId = (int)$authUser->id;
+        $isCurrentUserAdmin = strtolower((string)($authUser->role ?? '')) === 'admin';
         $actorUsername = User::normalizeUsername($authUser->username ?? '');
         $memberIds = [$currentUserId => true];
 
@@ -793,7 +1057,11 @@ class ChatController extends Controller {
             $params[] = $chatId;
             $params[] = (int)$memberId;
         }
-        Database::query('INSERT INTO chat_members (chat_id, user_id) VALUES ' . implode(', ', $values), $params);
+        if ($this->supportsChatMemberRole()) {
+            Database::query('INSERT INTO chat_members (chat_id, user_id, role) VALUES (?, ?, ?)', [$chatId, $currentUserId, 'moderator']);
+        } else {
+            Database::query('INSERT INTO chat_members (chat_id, user_id) VALUES ' . implode(', ', $values), $params);
+        }
 
         if ($this->supportsSystemEvents() && $actorUsername !== '') {
             Database::query(
@@ -838,6 +1106,10 @@ class ChatController extends Controller {
         $member = Database::query("SELECT id FROM chat_members WHERE chat_id = ? AND user_id = ?", [$chatId, $currentUserId])->fetch();
         if (!$member) {
             $this->json(['error' => 'Access denied'], 403);
+        }
+
+        if (!$this->canAddGroupMembers($chat, $currentUserId, $isCurrentUserAdmin)) {
+            $this->json(['error' => 'Only group owner can add users'], 403);
         }
 
         $target = User::findByUsername($targetUsername);
@@ -889,6 +1161,7 @@ class ChatController extends Controller {
         $targetUserId = (int)($_POST['user_id'] ?? 0);
         $authUser = Auth::user();
         $currentUserId = (int)$authUser->id;
+        $isCurrentUserAdmin = strtolower((string)($authUser->role ?? '')) === 'admin';
         $actorUsername = User::normalizeUsername($authUser->username ?? '');
 
         if ($chatId <= 0 || $targetUserId <= 0) {
@@ -911,8 +1184,12 @@ class ChatController extends Controller {
             $this->json(['error' => 'Personal chats cannot add or remove users'], 403);
         }
 
-        $member = Database::query("SELECT id FROM chat_members WHERE chat_id = ? AND user_id = ?", [$chatId, $currentUserId])->fetch();
+        $member = Database::query("SELECT id, role FROM chat_members WHERE chat_id = ? AND user_id = ?", [$chatId, $currentUserId])->fetch();
         if (!$member) {
+            $this->json(['error' => 'Access denied'], 403);
+        }
+
+        if (!$this->canModerateGroupMembers($chat, $currentUserId, $isCurrentUserAdmin)) {
             $this->json(['error' => 'Access denied'], 403);
         }
 
@@ -926,12 +1203,18 @@ class ChatController extends Controller {
             [$targetUserId]
         )->fetch();
         $targetMember = Database::query(
-            "SELECT id FROM chat_members WHERE chat_id = ? AND user_id = ? LIMIT 1",
+            "SELECT id, role FROM chat_members WHERE chat_id = ? AND user_id = ? LIMIT 1",
             [$chatId, $targetUserId]
         )->fetch();
 
         if (!$targetMember) {
             $this->json(['error' => 'User is not in this group'], 404);
+        }
+
+        $actorIsOwner = $this->isGroupOwner($chat, $currentUserId);
+        $targetIsModerator = $this->isGroupModeratorByMember($targetMember);
+        if ($targetIsModerator && !$actorIsOwner && !$isCurrentUserAdmin) {
+            $this->json(['error' => 'Only group owner can remove a moderator'], 403);
         }
 
         Database::query("DELETE FROM chat_members WHERE chat_id = ? AND user_id = ?", [$chatId, $targetUserId]);
@@ -1055,7 +1338,9 @@ class ChatController extends Controller {
 
         $chatId = (int)($_POST['chat_id'] ?? 0);
         $title = trim((string)($_POST['title'] ?? ''));
-        $currentUserId = (int)Auth::user()->id;
+        $authUser = Auth::user();
+        $currentUserId = (int)$authUser->id;
+        $isAdmin = strtolower((string)($authUser->role ?? '')) === 'admin';
 
         if ($chatId <= 0) {
             $this->json(['error' => 'Invalid payload'], 400);
@@ -1081,7 +1366,7 @@ class ChatController extends Controller {
             $this->json(['error' => 'Only group chats can be renamed'], 403);
         }
 
-        if ((int)($chat->created_by ?? 0) !== $currentUserId) {
+        if (!$this->canManageGroupSettings($chat, $currentUserId, $isAdmin)) {
             $this->json(['error' => 'Only the group owner can rename this chat'], 403);
         }
 
@@ -1126,7 +1411,9 @@ class ChatController extends Controller {
         }
 
         $chatId = (int)($_POST['chat_id'] ?? 0);
-        $currentUserId = (int)Auth::user()->id;
+        $authUser = Auth::user();
+        $currentUserId = (int)$authUser->id;
+        $isAdmin = strtolower((string)($authUser->role ?? '')) === 'admin';
 
         if ($chatId <= 0) {
             $this->json(['error' => 'Invalid payload'], 400);
@@ -1148,7 +1435,7 @@ class ChatController extends Controller {
             $this->json(['error' => 'Only group chats can be deleted'], 403);
         }
 
-        if ((int)($chat->created_by ?? 0) !== $currentUserId) {
+        if (!$this->canManageGroupSettings($chat, $currentUserId, $isAdmin)) {
             $this->json(['error' => 'Only the group owner can delete this group'], 403);
         }
 
@@ -1364,6 +1651,547 @@ class ChatController extends Controller {
         $this->json(['success' => true]);
     }
 
+    public function promoteGroupModerator() {
+        Auth::requireAuth();
+        Auth::csrfValidate();
+
+        if (!$this->supportsChatMemberRole()) {
+            $this->json(['error' => 'Group roles require a database update'], 400);
+        }
+
+        $chatId = (int)($_POST['chat_id'] ?? 0);
+        $targetUserId = (int)($_POST['user_id'] ?? 0);
+        $authUser = Auth::user();
+        $currentUserId = (int)$authUser->id;
+        $isAdmin = strtolower((string)($authUser->role ?? '')) === 'admin';
+
+        if ($chatId <= 0 || $targetUserId <= 0) {
+            $this->json(['error' => 'Invalid payload'], 400);
+        }
+
+        $chatSelect = $this->supportsChatSoftDelete()
+            ? "SELECT id, type, created_by, deleted_at FROM chats WHERE id = ?"
+            : "SELECT id, type, created_by FROM chats WHERE id = ?";
+        $chat = Database::query($chatSelect, [$chatId])->fetch();
+        if (!$chat || $this->chatIsSoftDeleted($chat) || !Chat::isGroupType($chat->type ?? null)) {
+            $this->json(['error' => 'Chat not found'], 404);
+        }
+
+        if (!$this->canManageGroupSettings($chat, $currentUserId, $isAdmin)) {
+            $this->json(['error' => 'Only group owner can promote moderators'], 403);
+        }
+
+        if (!$isAdmin) {
+            $actorMember = $this->getGroupMember($chatId, $currentUserId);
+            if (!$actorMember) {
+                $this->json(['error' => 'Access denied'], 403);
+            }
+        }
+
+        if ((int)($chat->created_by ?? 0) === $targetUserId) {
+            $this->json(['error' => 'Group owner already has elevated permissions'], 400);
+        }
+
+        $targetMember = $this->getGroupMember($chatId, $targetUserId);
+        if (!$targetMember) {
+            $this->json(['error' => 'User is not in this group'], 404);
+        }
+
+        Database::query(
+            "UPDATE chat_members SET role = 'moderator' WHERE chat_id = ? AND user_id = ?",
+            [$chatId, $targetUserId]
+        );
+
+        $targetUsername = (string)Database::query("SELECT username FROM users WHERE id = ? LIMIT 1", [$targetUserId])->fetchColumn();
+        if ($this->supportsSystemEvents() && trim($targetUsername) !== '') {
+            $actorName = User::normalizeUsername($authUser->username ?? '');
+            if ($actorName !== '') {
+                Database::query(
+                    "INSERT INTO chat_system_events (chat_id, event_type, content) VALUES (?, 'moderator_promoted', ?)",
+                    [$chatId, $actorName . ' promoted ' . User::normalizeUsername($targetUsername) . ' to moderator']
+                );
+            }
+        }
+
+        $this->json(['success' => true]);
+    }
+
+    public function demoteGroupModerator() {
+        Auth::requireAuth();
+        Auth::csrfValidate();
+
+        if (!$this->supportsChatMemberRole()) {
+            $this->json(['error' => 'Group roles require a database update'], 400);
+        }
+
+        $chatId = (int)($_POST['chat_id'] ?? 0);
+        $targetUserId = (int)($_POST['user_id'] ?? 0);
+        $authUser = Auth::user();
+        $currentUserId = (int)$authUser->id;
+        $isAdmin = strtolower((string)($authUser->role ?? '')) === 'admin';
+
+        if ($chatId <= 0 || $targetUserId <= 0) {
+            $this->json(['error' => 'Invalid payload'], 400);
+        }
+
+        $chatSelect = $this->supportsChatSoftDelete()
+            ? "SELECT id, type, created_by, deleted_at FROM chats WHERE id = ?"
+            : "SELECT id, type, created_by FROM chats WHERE id = ?";
+        $chat = Database::query($chatSelect, [$chatId])->fetch();
+        if (!$chat || $this->chatIsSoftDeleted($chat) || !Chat::isGroupType($chat->type ?? null)) {
+            $this->json(['error' => 'Chat not found'], 404);
+        }
+
+        if (!$this->canManageGroupSettings($chat, $currentUserId, $isAdmin)) {
+            $this->json(['error' => 'Only group owner can demote moderators'], 403);
+        }
+
+        if (!$isAdmin) {
+            $actorMember = $this->getGroupMember($chatId, $currentUserId);
+            if (!$actorMember) {
+                $this->json(['error' => 'Access denied'], 403);
+            }
+        }
+
+        if ((int)($chat->created_by ?? 0) === $targetUserId) {
+            $this->json(['error' => 'Group owner role cannot be changed'], 400);
+        }
+
+        $targetMember = $this->getGroupMember($chatId, $targetUserId);
+        if (!$targetMember) {
+            $this->json(['error' => 'User is not in this group'], 404);
+        }
+
+        Database::query(
+            "UPDATE chat_members SET role = 'member' WHERE chat_id = ? AND user_id = ?",
+            [$chatId, $targetUserId]
+        );
+
+        $targetUsername = (string)Database::query("SELECT username FROM users WHERE id = ? LIMIT 1", [$targetUserId])->fetchColumn();
+        if ($this->supportsSystemEvents() && trim($targetUsername) !== '') {
+            $actorName = User::normalizeUsername($authUser->username ?? '');
+            if ($actorName !== '') {
+                Database::query(
+                    "INSERT INTO chat_system_events (chat_id, event_type, content) VALUES (?, 'moderator_demoted', ?)",
+                    [$chatId, $actorName . ' removed moderator role from ' . User::normalizeUsername($targetUsername)]
+                );
+            }
+        }
+
+        $this->json(['success' => true]);
+    }
+
+    public function muteGroupMember() {
+        Auth::requireAuth();
+        Auth::csrfValidate();
+
+        if (!$this->supportsChatMemberMute()) {
+            $this->json(['error' => 'Group mute requires a database update'], 400);
+        }
+
+        $chatId = (int)($_POST['chat_id'] ?? 0);
+        $targetUserId = (int)($_POST['user_id'] ?? 0);
+        $authUser = Auth::user();
+        $currentUserId = (int)$authUser->id;
+        $isAdmin = strtolower((string)($authUser->role ?? '')) === 'admin';
+
+        if ($chatId <= 0 || $targetUserId <= 0) {
+            $this->json(['error' => 'Invalid payload'], 400);
+        }
+
+        $chatSelect = $this->supportsChatSoftDelete()
+            ? "SELECT id, type, created_by, deleted_at FROM chats WHERE id = ?"
+            : "SELECT id, type, created_by FROM chats WHERE id = ?";
+        $chat = Database::query($chatSelect, [$chatId])->fetch();
+        if (!$chat || $this->chatIsSoftDeleted($chat) || !Chat::isGroupType($chat->type ?? null)) {
+            $this->json(['error' => 'Chat not found'], 404);
+        }
+
+        if (!$this->canModerateGroupMembers($chat, $currentUserId, $isAdmin)) {
+            $this->json(['error' => 'Access denied'], 403);
+        }
+
+        if (!$isAdmin) {
+            $actorMember = $this->getGroupMember($chatId, $currentUserId);
+            if (!$actorMember) {
+                $this->json(['error' => 'Access denied'], 403);
+            }
+        }
+
+        if ((int)($chat->created_by ?? 0) === $targetUserId) {
+            $this->json(['error' => 'Group owner cannot be muted'], 403);
+        }
+
+        $targetMember = $this->getGroupMember($chatId, $targetUserId);
+        if (!$targetMember) {
+            $this->json(['error' => 'User is not in this group'], 404);
+        }
+
+        $targetIsModerator = $this->isGroupModeratorByMember($targetMember);
+        if ($targetIsModerator) {
+            $this->json(['error' => 'Moderators cannot be muted'], 403);
+        }
+
+        Database::query(
+            "UPDATE chat_members SET is_muted = 1, muted_by = ?, muted_at = NOW() WHERE chat_id = ? AND user_id = ?",
+            [$currentUserId, $chatId, $targetUserId]
+        );
+
+        $targetUsername = (string)Database::query("SELECT username FROM users WHERE id = ? LIMIT 1", [$targetUserId])->fetchColumn();
+        if ($this->supportsSystemEvents() && trim($targetUsername) !== '') {
+            $actorName = User::normalizeUsername($authUser->username ?? '');
+            if ($actorName !== '') {
+                Database::query(
+                    "INSERT INTO chat_system_events (chat_id, event_type, content) VALUES (?, 'user_muted', ?)",
+                    [$chatId, $actorName . ' muted ' . User::normalizeUsername($targetUsername)]
+                );
+            }
+        }
+
+        $this->json(['success' => true]);
+    }
+
+    public function unmuteGroupMember() {
+        Auth::requireAuth();
+        Auth::csrfValidate();
+
+        if (!$this->supportsChatMemberMute()) {
+            $this->json(['error' => 'Group mute requires a database update'], 400);
+        }
+
+        $chatId = (int)($_POST['chat_id'] ?? 0);
+        $targetUserId = (int)($_POST['user_id'] ?? 0);
+        $authUser = Auth::user();
+        $currentUserId = (int)$authUser->id;
+        $isAdmin = strtolower((string)($authUser->role ?? '')) === 'admin';
+
+        if ($chatId <= 0 || $targetUserId <= 0) {
+            $this->json(['error' => 'Invalid payload'], 400);
+        }
+
+        $chatSelect = $this->supportsChatSoftDelete()
+            ? "SELECT id, type, created_by, deleted_at FROM chats WHERE id = ?"
+            : "SELECT id, type, created_by FROM chats WHERE id = ?";
+        $chat = Database::query($chatSelect, [$chatId])->fetch();
+        if (!$chat || $this->chatIsSoftDeleted($chat) || !Chat::isGroupType($chat->type ?? null)) {
+            $this->json(['error' => 'Chat not found'], 404);
+        }
+
+        if (!$this->canModerateGroupMembers($chat, $currentUserId, $isAdmin)) {
+            $this->json(['error' => 'Access denied'], 403);
+        }
+
+        if (!$isAdmin) {
+            $actorMember = $this->getGroupMember($chatId, $currentUserId);
+            if (!$actorMember) {
+                $this->json(['error' => 'Access denied'], 403);
+            }
+        }
+
+        $targetMember = $this->getGroupMember($chatId, $targetUserId);
+        if (!$targetMember) {
+            $this->json(['error' => 'User is not in this group'], 404);
+        }
+
+        $targetIsModerator = $this->isGroupModeratorByMember($targetMember);
+        if ($targetIsModerator && !$this->isGroupOwner($chat, $currentUserId) && !$isAdmin) {
+            $this->json(['error' => 'Only group owner can unmute a moderator'], 403);
+        }
+
+        Database::query(
+            "UPDATE chat_members SET is_muted = 0, muted_by = NULL, muted_at = NULL WHERE chat_id = ? AND user_id = ?",
+            [$chatId, $targetUserId]
+        );
+
+        $targetUsername = (string)Database::query("SELECT username FROM users WHERE id = ? LIMIT 1", [$targetUserId])->fetchColumn();
+        if ($this->supportsSystemEvents() && trim($targetUsername) !== '') {
+            $actorName = User::normalizeUsername($authUser->username ?? '');
+            if ($actorName !== '') {
+                Database::query(
+                    "INSERT INTO chat_system_events (chat_id, event_type, content) VALUES (?, 'user_unmuted', ?)",
+                    [$chatId, $actorName . ' unmuted ' . User::normalizeUsername($targetUsername)]
+                );
+            }
+        }
+
+        $this->json(['success' => true]);
+    }
+
+    public function requestGroupJoin() {
+        Auth::requireAuth();
+        Auth::csrfValidate();
+
+        if (!$this->supportsGroupJoinRequests()) {
+            $this->json(['error' => 'Group join requests require a database update'], 400);
+        }
+
+        $chatId = (int)($_POST['chat_id'] ?? 0);
+        $authUser = Auth::user();
+        $currentUserId = (int)$authUser->id;
+
+        if ($chatId <= 0) {
+            $this->json(['error' => 'Invalid payload'], 400);
+        }
+
+        $chatSelect = $this->supportsChatSoftDelete()
+            ? "SELECT id, type, created_by, chat_number, non_member_visibility, deleted_at FROM chats WHERE id = ?"
+            : "SELECT id, type, created_by, chat_number, non_member_visibility FROM chats WHERE id = ?";
+        $chat = Database::query($chatSelect, [$chatId])->fetch();
+        if (!$chat || $this->chatIsSoftDeleted($chat) || !Chat::isGroupType($chat->type ?? null)) {
+            $this->json(['error' => 'Chat not found'], 404);
+        }
+
+        $visibility = $this->getGroupVisibility($chat);
+        if (!in_array($visibility, [self::GROUP_VISIBILITY_REQUESTABLE, self::GROUP_VISIBILITY_PUBLIC], true)) {
+            $this->json(['error' => 'This group does not accept join requests'], 403);
+        }
+
+        $existingMember = $this->getGroupMember($chatId, $currentUserId);
+        if ($existingMember) {
+            $this->json(['error' => 'You are already a group member'], 400);
+        }
+
+        $existing = Database::query(
+            "SELECT id, status FROM group_join_requests WHERE chat_id = ? AND requester_user_id = ? LIMIT 1",
+            [$chatId, $currentUserId]
+        )->fetch();
+
+        if ($existing && strtolower((string)($existing->status ?? '')) === 'pending') {
+            $this->json(['success' => true, 'status' => 'pending']);
+        }
+
+        if ($existing) {
+            Database::query(
+                "UPDATE group_join_requests
+                 SET status = 'pending', handled_by = NULL, handled_at = NULL, updated_at = NOW()
+                 WHERE id = ?",
+                [(int)$existing->id]
+            );
+        } else {
+            Database::query(
+                "INSERT INTO group_join_requests (chat_id, requester_user_id, status) VALUES (?, ?, 'pending')",
+                [$chatId, $currentUserId]
+            );
+        }
+
+        $requesterUsername = User::normalizeUsername($authUser->username ?? '');
+        $notifyRows = Database::query(
+            "SELECT DISTINCT cm.user_id
+             FROM chat_members cm
+             JOIN chats c ON c.id = cm.chat_id
+             WHERE cm.chat_id = ?
+               AND (cm.user_id = c.created_by OR cm.role = 'moderator')",
+            [$chatId]
+        )->fetchAll();
+
+        $chatPath = '/c/' . User::formatUserNumber((string)$chat->chat_number);
+        foreach ($notifyRows as $row) {
+            $recipientUserId = (int)($row->user_id ?? 0);
+            if ($recipientUserId <= 0) {
+                continue;
+            }
+
+            Notification::create(
+                $recipientUserId,
+                'group_join_request',
+                'Group join request',
+                ($requesterUsername !== '' ? $requesterUsername : 'A user') . ' requested to join this group',
+                $chatPath
+            );
+        }
+
+        $this->json(['success' => true, 'status' => 'pending']);
+    }
+
+    public function cancelGroupJoinRequest() {
+        Auth::requireAuth();
+        Auth::csrfValidate();
+
+        if (!$this->supportsGroupJoinRequests()) {
+            $this->json(['error' => 'Group join requests require a database update'], 400);
+        }
+
+        $chatId = (int)($_POST['chat_id'] ?? 0);
+        $currentUserId = (int)Auth::user()->id;
+
+        if ($chatId <= 0) {
+            $this->json(['error' => 'Invalid payload'], 400);
+        }
+
+        Database::query(
+            "UPDATE group_join_requests
+             SET status = 'cancelled', handled_by = NULL, handled_at = NULL, updated_at = NOW()
+             WHERE chat_id = ? AND requester_user_id = ? AND status = 'pending'",
+            [$chatId, $currentUserId]
+        );
+
+        $this->json(['success' => true]);
+    }
+
+    public function approveGroupJoinRequest() {
+        Auth::requireAuth();
+        Auth::csrfValidate();
+
+        if (!$this->supportsGroupJoinRequests()) {
+            $this->json(['error' => 'Group join requests require a database update'], 400);
+        }
+
+        $chatId = (int)($_POST['chat_id'] ?? 0);
+        $requesterUserId = (int)($_POST['user_id'] ?? 0);
+        $authUser = Auth::user();
+        $currentUserId = (int)$authUser->id;
+        $isAdmin = strtolower((string)($authUser->role ?? '')) === 'admin';
+
+        if ($chatId <= 0 || $requesterUserId <= 0) {
+            $this->json(['error' => 'Invalid payload'], 400);
+        }
+
+        $chatSelect = $this->supportsChatSoftDelete()
+            ? "SELECT id, type, created_by, chat_number, deleted_at FROM chats WHERE id = ?"
+            : "SELECT id, type, created_by, chat_number FROM chats WHERE id = ?";
+        $chat = Database::query($chatSelect, [$chatId])->fetch();
+        if (!$chat || $this->chatIsSoftDeleted($chat) || !Chat::isGroupType($chat->type ?? null)) {
+            $this->json(['error' => 'Chat not found'], 404);
+        }
+
+        if (!$this->canApproveGroupJoinRequests($chat, $currentUserId, $isAdmin)) {
+            $this->json(['error' => 'Access denied'], 403);
+        }
+
+        if (!$isAdmin) {
+            $actorMember = $this->getGroupMember($chatId, $currentUserId);
+            if (!$actorMember) {
+                $this->json(['error' => 'Access denied'], 403);
+            }
+        }
+
+        $request = Database::query(
+            "SELECT id, status FROM group_join_requests WHERE chat_id = ? AND requester_user_id = ? LIMIT 1",
+            [$chatId, $requesterUserId]
+        )->fetch();
+        if (!$request || strtolower((string)($request->status ?? '')) !== 'pending') {
+            $this->json(['error' => 'Join request not found'], 404);
+        }
+
+        $memberCount = (int)Database::query(
+            "SELECT COUNT(*) FROM chat_members WHERE chat_id = ?",
+            [$chatId]
+        )->fetchColumn();
+        if ($memberCount >= self::GROUP_CHAT_USER_LIMIT) {
+            $this->json(['error' => self::USER_LIMIT_REACHED_MESSAGE], 429);
+        }
+
+        Database::query(
+            "INSERT IGNORE INTO chat_members (chat_id, user_id, role, is_muted) VALUES (?, ?, 'member', 0)",
+            [$chatId, $requesterUserId]
+        );
+
+        Database::query(
+            "UPDATE group_join_requests
+             SET status = 'approved', handled_by = ?, handled_at = NOW(), updated_at = NOW()
+             WHERE id = ?",
+            [$currentUserId, (int)$request->id]
+        );
+
+        if ($this->supportsLastSeenMessageId()) {
+            $latestMessageId = $this->getLatestMessageId($chatId);
+            if ($latestMessageId > 0) {
+                $this->markChatSeenUpToMessageId($chatId, $requesterUserId, $latestMessageId);
+            }
+        }
+
+        $requesterUsername = (string)Database::query("SELECT username FROM users WHERE id = ? LIMIT 1", [$requesterUserId])->fetchColumn();
+        $actorUsername = User::normalizeUsername($authUser->username ?? '');
+        if ($this->supportsSystemEvents() && $actorUsername !== '' && trim($requesterUsername) !== '') {
+            Database::query(
+                "INSERT INTO chat_system_events (chat_id, event_type, content) VALUES (?, 'join_request_approved', ?)",
+                [$chatId, $actorUsername . ' approved join request for ' . User::normalizeUsername($requesterUsername)]
+            );
+        }
+
+        Notification::create(
+            $requesterUserId,
+            'group_join_approved',
+            'Group request approved',
+            'Your request to join this group was approved',
+            '/c/' . User::formatUserNumber((string)$chat->chat_number)
+        );
+
+        $this->json(['success' => true]);
+    }
+
+    public function denyGroupJoinRequest() {
+        Auth::requireAuth();
+        Auth::csrfValidate();
+
+        if (!$this->supportsGroupJoinRequests()) {
+            $this->json(['error' => 'Group join requests require a database update'], 400);
+        }
+
+        $chatId = (int)($_POST['chat_id'] ?? 0);
+        $requesterUserId = (int)($_POST['user_id'] ?? 0);
+        $authUser = Auth::user();
+        $currentUserId = (int)$authUser->id;
+        $isAdmin = strtolower((string)($authUser->role ?? '')) === 'admin';
+
+        if ($chatId <= 0 || $requesterUserId <= 0) {
+            $this->json(['error' => 'Invalid payload'], 400);
+        }
+
+        $chatSelect = $this->supportsChatSoftDelete()
+            ? "SELECT id, type, created_by, chat_number, deleted_at FROM chats WHERE id = ?"
+            : "SELECT id, type, created_by, chat_number FROM chats WHERE id = ?";
+        $chat = Database::query($chatSelect, [$chatId])->fetch();
+        if (!$chat || $this->chatIsSoftDeleted($chat) || !Chat::isGroupType($chat->type ?? null)) {
+            $this->json(['error' => 'Chat not found'], 404);
+        }
+
+        if (!$this->canApproveGroupJoinRequests($chat, $currentUserId, $isAdmin)) {
+            $this->json(['error' => 'Access denied'], 403);
+        }
+
+        if (!$isAdmin) {
+            $actorMember = $this->getGroupMember($chatId, $currentUserId);
+            if (!$actorMember) {
+                $this->json(['error' => 'Access denied'], 403);
+            }
+        }
+
+        $request = Database::query(
+            "SELECT id, status FROM group_join_requests WHERE chat_id = ? AND requester_user_id = ? LIMIT 1",
+            [$chatId, $requesterUserId]
+        )->fetch();
+        if (!$request || strtolower((string)($request->status ?? '')) !== 'pending') {
+            $this->json(['error' => 'Join request not found'], 404);
+        }
+
+        Database::query(
+            "UPDATE group_join_requests
+             SET status = 'denied', handled_by = ?, handled_at = NOW(), updated_at = NOW()
+             WHERE id = ?",
+            [$currentUserId, (int)$request->id]
+        );
+
+        $requesterUsername = (string)Database::query("SELECT username FROM users WHERE id = ? LIMIT 1", [$requesterUserId])->fetchColumn();
+        $actorUsername = User::normalizeUsername($authUser->username ?? '');
+        if ($this->supportsSystemEvents() && $actorUsername !== '' && trim($requesterUsername) !== '') {
+            Database::query(
+                "INSERT INTO chat_system_events (chat_id, event_type, content) VALUES (?, 'join_request_denied', ?)",
+                [$chatId, $actorUsername . ' denied join request for ' . User::normalizeUsername($requesterUsername)]
+            );
+        }
+
+        Notification::create(
+            $requesterUserId,
+            'group_join_denied',
+            'Group request denied',
+            'Your request to join this group was denied',
+            '/'
+        );
+
+        $this->json(['success' => true]);
+    }
+
     private function getGroupMessageSettingKey(string $type, int $chatId): string {
         return 'group_' . $type . '_window_' . $chatId;
     }
@@ -1522,22 +2350,23 @@ class ChatController extends Controller {
         $chatId = (int)($_POST['chat_id'] ?? 0);
         $editWindow = trim($_POST['edit_window'] ?? 'never');
         $deleteWindow = trim($_POST['delete_window'] ?? 'never');
+        $nonMemberVisibility = strtolower(trim((string)($_POST['non_member_visibility'] ?? self::GROUP_VISIBILITY_NONE)));
         $authUser = Auth::user();
         $currentUserId = (int)$authUser->id;
         $isAdmin = strtolower((string)($authUser->role ?? '')) === 'admin';
 
         $allowedValues = ['never', '600', '3600', '86400', 'forever'];
-        if ($chatId <= 0 || !in_array($editWindow, $allowedValues, true) || !in_array($deleteWindow, $allowedValues, true)) {
+        $allowedVisibilityValues = [self::GROUP_VISIBILITY_NONE, self::GROUP_VISIBILITY_REQUESTABLE, self::GROUP_VISIBILITY_PUBLIC];
+        if ($chatId <= 0 || !in_array($editWindow, $allowedValues, true) || !in_array($deleteWindow, $allowedValues, true) || !in_array($nonMemberVisibility, $allowedVisibilityValues, true)) {
             $this->json(['error' => 'Invalid payload'], 400);
         }
 
-        $chat = Database::query("SELECT id, type, created_by FROM chats WHERE id = ?", [$chatId])->fetch();
+        $chat = Database::query("SELECT id, type, created_by, non_member_visibility FROM chats WHERE id = ?", [$chatId])->fetch();
         if (!$chat || !Chat::isGroupType($chat->type ?? null)) {
             $this->json(['error' => 'Chat not found'], 404);
         }
 
-        $isGroupOwner = (int)$chat->created_by === $currentUserId;
-        if (!$isGroupOwner && !$isAdmin) {
+        if (!$this->canManageGroupSettings($chat, $currentUserId, $isAdmin)) {
             $this->json(['error' => 'Access denied'], 403);
         }
 
@@ -1548,8 +2377,16 @@ class ChatController extends Controller {
 
         Setting::set($this->getGroupMessageSettingKey('edit', $chatId), $editWindow);
         Setting::set($this->getGroupMessageSettingKey('delete', $chatId), $deleteWindow);
+        if ($this->supportsGroupVisibility()) {
+            Database::query("UPDATE chats SET non_member_visibility = ? WHERE id = ?", [$nonMemberVisibility, $chatId]);
+        }
 
-        $this->json(['success' => true]);
+        $this->json([
+            'success' => true,
+            'edit_window' => $editWindow,
+            'delete_window' => $deleteWindow,
+            'non_member_visibility' => $nonMemberVisibility,
+        ]);
     }
 
     private function parseAttachmentIds($raw): array {

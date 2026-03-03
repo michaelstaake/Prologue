@@ -1430,7 +1430,7 @@ function bindChatHeaderMenu() {
             return;
         }
 
-        if (action === 'message-settings') {
+        if (action === 'group-settings' || action === 'message-settings') {
             if (typeof window.openMessageSettingsModal === 'function') {
                 window.openMessageSettingsModal();
             }

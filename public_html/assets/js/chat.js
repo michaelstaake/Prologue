@@ -685,6 +685,7 @@ function renderPinnedMessageBanner(pinnedMessage) {
     if (!banner || !usernameNode || !timeNode || !contentNode) return;
 
     const safePinnedMessage = normalizePinnedMessage(pinnedMessage);
+    const canPinMessages = canCurrentUserPinMessages();
     if (!safePinnedMessage) {
         banner.classList.add('hidden');
         banner.classList.remove('-translate-y-full', 'opacity-0', 'pointer-events-none');
@@ -699,6 +700,7 @@ function renderPinnedMessageBanner(pinnedMessage) {
         contentNode.dataset.mentionMap = '{}';
         if (unpinButton) {
             unpinButton.disabled = true;
+            unpinButton.classList.toggle('hidden', !canPinMessages);
             unpinButton.classList.add('opacity-50', 'cursor-not-allowed');
         }
         if (goToButton) {
@@ -722,8 +724,10 @@ function renderPinnedMessageBanner(pinnedMessage) {
         window.refreshUtcTimestamps(timeNode);
     }
     if (unpinButton) {
-        unpinButton.disabled = false;
-        unpinButton.classList.remove('opacity-50', 'cursor-not-allowed');
+        unpinButton.classList.toggle('hidden', !canPinMessages);
+        unpinButton.disabled = !canPinMessages;
+        unpinButton.classList.toggle('opacity-50', !canPinMessages);
+        unpinButton.classList.toggle('cursor-not-allowed', !canPinMessages);
     }
     if (goToButton) {
         goToButton.disabled = false;
@@ -2556,6 +2560,151 @@ async function removeGroupMember(userId, username) {
     showToast(result.error || 'Unable to remove member', 'error');
 }
 
+async function promoteGroupModerator(userId, username) {
+    if (!currentChat) return;
+    const result = await postForm('/api/chats/group/promote-moderator', {
+        csrf_token: getCsrfToken(),
+        chat_id: String(currentChat.id),
+        user_id: String(userId)
+    });
+
+    if (result.success) {
+        showToast(`${String(username || 'User')} is now a moderator`, 'success');
+        await reloadCurrentView({ source: 'promote-group-moderator' });
+        return;
+    }
+
+    showToast(result.error || 'Unable to promote moderator', 'error');
+}
+
+async function demoteGroupModerator(userId, username) {
+    if (!currentChat) return;
+    const result = await postForm('/api/chats/group/demote-moderator', {
+        csrf_token: getCsrfToken(),
+        chat_id: String(currentChat.id),
+        user_id: String(userId)
+    });
+
+    if (result.success) {
+        showToast(`${String(username || 'User')} is no longer a moderator`, 'success');
+        await reloadCurrentView({ source: 'demote-group-moderator' });
+        return;
+    }
+
+    showToast(result.error || 'Unable to demote moderator', 'error');
+}
+
+async function muteGroupMember(userId, username) {
+    if (!currentChat) return;
+    const result = await postForm('/api/chats/group/mute-member', {
+        csrf_token: getCsrfToken(),
+        chat_id: String(currentChat.id),
+        user_id: String(userId)
+    });
+
+    if (result.success) {
+        showToast(`${String(username || 'User')} was muted`, 'success');
+        await reloadCurrentView({ source: 'mute-group-member' });
+        return;
+    }
+
+    showToast(result.error || 'Unable to mute member', 'error');
+}
+
+async function unmuteGroupMember(userId, username) {
+    if (!currentChat) return;
+    const result = await postForm('/api/chats/group/unmute-member', {
+        csrf_token: getCsrfToken(),
+        chat_id: String(currentChat.id),
+        user_id: String(userId)
+    });
+
+    if (result.success) {
+        showToast(`${String(username || 'User')} was unmuted`, 'success');
+        await reloadCurrentView({ source: 'unmute-group-member' });
+        return;
+    }
+
+    showToast(result.error || 'Unable to unmute member', 'error');
+}
+
+async function requestCurrentGroupJoin() {
+    if (!currentChat) return;
+
+    const result = await postForm('/api/chats/group/request-join', {
+        csrf_token: getCsrfToken(),
+        chat_id: String(currentChat.id)
+    });
+
+    if (result.success) {
+        showToast('Join request sent', 'success');
+        await reloadCurrentView({ source: 'group-request-join' });
+        return;
+    }
+
+    showToast(result.error || 'Unable to request access', 'error');
+}
+
+async function cancelCurrentGroupJoinRequest() {
+    if (!currentChat) return;
+
+    const result = await postForm('/api/chats/group/cancel-request', {
+        csrf_token: getCsrfToken(),
+        chat_id: String(currentChat.id)
+    });
+
+    if (result.success) {
+        showToast('Join request cancelled', 'success');
+        await reloadCurrentView({ source: 'group-cancel-request' });
+        return;
+    }
+
+    showToast(result.error || 'Unable to cancel request', 'error');
+}
+
+async function approveGroupJoinRequest(userId) {
+    if (!currentChat) return;
+
+    const result = await postForm('/api/chats/group/approve-request', {
+        csrf_token: getCsrfToken(),
+        chat_id: String(currentChat.id),
+        user_id: String(userId)
+    });
+
+    if (result.success) {
+        showToast('Join request approved', 'success');
+        await reloadCurrentView({ source: 'group-approve-request' });
+        return;
+    }
+
+    showToast(result.error || 'Unable to approve request', 'error');
+}
+
+async function denyGroupJoinRequest(userId) {
+    if (!currentChat) return;
+
+    const result = await postForm('/api/chats/group/deny-request', {
+        csrf_token: getCsrfToken(),
+        chat_id: String(currentChat.id),
+        user_id: String(userId)
+    });
+
+    if (result.success) {
+        showToast('Join request denied', 'success');
+        await reloadCurrentView({ source: 'group-deny-request' });
+        return;
+    }
+
+    showToast(result.error || 'Unable to deny request', 'error');
+}
+
+window.promoteGroupModerator = promoteGroupModerator;
+window.demoteGroupModerator = demoteGroupModerator;
+window.muteGroupMember = muteGroupMember;
+window.unmuteGroupMember = unmuteGroupMember;
+window.approveGroupJoinRequest = approveGroupJoinRequest;
+window.denyGroupJoinRequest = denyGroupJoinRequest;
+
 async function leaveCurrentGroup() {
     if (!currentChat) return;
     if (normalizeChatType(currentChat.type) !== 'group') {
@@ -2570,11 +2719,15 @@ async function leaveCurrentGroup() {
 
 function getEligibleNewOwners() {
     const memberNodes = Array.from(document.querySelectorAll('[data-group-member-user-id]'));
+    const safeCurrentUserId = Number(currentUserId || 0);
     return memberNodes
         .map((node) => {
             const userId = Number(node.getAttribute('data-group-member-user-id') || 0);
             const username = String(node.getAttribute('data-group-member-username') || '').trim();
             if (!Number.isFinite(userId) || userId <= 0 || !username) {
+                return null;
+            }
+            if (safeCurrentUserId > 0 && userId === safeCurrentUserId) {
                 return null;
             }
             return { userId, username };
@@ -3017,6 +3170,14 @@ async function pollMessages(options = {}) {
     if (currentChat && data.group_delete_window !== undefined) {
         currentChat.group_delete_window = String(data.group_delete_window || 'never');
     }
+    const hasCanSendMessage = Object.prototype.hasOwnProperty.call(data, 'can_send_message');
+    const nextRestrictionReason = Object.prototype.hasOwnProperty.call(data, 'can_send_message_reason')
+        ? String(data.can_send_message_reason || '')
+        : String(currentChat?.message_restriction_reason || '');
+    if (currentChat && hasCanSendMessage) {
+        currentChat.can_send_messages = Boolean(data.can_send_message);
+        currentChat.message_restriction_reason = nextRestrictionReason;
+    }
     const forceRender = options.forceRender === true;
     const activeChatId = Number(currentChat.id || 0);
     const nextMessagesSignature = buildMessagesSignature(messages);
@@ -3040,12 +3201,8 @@ async function pollMessages(options = {}) {
     renderPinnedMessageBanner(pinnedMessage);
     refreshChatCallStatusBar();
 
-    const restrictionReason = Object.prototype.hasOwnProperty.call(data, 'can_send_message_reason')
-        ? String(data.can_send_message_reason || '')
-        : String(currentChat?.message_restriction_reason || '');
-
-    if (Object.prototype.hasOwnProperty.call(data, 'can_send_message')) {
-        setChatComposerEnabled(Boolean(data.can_send_message), restrictionReason);
+    if (hasCanSendMessage) {
+        setChatComposerEnabled(Boolean(data.can_send_message), nextRestrictionReason);
     }
 
     if (Object.prototype.hasOwnProperty.call(data, 'can_start_call')) {
@@ -3112,6 +3269,18 @@ function buildMessagesSignature(messages) {
 }
 
 function getPersonalChatMessageRestrictionText(reason) {
+    if (String(reason || '') === 'group_muted') {
+        return 'You are muted in this group.';
+    }
+
+    if (String(reason || '') === 'group_members_only') {
+        return 'Join this group to send messages.';
+    }
+
+    if (String(reason || '') === 'group_read_only_public') {
+        return 'This is a public read-only view. Join the group to participate.';
+    }
+
     if (String(reason || '') === 'banned_user') {
         return "You can't send messages to a banned user.";
     }
@@ -3120,6 +3289,18 @@ function getPersonalChatMessageRestrictionText(reason) {
 }
 
 function getPersonalChatMessageRestrictionToast(reason) {
+    if (String(reason || '') === 'group_muted') {
+        return 'You are muted in this group';
+    }
+
+    if (String(reason || '') === 'group_members_only') {
+        return 'Join this group to send messages';
+    }
+
+    if (String(reason || '') === 'group_read_only_public') {
+        return 'This public group view is read-only';
+    }
+
     if (String(reason || '') === 'banned_user') {
         return "You can't send messages to a banned user";
     }
@@ -3481,6 +3662,9 @@ function renderMessages(messages, options = {}) {
         const editedAt = String(msg?.edited_at || '');
         const isQuoted = !!(msg?.is_quoted);
         const hasAttachments = Array.isArray(msg?.attachments) && msg.attachments.length > 0;
+        const isGroupReadOnlyViewer = normalizeChatType(currentChat?.type) === 'group' && !Boolean(currentChat?.is_group_member);
+        const canReplyToMessage = !isGroupReadOnlyViewer && !isCurrentUserGroupMuted();
+        const canPinMessage = !isGroupReadOnlyViewer && canCurrentUserPinMessages();
 
         let editButton = '';
         let deleteButton = '';
@@ -3490,6 +3674,16 @@ function renderMessages(messages, options = {}) {
         if (canDeleteMessage(msg, hasAttachments)) {
             deleteButton = `<button type="button" class="text-zinc-400 hover:text-zinc-300 js-delete-link" title="Delete" aria-label="Delete" data-delete-message-id="${Number(msg.id)}"><i class="fa-solid fa-trash" aria-hidden="true"></i></button>`;
         }
+
+        const interactionControlsMarkup = isGroupReadOnlyViewer
+            ? ''
+            : `<div class="flex items-center gap-3 md:opacity-0 md:group-hover:opacity-100 md:pointer-events-none md:group-hover:pointer-events-auto md:transition-opacity md:duration-150 md:ease-out">
+                                ${canReplyToMessage ? `<button type="button" class="text-zinc-400 hover:text-zinc-300 js-quote-link" title="Quote" aria-label="Quote" data-quote-message-id="${Number(msg.id)}" data-quote-username="${escapeHtml(String(msg.username || ''))}" data-quote-user-number="${escapeHtml(String(msg.user_number || ''))}" data-quote-content="${escapeHtml(String(msg.content || ''))}" data-quote-mention-map="${mentionMapJson}"><i class="fa-solid fa-reply" aria-hidden="true"></i></button>` : ''}
+                                ${editButton}
+                                ${deleteButton}
+                                ${canPinMessage ? `<button type="button" class="text-zinc-400 hover:text-zinc-300 js-pin-link" title="Pin" aria-label="Pin" data-pin-message-id="${Number(msg.id)}"><i class="fa-solid fa-thumbtack" aria-hidden="true"></i></button>` : ''}
+                                <button type="button" class="text-zinc-400 hover:text-zinc-300 js-react-link" title="React" aria-label="React" data-react-message-id="${Number(msg.id)}"><i class="fa-solid fa-thumbs-up" aria-hidden="true"></i></button>
+                            </div>`;
 
         chunks.push(`
             <div class="flex gap-3 ${isNewGroup ? 'mt-4' : 'mt-1'} group" data-message-id="${Number(msg.id)}" data-message-user-id="${messageUserId}" data-message-created-at="${escapeHtml(fullTimestamp)}" data-message-is-quoted="${isQuoted ? '1' : '0'}" data-message-has-attachments="${hasAttachments ? '1' : '0'}" data-message-edited-at="${escapeHtml(editedAt)}">
@@ -3506,14 +3700,8 @@ function renderMessages(messages, options = {}) {
                         <div class="text-xs flex items-center gap-3">
                             <span class="text-zinc-500" data-utc="${escapeHtml(fullTimestamp)}" title="${escapeHtml(fullTimestamp)}">${escapeHtml(compactTimestamp)}</span>
                             ${editedAt ? '<span class="text-zinc-500 italic">(edited)</span>' : ''}
-                            <div class="flex items-center gap-3 md:opacity-0 md:group-hover:opacity-100 md:pointer-events-none md:group-hover:pointer-events-auto md:transition-opacity md:duration-150 md:ease-out">
-                                <button type="button" class="text-zinc-400 hover:text-zinc-300 js-quote-link" title="Quote" aria-label="Quote" data-quote-message-id="${Number(msg.id)}" data-quote-username="${escapeHtml(String(msg.username || ''))}" data-quote-user-number="${escapeHtml(String(msg.user_number || ''))}" data-quote-content="${escapeHtml(String(msg.content || ''))}" data-quote-mention-map="${mentionMapJson}"><i class="fa-solid fa-reply" aria-hidden="true"></i></button>
-                                ${editButton}
-                                ${deleteButton}
-                                <button type="button" class="text-zinc-400 hover:text-zinc-300 js-pin-link" title="Pin" aria-label="Pin" data-pin-message-id="${Number(msg.id)}"><i class="fa-solid fa-thumbtack" aria-hidden="true"></i></button>
-                                <button type="button" class="text-zinc-400 hover:text-zinc-300 js-react-link" title="React" aria-label="React" data-react-message-id="${Number(msg.id)}"><i class="fa-solid fa-thumbs-up" aria-hidden="true"></i></button>
-                            </div>
-                            ${reactionBadgesMarkup}
+                            ${interactionControlsMarkup}
+                            ${isGroupReadOnlyViewer ? '' : reactionBadgesMarkup}
                         </div>
                     </div>
                 </div>
@@ -3552,6 +3740,32 @@ function renderMessages(messages, options = {}) {
     }
 
     box.scrollTop = box.scrollHeight;
+}
+
+function isCurrentUserGroupMuted() {
+    if (!currentChat || normalizeChatType(currentChat.type) !== 'group') {
+        return false;
+    }
+
+    return String(currentChat.message_restriction_reason || '') === 'group_muted';
+}
+
+function canCurrentUserPinMessages() {
+    if (!currentChat) {
+        return false;
+    }
+
+    if (normalizeChatType(currentChat.type) !== 'group') {
+        return true;
+    }
+
+    const ownerUserId = Number(currentChat.owner_user_id || 0);
+    const me = Number(currentUserId || 0);
+    if (ownerUserId > 0 && ownerUserId === me) {
+        return true;
+    }
+
+    return currentChat.is_group_moderator === true;
 }
 
 function isWithinWindow(windowValue, createdAt) {
@@ -3742,6 +3956,92 @@ function bindDeleteMessageModal() {
     }
 }
 
+function bindGroupJoinRequestButtons() {
+    const requestButton = document.getElementById('request-group-join');
+    const cancelButton = document.getElementById('cancel-group-join-request');
+
+    if (requestButton) {
+        requestButton.addEventListener('click', async (event) => {
+            event.preventDefault();
+            await requestCurrentGroupJoin();
+        });
+    }
+
+    if (cancelButton) {
+        cancelButton.addEventListener('click', async (event) => {
+            event.preventDefault();
+            await cancelCurrentGroupJoinRequest();
+        });
+    }
+}
+
+function closeGroupMemberActionMenus(exceptMenuId = '') {
+    const menus = document.querySelectorAll('[data-group-member-menu]');
+    const toggles = document.querySelectorAll('[data-group-member-menu-toggle]');
+
+    menus.forEach((menu) => {
+        if (!(menu instanceof HTMLElement)) return;
+        const shouldKeepOpen = exceptMenuId && menu.id === exceptMenuId;
+        menu.classList.toggle('hidden', !shouldKeepOpen);
+    });
+
+    toggles.forEach((toggle) => {
+        if (!(toggle instanceof HTMLElement)) return;
+        const menuId = String(toggle.dataset.menuId || '');
+        const isExpanded = Boolean(exceptMenuId && menuId === exceptMenuId);
+        toggle.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+    });
+}
+
+function bindGroupMemberActionMenus() {
+    if (document.body.dataset.groupMemberActionMenusBound === '1') return;
+    document.body.dataset.groupMemberActionMenusBound = '1';
+
+    document.addEventListener('click', (event) => {
+        const target = event.target;
+        if (!(target instanceof Element)) return;
+
+        const toggle = target.closest('[data-group-member-menu-toggle]');
+        if (toggle instanceof HTMLElement) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            const menuId = String(toggle.dataset.menuId || '');
+            if (!menuId) {
+                closeGroupMemberActionMenus();
+                return;
+            }
+
+            const menu = document.getElementById(menuId);
+            if (!menu) {
+                closeGroupMemberActionMenus();
+                return;
+            }
+
+            const shouldOpen = menu.classList.contains('hidden');
+            closeGroupMemberActionMenus(shouldOpen ? menuId : '');
+            return;
+        }
+
+        const clickedAction = target.closest('[data-group-member-action]');
+        if (clickedAction) {
+            closeGroupMemberActionMenus();
+            return;
+        }
+
+        if (target.closest('[data-group-member-menu]')) {
+            return;
+        }
+
+        closeGroupMemberActionMenus();
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return;
+        closeGroupMemberActionMenus();
+    });
+}
+
 function bindMessageSettingsModal() {
     const modal = document.getElementById('message-settings-modal');
     if (!modal) return;
@@ -3749,6 +4049,7 @@ function bindMessageSettingsModal() {
     const cancelBtn = document.getElementById('message-settings-cancel');
     const editSelect = document.getElementById('message-settings-edit-window');
     const deleteSelect = document.getElementById('message-settings-delete-window');
+    const visibilitySelect = document.getElementById('group-settings-visibility');
 
     const closeModal = () => {
         modal.classList.add('hidden');
@@ -3765,6 +4066,7 @@ function bindMessageSettingsModal() {
         if (!currentChat) return;
         if (editSelect) editSelect.value = currentChat.group_edit_window || 'never';
         if (deleteSelect) deleteSelect.value = currentChat.group_delete_window || 'never';
+        if (visibilitySelect) visibilitySelect.value = currentChat.group_visibility || 'none';
         modal.classList.remove('hidden');
         modal.setAttribute('aria-hidden', 'false');
     };
@@ -3775,13 +4077,15 @@ function bindMessageSettingsModal() {
             if (!currentChat) return;
             const editWindow = editSelect?.value || 'never';
             const deleteWindow = deleteSelect?.value || 'never';
+            const nonMemberVisibility = visibilitySelect?.value || 'none';
             closeModal();
             try {
                 const result = await postForm('/api/chats/group/message-settings', {
                     csrf_token: getCsrfToken(),
                     chat_id: currentChat.id,
                     edit_window: editWindow,
-                    delete_window: deleteWindow
+                    delete_window: deleteWindow,
+                    non_member_visibility: nonMemberVisibility
                 });
                 if (result.error) {
                     showToast(result.error, 'error');
@@ -3789,7 +4093,8 @@ function bindMessageSettingsModal() {
                 }
                 currentChat.group_edit_window = editWindow;
                 currentChat.group_delete_window = deleteWindow;
-                showToast('Message settings saved');
+                currentChat.group_visibility = nonMemberVisibility;
+                showToast('Group settings saved');
                 await pollMessages({ scrollMode: 'preserve', forceRender: true });
             } catch (err) {
                 showToast('Failed to save settings', 'error');

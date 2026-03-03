@@ -67,6 +67,34 @@ class UpdateController extends Controller {
             '0.1.3' => [
                 "ALTER TABLE messages ADD COLUMN edited_at TIMESTAMP NULL AFTER created_at",
             ],
+            '0.2.1' => [
+                "ALTER TABLE chats ADD COLUMN non_member_visibility ENUM('none','requestable','public') NOT NULL DEFAULT 'none' AFTER title",
+                "ALTER TABLE chat_members ADD COLUMN role ENUM('member','moderator') NOT NULL DEFAULT 'member' AFTER user_id",
+                "ALTER TABLE chat_members ADD COLUMN is_muted TINYINT(1) NOT NULL DEFAULT 0 AFTER role",
+                "ALTER TABLE chat_members ADD COLUMN muted_by INT NULL AFTER is_muted",
+                "ALTER TABLE chat_members ADD COLUMN muted_at TIMESTAMP NULL AFTER muted_by",
+                "ALTER TABLE chat_members ADD CONSTRAINT fk_chat_members_muted_by FOREIGN KEY (muted_by) REFERENCES users(id) ON DELETE SET NULL",
+                "ALTER TABLE chat_members ADD KEY idx_chat_members_role (chat_id, role)",
+                "CREATE TABLE IF NOT EXISTS group_join_requests (
+                    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                    chat_id INT NOT NULL,
+                    requester_user_id INT NOT NULL,
+                    status ENUM('pending','approved','denied','cancelled') NOT NULL DEFAULT 'pending',
+                    handled_by INT NULL,
+                    handled_at TIMESTAMP NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    FOREIGN KEY (chat_id) REFERENCES chats(id) ON DELETE CASCADE,
+                    FOREIGN KEY (requester_user_id) REFERENCES users(id) ON DELETE CASCADE,
+                    FOREIGN KEY (handled_by) REFERENCES users(id) ON DELETE SET NULL,
+                    UNIQUE KEY uniq_group_join_requests_chat_user (chat_id, requester_user_id),
+                    KEY idx_group_join_requests_status (chat_id, status)
+                )",
+                "UPDATE chat_members cm
+                 JOIN chats c ON c.id = cm.chat_id
+                 SET cm.role = 'moderator'
+                 WHERE c.type = 'group' AND c.created_by = cm.user_id",
+            ],
         ];
     }
 

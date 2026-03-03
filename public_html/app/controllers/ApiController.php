@@ -161,6 +161,96 @@ class ApiController extends Controller {
         return Chat::isSoftDeleted($chat);
     }
 
+    private function supportsGroupVisibility(): bool {
+        static $supports = null;
+        if ($supports !== null) {
+            return $supports;
+        }
+
+        $result = Database::query(
+            "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'chats' AND COLUMN_NAME = 'non_member_visibility'"
+        )->fetchColumn();
+
+        $supports = ((int)$result) > 0;
+        return $supports;
+    }
+
+    private function supportsChatMemberMute(): bool {
+        static $supports = null;
+        if ($supports !== null) {
+            return $supports;
+        }
+
+        $result = Database::query(
+            "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'chat_members' AND COLUMN_NAME = 'is_muted'"
+        )->fetchColumn();
+
+        $supports = ((int)$result) > 0;
+        return $supports;
+    }
+
+    private function supportsChatMemberRole(): bool {
+        static $supports = null;
+        if ($supports !== null) {
+            return $supports;
+        }
+
+        $result = Database::query(
+            "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'chat_members' AND COLUMN_NAME = 'role'"
+        )->fetchColumn();
+
+        $supports = ((int)$result) > 0;
+        return $supports;
+    }
+
+    private function isGroupOwner($chatRow, int $userId): bool {
+        if (!$chatRow || $userId <= 0) {
+            return false;
+        }
+
+        return (int)($chatRow->created_by ?? 0) === $userId;
+    }
+
+    private function isGroupModerator(int $chatId, int $userId): bool {
+        if (!$this->supportsChatMemberRole() || $chatId <= 0 || $userId <= 0) {
+            return false;
+        }
+
+        $role = strtolower(trim((string)Database::query(
+            "SELECT role FROM chat_members WHERE chat_id = ? AND user_id = ? LIMIT 1",
+            [$chatId, $userId]
+        )->fetchColumn()));
+
+        return $role === 'moderator';
+    }
+
+    private function canPinGroupMessages($chatRow, int $chatId, int $userId): bool {
+        if ($this->isGroupOwner($chatRow, $userId)) {
+            return true;
+        }
+
+        return $this->isGroupModerator($chatId, $userId);
+    }
+
+    private function isGroupPublicVisibility($chatRow): bool {
+        if (!$chatRow || !Chat::isGroupType($chatRow->type ?? null) || !$this->supportsGroupVisibility()) {
+            return false;
+        }
+
+        return strtolower(trim((string)($chatRow->non_member_visibility ?? 'none'))) === 'public';
+    }
+
+    private function isGroupMemberMuted(int $chatId, int $userId): bool {
+        if (!$this->supportsChatMemberMute() || $chatId <= 0 || $userId <= 0) {
+            return false;
+        }
+
+        return (int)Database::query(
+            "SELECT is_muted FROM chat_members WHERE chat_id = ? AND user_id = ? LIMIT 1",
+            [$chatId, $userId]
+        )->fetchColumn() === 1;
+    }
+
     private function ensureCallSignalTableExists(): void {
         Database::query(
             "CREATE TABLE IF NOT EXISTS call_signals (
@@ -616,20 +706,21 @@ class ApiController extends Controller {
         $userId = $authUser->id;
         $supportsLastSeen = $this->supportsLastSeenMessageId();
 
-        $allowed = Database::query("SELECT id FROM chat_members WHERE chat_id = ? AND user_id = ?", [$chatId, $userId])->fetch();
-        if (!$allowed) {
-            $this->json(['error' => 'Access denied'], 403);
-        }
-
         $chatRow = null;
         if ($this->supportsChatSoftDelete()) {
-            $chatRow = Database::query("SELECT id, type, deleted_at FROM chats WHERE id = ?", [$chatId])->fetch();
+            $chatRow = Database::query("SELECT id, type, non_member_visibility, deleted_at FROM chats WHERE id = ?", [$chatId])->fetch();
             if (!$chatRow || $this->chatIsSoftDeleted($chatRow)) {
                 $this->json(['error' => 'Chat not found'], 404);
             }
         }
         if (!$chatRow) {
-            $chatRow = Database::query("SELECT id, type FROM chats WHERE id = ?", [$chatId])->fetch();
+            $chatRow = Database::query("SELECT id, type, non_member_visibility FROM chats WHERE id = ?", [$chatId])->fetch();
+        }
+
+        $allowed = Database::query("SELECT id FROM chat_members WHERE chat_id = ? AND user_id = ?", [$chatId, $userId])->fetch();
+        $isPublicGroupViewer = !$allowed && $this->isGroupPublicVisibility($chatRow);
+        if (!$allowed && !$isPublicGroupViewer) {
+            $this->json(['error' => 'Access denied'], 403);
         }
 
         try {
@@ -712,30 +803,33 @@ class ApiController extends Controller {
             $messages = array_values(array_slice($combined, -200));
         }
 
-        try {
-            $typingUsers = Database::query(
-                "SELECT u.id, u.username, u.avatar_filename
-                 FROM chat_typing_status cts
-                 JOIN users u ON u.id = cts.user_id
-                 WHERE cts.chat_id = ?
-                   AND cts.user_id != ?
-                   AND cts.updated_at >= NOW() - INTERVAL 8 SECOND
-                 ORDER BY cts.updated_at DESC",
-                [$chatId, $userId]
-            )->fetchAll();
-        } catch (Throwable $e) {
-            $message = $e->getMessage();
-            if (stripos($message, 'chat_typing_status') === false && stripos($message, 'avatar_filename') === false) {
-                throw $e;
-            }
+        $typingUsers = [];
+        if ($allowed) {
+            try {
+                $typingUsers = Database::query(
+                    "SELECT u.id, u.username, u.avatar_filename
+                     FROM chat_typing_status cts
+                     JOIN users u ON u.id = cts.user_id
+                     WHERE cts.chat_id = ?
+                       AND cts.user_id != ?
+                       AND cts.updated_at >= NOW() - INTERVAL 8 SECOND
+                     ORDER BY cts.updated_at DESC",
+                    [$chatId, $userId]
+                )->fetchAll();
+            } catch (Throwable $e) {
+                $message = $e->getMessage();
+                if (stripos($message, 'chat_typing_status') === false && stripos($message, 'avatar_filename') === false) {
+                    throw $e;
+                }
 
-            $typingUsers = [];
+                $typingUsers = [];
+            }
         }
         foreach ($typingUsers as $typingUser) {
             $typingUser->avatar_url = User::avatarUrl($typingUser);
         }
 
-        if ($supportsLastSeen) {
+        if ($supportsLastSeen && $allowed) {
             $latestMessageId = !empty($messages) ? (int)($messages[count($messages) - 1]->id ?? 0) : 0;
             if ($latestMessageId > 0) {
                 Database::query(
@@ -756,7 +850,20 @@ class ApiController extends Controller {
         if ($isGroupChat) {
             $response['group_edit_window'] = $groupEditWindow;
             $response['group_delete_window'] = $groupDeleteWindow;
+            $response['is_group_public_viewer'] = $isPublicGroupViewer;
         }
+
+        if ($isGroupChat) {
+            if ($allowed) {
+                $isMuted = $this->isGroupMemberMuted($chatId, (int)$userId);
+                $response['can_send_message'] = !$isMuted;
+                $response['can_send_message_reason'] = $isMuted ? 'group_muted' : '';
+            } else {
+                $response['can_send_message'] = false;
+                $response['can_send_message_reason'] = 'group_read_only_public';
+            }
+        }
+
         $this->json($response);
     }
 
@@ -778,11 +885,22 @@ class ApiController extends Controller {
             $this->json(['error' => 'Access denied'], 403);
         }
 
+        $chat = null;
         if ($this->supportsChatSoftDelete()) {
-            $chat = Database::query("SELECT id, deleted_at FROM chats WHERE id = ?", [$chatId])->fetch();
+            $chat = Database::query("SELECT id, type, created_by, deleted_at FROM chats WHERE id = ?", [$chatId])->fetch();
             if (!$chat || $this->chatIsSoftDeleted($chat)) {
                 $this->json(['error' => 'Chat not found'], 404);
             }
+        }
+        if (!$chat) {
+            $chat = Database::query("SELECT id, type, created_by FROM chats WHERE id = ?", [$chatId])->fetch();
+            if (!$chat) {
+                $this->json(['error' => 'Chat not found'], 404);
+            }
+        }
+
+        if (Chat::isGroupType($chat->type ?? null) && !$this->canPinGroupMessages($chat, $chatId, $userId)) {
+            $this->json(['error' => 'Only group owners or moderators can pin messages'], 403);
         }
 
         $message = Database::query(
@@ -828,11 +946,22 @@ class ApiController extends Controller {
             $this->json(['error' => 'Access denied'], 403);
         }
 
+        $chat = null;
         if ($this->supportsChatSoftDelete()) {
-            $chat = Database::query("SELECT id, deleted_at FROM chats WHERE id = ?", [$chatId])->fetch();
+            $chat = Database::query("SELECT id, type, created_by, deleted_at FROM chats WHERE id = ?", [$chatId])->fetch();
             if (!$chat || $this->chatIsSoftDeleted($chat)) {
                 $this->json(['error' => 'Chat not found'], 404);
             }
+        }
+        if (!$chat) {
+            $chat = Database::query("SELECT id, type, created_by FROM chats WHERE id = ?", [$chatId])->fetch();
+            if (!$chat) {
+                $this->json(['error' => 'Chat not found'], 404);
+            }
+        }
+
+        if (Chat::isGroupType($chat->type ?? null) && !$this->canPinGroupMessages($chat, $chatId, $userId)) {
+            $this->json(['error' => 'Only group owners or moderators can unpin messages'], 403);
         }
 
         $this->clearPinnedMessageForChat($chatId);
