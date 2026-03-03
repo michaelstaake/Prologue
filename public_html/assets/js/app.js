@@ -985,6 +985,8 @@ function bindTrashDeleteModal() {
 
         submit.disabled = false;
         submit.textContent = 'Delete Permanently';
+        const focusableElements = modal.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+        if (focusableElements.length > 0) focusableElements[0].focus();
     };
 
     const closeModal = () => {
@@ -1018,9 +1020,26 @@ function bindTrashDeleteModal() {
     });
 
     document.addEventListener('keydown', (event) => {
-        if (event.key !== 'Escape') return;
-        if (modal.classList.contains('hidden')) return;
-        closeModal();
+        if (event.key === 'Escape') {
+            if (modal.classList.contains('hidden')) return;
+            closeModal();
+        } else if (event.key === 'Tab') {
+            if (modal.classList.contains('hidden')) return;
+            const focusableElements = modal.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+            const first = focusableElements[0];
+            const last = focusableElements[focusableElements.length - 1];
+            if (event.shiftKey) {
+                if (document.activeElement === first) {
+                    event.preventDefault();
+                    last.focus();
+                }
+            } else {
+                if (document.activeElement === last) {
+                    event.preventDefault();
+                    first.focus();
+                }
+            }
+        }
     });
 
     form.addEventListener('submit', () => {

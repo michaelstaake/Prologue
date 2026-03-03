@@ -86,6 +86,7 @@
 </head>
 <?php $currentUser = Auth::user(); ?>
 <body class="text-gray-200 <?= $currentUser ? 'h-screen overflow-hidden' : 'min-h-screen overflow-y-auto' ?>">
+    <a href="#app-main-content" class="sr-only focus:not-sr-only">Skip to main content</a>
     <?php
         $browserNotificationsEnabled = false;
         $friendRequestSoundEnabled = true;
@@ -231,7 +232,7 @@
             </div>
         </div>
 
-    <div id="mobile-top-bar" class="lg:hidden sticky top-0 z-30 flex items-center justify-between px-4 py-4 bg-zinc-900/95 backdrop-blur border-b border-zinc-800">
+    <div id="mobile-top-bar" role="banner" class="lg:hidden sticky top-0 z-30 flex items-center justify-between px-4 py-4 bg-zinc-900/95 backdrop-blur border-b border-zinc-800">
         <button id="sidebar-toggle-mobile" class="flex items-center gap-3" aria-label="Open menu">
             <i class="fa-solid fa-comments text-2xl prologue-accent"></i>
             <span class="text-2xl font-bold text-zinc-100">Prologue</span>
@@ -243,7 +244,7 @@
     </div>
 
     <div id="app-layout" class="flex flex-1 min-h-0">
-        <aside id="app-sidebar" class="w-72 sidebar border-r border-zinc-800 flex flex-col">
+        <aside id="app-sidebar" role="complementary" class="w-72 sidebar border-r border-zinc-800 flex flex-col">
             <a href="<?= htmlspecialchars(base_url('/'), ENT_QUOTES, 'UTF-8') ?>" class="p-4 border-b border-zinc-700 flex items-center gap-3 hover:bg-zinc-800/40 transition">
                 <i class="fa-solid fa-comments text-2xl prologue-accent"></i>
                 <span class="text-2xl font-bold">Prologue</span>
@@ -256,10 +257,10 @@
                     <button type="button" data-chat-sidebar-mode="custom" class="px-2.5 py-1 rounded-md transition text-zinc-400 hover:text-zinc-200">Custom</button>
                 </div>
 
-                <div class="flex-1 min-h-0 flex flex-col">
+                <nav class="flex-1 min-h-0 flex flex-col">
                     <div class="px-3 pb-2 text-xs uppercase tracking-wide text-zinc-500">Chats</div>
                     <div id="chat-sidebar-list" class="space-y-1 overflow-y-auto min-h-0"></div>
-                </div>
+                </nav>
                 <div id="chat-sidebar-custom-controls" class="hidden space-y-2">
                     <div id="chat-sidebar-custom-count" class="px-1 text-xs uppercase tracking-wide text-zinc-500">Custom (0/8)</div>
                     <div class="px-1 text-xs text-zinc-500">Add a chat to Custom by right clicking on it</div>

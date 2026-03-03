@@ -725,7 +725,7 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                     <div id="emoji-grid" class="grid grid-cols-6 justify-start gap-3 sm:max-h-72 flex-1 overflow-y-auto pr-1"></div>
                 </div>
                 <div id="emoji-preview" class="hidden sm:flex w-20 flex-shrink-0 flex-col items-center gap-2 pt-10">
-                    <img id="emoji-preview-img" src="" alt="" class="w-14 h-14 hidden">
+                    <img id="emoji-preview-img" src="" alt="Emoji preview" class="w-14 h-14 hidden">
                     <div id="emoji-preview-label" class="text-xs text-zinc-400 text-center leading-tight break-words w-full hidden"></div>
                 </div>
             </div>
