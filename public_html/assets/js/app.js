@@ -1254,9 +1254,26 @@ window.logout = logout;
 
 let appInitStarted = false;
 
+function bindDynamicViewportHeight() {
+    if (document.documentElement.dataset.appVhBound === '1') return;
+    document.documentElement.dataset.appVhBound = '1';
+
+    const syncViewportHeight = () => {
+        const viewportHeight = window.visualViewport?.height || window.innerHeight;
+        if (!Number.isFinite(viewportHeight) || viewportHeight <= 0) return;
+        document.documentElement.style.setProperty('--app-vh', `${Math.round(viewportHeight)}px`);
+    };
+
+    syncViewportHeight();
+    window.addEventListener('resize', syncViewportHeight);
+    window.visualViewport?.addEventListener('resize', syncViewportHeight);
+    window.visualViewport?.addEventListener('scroll', syncViewportHeight);
+}
+
 function startAppInitOnce() {
     if (appInitStarted) return;
     appInitStarted = true;
+    bindDynamicViewportHeight();
     currentClientRenderedUrl = window.location.pathname + window.location.search + window.location.hash;
     bindClientNavigation();
     init().catch(() => {});

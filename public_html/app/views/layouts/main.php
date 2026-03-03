@@ -2,7 +2,7 @@
 <html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="csrf-token" content="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
     <link rel="icon" type="image/png" href="<?= htmlspecialchars(base_url('/assets/img/favicon.png'), ENT_QUOTES, 'UTF-8') ?>">
     <title>Prologue</title>
@@ -15,6 +15,11 @@
         body { background: #09090b; }
         .prologue-accent { color: #34d399; }
         .sidebar { background: #111827; }
+        body.h-screen {
+            height: 100dvh;
+            height: var(--app-vh, 100dvh);
+        }
+        body.h-screen > .app-shell { height: 100%; min-height: 0; }
         .typing-dots { display: inline-flex; gap: 1px; margin-left: 2px; }
         .typing-dots span { opacity: .35; animation: typing-dot 1s infinite; }
         .typing-dots span:nth-child(2) { animation-delay: .2s; }
@@ -69,6 +74,12 @@
                 inset: 0;
                 background: rgba(0,0,0,0.5);
                 z-index: 49;
+            }
+        }
+
+        @media (max-width: 639.98px) {
+            #message-form {
+                padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
             }
         }
     </style>
@@ -197,7 +208,7 @@
         }
     ?>
     <?php if ($currentUser): ?>
-    <div class="h-screen flex flex-col">
+    <div class="h-screen flex flex-col app-shell">
         <div id="chat-call-status-bar" class="hidden w-full px-6 py-2 border-b border-transparent text-sm font-medium flex items-center gap-3 shrink-0">
             <span id="chat-call-status-label"></span>
             <span id="chat-call-status-duration" class="hidden text-xs opacity-80 tabular-nums">00:00</span>
