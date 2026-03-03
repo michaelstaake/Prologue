@@ -47,6 +47,7 @@ services:
       PMA_HOST: chat-db
       PMA_PORT: 3306
       MYSQL_ROOT_PASSWORD: root
+      PMA_SESSION_EXPIRATION: 7200
 
 volumes:
   chat_mysql_data:
