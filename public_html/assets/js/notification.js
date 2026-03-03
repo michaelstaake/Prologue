@@ -1140,12 +1140,9 @@ async function handleToastHistoryClick(event) {
     }
 
     if (action?.href) {
-        // Close mobile notification panel before navigating
-        const panel = document.getElementById('notification-history-panel');
-        if (panel && panel.classList.contains('mobile-open')) {
-            panel.classList.remove('mobile-open');
-            const backdrop = document.getElementById('mobile-overlay-backdrop');
-            if (backdrop) backdrop.classList.remove('visible');
+        // Close notification panel before navigating
+        if (typeof window.collapseNotificationPanel === 'function') {
+            window.collapseNotificationPanel();
         }
 
         if (action.openInNewTab) {
@@ -1248,6 +1245,17 @@ function bindNotificationHistory() {
             handleToastHistoryClick(event);
         });
     }
+
+    window.collapseNotificationPanel = () => {
+        if (!expanded) return;
+        expanded = false;
+        window.NOTIFICATION_SIDEBAR_EXPANDED = false;
+        setExpanded(false);
+        postForm('/api/notifications/sidebar-state', {
+            csrf_token: getCsrfToken(),
+            expanded: '0'
+        }).catch(() => {});
+    };
 
     // Reset panel state when crossing the mobile/desktop breakpoint
     let wasMobile = isMobileLayout();
