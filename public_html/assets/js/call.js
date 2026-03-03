@@ -19,6 +19,7 @@ let settingsLevelRaf = null;
 let settingsLevelAnalyser = null;
 let callParticipantsRenderSignature = '';
 let callConnectingOverlayTimeout = null;
+let callLeaveBeaconBound = false;
 
 function hideCallConnectingOverlay() {
     if (callConnectingOverlayTimeout) {
@@ -809,6 +810,9 @@ async function initGlobalCallPersistence() {
 }
 
 function initCallLeaveBeacon() {
+    if (callLeaveBeaconBound) return;
+    callLeaveBeaconBound = true;
+
     const fireLeaveBeacon = () => {
         const callId = Number(currentCallId || 0);
         if (callId <= 0) return;
@@ -818,6 +822,7 @@ function initCallLeaveBeacon() {
         });
         navigator.sendBeacon('/api/calls/leave', payload);
     };
+
     window.addEventListener('pagehide', fireLeaveBeacon);
     window.addEventListener('beforeunload', fireLeaveBeacon);
 }
@@ -856,10 +861,18 @@ async function refreshChatCallStatusBar(options = {}) {
     try {
         const response = await fetch(`/api/calls/active/${currentChat.id}`);
         const payload = await response.json();
-        const activeCall = payload?.call || null;
+        let activeCall = payload?.call || null;
         if (activeCall) {
             activeCall.chat_id = Number(activeCall?.chat_id || currentChat.id || 0);
             activeCall.chat_type = normalizeChatType(currentChat?.type || 'personal');
+        }
+
+        const hasLocalOrPersistedCall = Number(currentCallId || globalCallContext?.id || 0) > 0;
+        if (!activeCall && hasLocalOrPersistedCall) {
+            const globalActiveCall = await fetchCurrentActiveCall().catch(() => null);
+            if (globalActiveCall) {
+                activeCall = globalActiveCall;
+            }
         }
 
         await applyActiveCallSnapshot(activeCall, { allowRestore: false });

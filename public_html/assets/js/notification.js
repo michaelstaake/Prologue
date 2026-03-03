@@ -1045,7 +1045,17 @@ async function handleToastHistoryClick(event) {
         if (action.openInNewTab) {
             window.open(action.href, '_blank', 'noopener,noreferrer');
         } else {
-            window.location.href = action.href;
+            const targetUrl = new URL(action.href, window.location.origin);
+            if (targetUrl.origin === window.location.origin && typeof window.navigateApp === 'function') {
+                window.navigateApp(targetUrl.pathname + targetUrl.search + targetUrl.hash, {
+                    source: 'notification-click',
+                    updateHistory: true
+                }).catch(() => {
+                    window.location.href = action.href;
+                });
+            } else {
+                window.location.href = action.href;
+            }
         }
     }
 }
@@ -1058,6 +1068,8 @@ function bindNotificationHistory() {
     const title = document.getElementById('notification-history-title');
     const header = document.getElementById('notification-history-header');
     if (!button || !panel) return;
+    if (button.dataset.bound === '1') return;
+    button.dataset.bound = '1';
 
     const isMobileLayout = () => window.innerWidth < 1024;
 

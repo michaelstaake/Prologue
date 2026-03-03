@@ -1,5 +1,28 @@
 // Extracted from app.js for feature-focused organization.
 
+function navigateWithFallback(url, options = {}) {
+    const targetUrl = String(url || '').trim();
+    if (!targetUrl) return;
+
+    if (typeof window.navigateApp === 'function') {
+        window.navigateApp(targetUrl, options).catch(() => {
+            window.location.href = targetUrl;
+        });
+        return;
+    }
+
+    window.location.href = targetUrl;
+}
+
+async function reloadCurrentView(options = {}) {
+    if (typeof window.reloadAppView === 'function') {
+        const success = await window.reloadAppView(options).catch(() => false);
+        if (success) return;
+    }
+
+    window.location.reload();
+}
+
 async function sendFriendRequest(event) {
     event.preventDefault();
     const input = document.getElementById('friend-number');
@@ -26,7 +49,7 @@ async function acceptFriendRequest(requesterId) {
         requester_id: String(requesterId)
     });
     if (result.success) {
-        window.location.href = `/c/${formatNumber(result.chat_number)}`;
+        navigateWithFallback(`/c/${formatNumber(result.chat_number)}`, { source: 'accept-friend', updateHistory: true });
         return;
     }
     showToast(result.error || 'Unable to accept request', 'error');
@@ -40,7 +63,7 @@ async function cancelFriendRequest(targetUserId) {
 
     if (result.success) {
         showToast('Friend request cancelled', 'success');
-        window.location.reload();
+        await reloadCurrentView({ source: 'cancel-friend-request' });
         return;
     }
 
@@ -138,7 +161,7 @@ async function unfriendUser(userId) {
 
     if (result.success) {
         showToast('Friend removed', 'success');
-        window.location.reload();
+        await reloadCurrentView({ source: 'unfriend-user' });
         return;
     }
 
@@ -222,7 +245,7 @@ async function toggleFavoriteUser(userId, favorite) {
 
     if (result.success) {
         showToast(result.is_favorite ? 'Added to favorites' : 'Removed from favorites', 'success');
-        window.location.reload();
+        await reloadCurrentView({ source: 'toggle-favorite-user' });
         return;
     }
 
@@ -313,7 +336,7 @@ async function reactToProfilePost(postId, reactionCode) {
         return;
     }
 
-    window.location.reload();
+    await reloadCurrentView({ source: 'react-profile-post' });
 }
 
 async function createProfilePost(content) {
@@ -344,7 +367,7 @@ async function createProfilePost(content) {
     } else {
         showToast('Post published', 'success');
     }
-    window.location.reload();
+    await reloadCurrentView({ source: 'create-profile-post' });
     return true;
 }
 
@@ -371,7 +394,7 @@ async function deleteProfilePost(postId) {
         showToast('Post deleted', 'success');
     }
 
-    window.location.reload();
+    await reloadCurrentView({ source: 'delete-profile-post' });
     return true;
 }
 
@@ -1321,6 +1344,8 @@ function bindStatusMenu() {
     const toggle = document.getElementById('status-menu-toggle');
     const menu = document.getElementById('status-menu');
     if (!toggle || !menu) return;
+    if (toggle.dataset.bound === '1') return;
+    toggle.dataset.bound = '1';
 
     const storedStatus = String(window.CURRENT_USER_PRESENCE_STATUS || 'online').toLowerCase();
     selectedPresenceStatus = storedStatus === 'busy' ? 'busy' : (storedStatus === 'offline' ? 'offline' : 'online');
@@ -1438,7 +1463,7 @@ function bindChatHeaderMenu() {
 
 
 function logout() {
-    window.location.href = '/logout';
+    navigateWithFallback('/logout', { source: 'logout', updateHistory: true });
 }
 
 async function copyTextToClipboard(text) {
@@ -1463,6 +1488,9 @@ function bindInviteCopyButtons() {
     if (!buttons.length) return;
 
     buttons.forEach((button) => {
+        if (button.dataset.bound === '1') return;
+        button.dataset.bound = '1';
+
         button.addEventListener('click', async () => {
             const value = button.dataset.copyValue || '';
             if (!value) return;

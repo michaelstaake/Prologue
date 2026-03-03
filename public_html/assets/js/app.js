@@ -116,6 +116,15 @@ function getCsrfToken() {
 }
 
 let versionUpdateDetected = false;
+let chatPollIntervalId = null;
+let sidebarPollIntervalId = null;
+let notificationPollIntervalId = null;
+let typingBeforeUnloadBound = false;
+let clientNavigationBound = false;
+let clientNavigationInFlight = false;
+let currentClientRenderedUrl = '';
+const beforeRouteChangeHooks = new Set();
+const afterRouteChangeHooks = new Set();
 
 function showVersionUpdateOverlay() {
     if (versionUpdateDetected) return;
@@ -139,6 +148,214 @@ function showVersionUpdateOverlay() {
         return response;
     };
 })();
+
+function registerRouteLifecycleHook(type, callback) {
+    if (typeof callback !== 'function') return;
+
+    if (type === 'before') {
+        beforeRouteChangeHooks.add(callback);
+        return;
+    }
+
+    if (type === 'after') {
+        afterRouteChangeHooks.add(callback);
+    }
+}
+
+function runRouteLifecycleHooks(type, detail = {}) {
+    const hooks = type === 'before' ? beforeRouteChangeHooks : afterRouteChangeHooks;
+    hooks.forEach((hook) => {
+        try {
+            hook(detail);
+        } catch {
+        }
+    });
+
+    document.dispatchEvent(new CustomEvent(`prologue:route-${type}`, { detail }));
+}
+
+function clearRouteScopedIntervals() {
+    if (chatPollIntervalId) {
+        clearInterval(chatPollIntervalId);
+        chatPollIntervalId = null;
+    }
+
+    if (sidebarPollIntervalId) {
+        clearInterval(sidebarPollIntervalId);
+        sidebarPollIntervalId = null;
+    }
+
+    if (notificationPollIntervalId) {
+        clearInterval(notificationPollIntervalId);
+        notificationPollIntervalId = null;
+    }
+}
+
+function shouldHandleClientNavigationForUrl(targetUrl) {
+    if (!window.CURRENT_USER_ID) return false;
+
+    const pathname = String(targetUrl.pathname || '');
+    const blockedPrefixes = ['/auth', '/install', '/update'];
+    if (blockedPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) {
+        return false;
+    }
+
+    return true;
+}
+
+function executeScriptsInContainer(container) {
+    if (!(container instanceof Element)) return;
+
+    const scripts = Array.from(container.querySelectorAll('script'));
+    scripts.forEach((oldScript) => {
+        const newScript = document.createElement('script');
+
+        for (const attribute of oldScript.attributes) {
+            newScript.setAttribute(attribute.name, attribute.value);
+        }
+
+        if (!oldScript.src) {
+            newScript.textContent = oldScript.textContent || '';
+        }
+
+        oldScript.replaceWith(newScript);
+    });
+}
+
+function replaceMainContentFromHtml(htmlText, targetUrl, options = {}) {
+    const parser = new DOMParser();
+    const nextDoc = parser.parseFromString(htmlText, 'text/html');
+    const nextMain = nextDoc.getElementById('app-main-content') || nextDoc.querySelector('main');
+    const currentMain = document.getElementById('app-main-content') || document.querySelector('main');
+    if (!nextMain || !currentMain) {
+        return false;
+    }
+
+    currentMain.replaceWith(nextMain);
+    executeScriptsInContainer(nextMain);
+
+    const nextTitle = String(nextDoc.querySelector('title')?.textContent || '').trim();
+    if (nextTitle) {
+        document.title = nextTitle;
+    }
+
+    if (options.updateHistory !== false && window.history && typeof window.history.pushState === 'function') {
+        window.history.pushState({}, '', targetUrl.pathname + targetUrl.search + targetUrl.hash);
+    }
+
+    return true;
+}
+
+async function navigateApp(url, options = {}) {
+    const targetUrl = new URL(url, window.location.origin);
+    const renderedUrlString = String(currentClientRenderedUrl || (window.location.pathname + window.location.search + window.location.hash));
+    const currentUrl = new URL(renderedUrlString, window.location.origin);
+
+    const samePath = targetUrl.pathname === currentUrl.pathname;
+    const sameSearch = targetUrl.search === currentUrl.search;
+    const sameHash = targetUrl.hash === currentUrl.hash;
+    if (!options.force && samePath && sameSearch && sameHash) {
+        return true;
+    }
+
+    if (!shouldHandleClientNavigationForUrl(targetUrl)) {
+        window.location.href = targetUrl.pathname + targetUrl.search + targetUrl.hash;
+        return false;
+    }
+
+    if (clientNavigationInFlight) {
+        return false;
+    }
+
+    clientNavigationInFlight = true;
+    const fromUrl = currentUrl.pathname + currentUrl.search + currentUrl.hash;
+    const toUrl = targetUrl.pathname + targetUrl.search + targetUrl.hash;
+
+    try {
+        runRouteLifecycleHooks('before', { from: fromUrl, to: toUrl, source: options.source || 'navigate' });
+
+        const response = await fetch(targetUrl.pathname + targetUrl.search + targetUrl.hash, {
+            method: 'GET',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        });
+
+        if (!response.ok) {
+            window.location.href = toUrl;
+            return false;
+        }
+
+        const htmlText = await response.text();
+        const swapped = replaceMainContentFromHtml(htmlText, targetUrl, { updateHistory: options.updateHistory !== false });
+        if (!swapped) {
+            window.location.href = toUrl;
+            return false;
+        }
+
+        clearRouteScopedIntervals();
+        await init();
+        currentClientRenderedUrl = targetUrl.pathname + targetUrl.search + targetUrl.hash;
+        runRouteLifecycleHooks('after', { from: fromUrl, to: toUrl, source: options.source || 'navigate' });
+        return true;
+    } catch {
+        window.location.href = toUrl;
+        return false;
+    } finally {
+        clientNavigationInFlight = false;
+    }
+}
+
+function bindClientNavigation() {
+    if (clientNavigationBound) return;
+    clientNavigationBound = true;
+
+    document.addEventListener('click', (event) => {
+        if (event.defaultPrevented) return;
+        if (event.button !== 0) return;
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+
+        const anchor = event.target instanceof Element
+            ? event.target.closest('a[href]')
+            : null;
+        if (!anchor) return;
+        if (anchor.hasAttribute('download')) return;
+        if (anchor.getAttribute('target') === '_blank') return;
+
+        const href = anchor.getAttribute('href') || '';
+        if (!href || href.startsWith('mailto:') || href.startsWith('tel:') || href.startsWith('javascript:')) {
+            return;
+        }
+
+        const targetUrl = new URL(href, window.location.origin);
+        if (targetUrl.origin !== window.location.origin) return;
+        if (!shouldHandleClientNavigationForUrl(targetUrl)) return;
+
+        event.preventDefault();
+        navigateApp(targetUrl.pathname + targetUrl.search + targetUrl.hash, { source: 'click', updateHistory: true }).catch(() => {});
+    });
+
+    window.addEventListener('popstate', () => {
+        const targetUrl = new URL(window.location.href);
+        if (!shouldHandleClientNavigationForUrl(targetUrl)) {
+            window.location.reload();
+            return;
+        }
+
+        navigateApp(targetUrl.pathname + targetUrl.search + targetUrl.hash, { source: 'popstate', updateHistory: false, force: true }).catch(() => {
+            window.location.reload();
+        });
+    });
+}
+
+async function reloadAppView(options = {}) {
+    const targetUrl = window.location.pathname + window.location.search + window.location.hash;
+    return navigateApp(targetUrl, {
+        source: options.source || 'reload',
+        updateHistory: false,
+        force: true
+    });
+}
 
 function normalizeChatType(type) {
     const value = String(type || '').trim().toLowerCase();
@@ -579,7 +796,10 @@ async function init() {
         setChatComposerEnabled(currentChat.can_send_messages !== false, currentChat.message_restriction_reason || '');
         setChatCallEnabled(currentChat.can_start_calls !== false);
         refreshChatCallStatusBar({ force: true });
-        setInterval(pollMessages, 3000);
+        if (chatPollIntervalId) {
+            clearInterval(chatPollIntervalId);
+        }
+        chatPollIntervalId = setInterval(pollMessages, 3000);
     }
 
     if (Number(currentUserId || 0) > 0) {
@@ -638,7 +858,7 @@ async function init() {
             sendTypingStatus(false).catch(() => {});
         });
 
-        window.addEventListener('beforeunload', () => {
+        const flushTypingStatusBeacon = () => {
             if (!typingActive || !currentChat) return;
 
             const payload = new URLSearchParams({
@@ -648,7 +868,13 @@ async function init() {
             });
 
             navigator.sendBeacon('/api/chats/typing', payload);
-        });
+        };
+
+        if (!typingBeforeUnloadBound) {
+            typingBeforeUnloadBound = true;
+            window.addEventListener('beforeunload', flushTypingStatusBeacon);
+            document.addEventListener('prologue:route-before', flushTypingStatusBeacon);
+        }
     }
 
     const searchForm = document.getElementById('user-search-form');
@@ -707,11 +933,17 @@ async function init() {
         await fetchNotifications().catch(() => {});
         bindNotificationHistory();
         renderToastHistory();
-        setInterval(fetchNotifications, 5000);
+        if (notificationPollIntervalId) {
+            clearInterval(notificationPollIntervalId);
+        }
+        notificationPollIntervalId = setInterval(fetchNotifications, 5000);
     }
 
     loadSidebarChats();
-    setInterval(loadSidebarChats, 5000);
+    if (sidebarPollIntervalId) {
+        clearInterval(sidebarPollIntervalId);
+    }
+    sidebarPollIntervalId = setInterval(loadSidebarChats, 5000);
 
     bindSidebarToggle();
 }
@@ -896,6 +1128,12 @@ function bindDashboardPostNavigation() {
     const goToPost = (card) => {
         const url = String(card.getAttribute('data-dashboard-post-url') || '').trim();
         if (!url) return;
+        if (typeof window.navigateApp === 'function') {
+            window.navigateApp(url, { source: 'dashboard-card', updateHistory: true }).catch(() => {
+                window.location.href = url;
+            });
+            return;
+        }
         window.location.href = url;
     };
 
@@ -923,6 +1161,8 @@ function bindSidebarToggle() {
     const toggleBtn = document.getElementById('sidebar-toggle-mobile');
     const backdrop = document.getElementById('mobile-overlay-backdrop');
     if (!sidebar || !toggleBtn || !backdrop) return;
+    if (toggleBtn.dataset.bound === '1') return;
+    toggleBtn.dataset.bound = '1';
 
     const isMobileLayout = () => window.innerWidth < 1024;
 
@@ -986,8 +1226,14 @@ let appInitStarted = false;
 function startAppInitOnce() {
     if (appInitStarted) return;
     appInitStarted = true;
+    currentClientRenderedUrl = window.location.pathname + window.location.search + window.location.hash;
+    bindClientNavigation();
     init().catch(() => {});
 }
+
+window.navigateApp = navigateApp;
+window.reloadAppView = reloadAppView;
+window.registerRouteLifecycleHook = registerRouteLifecycleHook;
 
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', startAppInitOnce, { once: true });

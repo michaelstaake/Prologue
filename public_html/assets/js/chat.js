@@ -1454,6 +1454,29 @@ let sidebarModeInitialized = false;
 let sidebarIsDraggingCustom = false;
 let sidebarCustomContextChatNumber = '';
 
+function navigateWithFallback(url, options = {}) {
+    const targetUrl = String(url || '').trim();
+    if (!targetUrl) return;
+
+    if (typeof window.navigateApp === 'function') {
+        window.navigateApp(targetUrl, options).catch(() => {
+            window.location.href = targetUrl;
+        });
+        return;
+    }
+
+    window.location.href = targetUrl;
+}
+
+async function reloadCurrentView(options = {}) {
+    if (typeof window.reloadAppView === 'function') {
+        const success = await window.reloadAppView(options).catch(() => false);
+        if (success) return;
+    }
+
+    window.location.reload();
+}
+
 function normalizeSidebarMode(value) {
     const mode = String(value || '').trim().toLowerCase();
     if (mode === 'pm' || mode === 'group' || mode === 'custom' || mode === 'all') {
@@ -2182,7 +2205,7 @@ async function createGroupChat() {
     });
 
     if (result.success && result.chat_number) {
-        window.location.href = `/c/${formatNumber(result.chat_number)}?prompt_group_name=1`;
+        navigateWithFallback(`/c/${formatNumber(result.chat_number)}?prompt_group_name=1`, { source: 'create-group', updateHistory: true });
         return;
     }
 
@@ -2218,7 +2241,7 @@ async function addGroupMemberByUsername(event, usernameOverride = null) {
         if (usernameInput) {
             usernameInput.value = '';
         }
-        window.location.reload();
+        await reloadCurrentView({ source: 'add-group-member' });
         return;
     }
 
@@ -2494,7 +2517,7 @@ async function submitLeaveGroup(newOwnerUserId = 0) {
 
     if (result.success) {
         const nextLocation = String(result.redirect || '/');
-        window.location.href = nextLocation;
+        navigateWithFallback(nextLocation, { source: 'leave-group', updateHistory: true });
         return;
     }
 
@@ -2526,7 +2549,7 @@ async function submitDeleteGroup() {
     });
 
     if (result.success) {
-        window.location.href = String(result.redirect || '/');
+        navigateWithFallback(String(result.redirect || '/'), { source: 'delete-group', updateHistory: true });
         return;
     }
 
@@ -2574,7 +2597,7 @@ async function submitTakeCurrentGroupOwnership() {
 
     if (result.success) {
         showToast('You now own this group', 'success');
-        window.location.reload();
+        await reloadCurrentView({ source: 'take-group-ownership' });
         return;
     }
 
@@ -2796,7 +2819,7 @@ async function renameCurrentChat() {
 
     if (result.success) {
         showToast(result.reset ? 'Chat name reset to chat number' : 'Chat renamed', 'success');
-        window.location.reload();
+        await reloadCurrentView({ source: 'rename-chat' });
         return;
     }
 
