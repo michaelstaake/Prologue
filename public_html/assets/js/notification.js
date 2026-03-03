@@ -1027,6 +1027,15 @@ function renderToastHistory() {
 
     updateMobileNotificationState();
 
+    const clearBtn = document.getElementById('notification-clear-all-btn');
+    if (clearBtn) {
+        if (visibleToasts.length > 0 && isNotificationHistoryExpanded()) {
+            clearBtn.classList.remove('hidden');
+        } else {
+            clearBtn.classList.add('hidden');
+        }
+    }
+
     if (!list) return;
 
     list.innerHTML = visibleToasts.map((toast, index) => {
@@ -1189,6 +1198,10 @@ function bindNotificationHistory() {
         if (title) {
             title.classList.toggle('hidden', !expanded);
         }
+        const clearBtn = document.getElementById('notification-clear-all-btn');
+        if (clearBtn) {
+            clearBtn.classList.toggle('hidden', !expanded || toastHistory.length === 0);
+        }
         if (header) {
             header.classList.toggle('justify-center', !expanded);
             header.classList.toggle('justify-between', expanded);
@@ -1342,6 +1355,31 @@ function setTwofaSettingsStatus(text, kind) {
     statusEl.classList.remove('text-zinc-500', 'text-emerald-400', 'text-red-400');
     statusEl.classList.add(kindClassMap[kind] || kindClassMap.info);
     statusEl.textContent = text;
+}
+
+async function clearAllNotifications() {
+    const btn = document.getElementById('notification-clear-all-btn');
+    if (btn) btn.disabled = true;
+
+    try {
+        await postForm('/api/notifications/clear', {
+            csrf_token: getCsrfToken()
+        });
+    } catch (e) {
+        showToast('Failed to clear notifications', 'error');
+        if (btn) btn.disabled = false;
+        return;
+    }
+
+    for (const toast of toastHistory) {
+        clearActiveToastPopup(toast.id);
+    }
+    toastHistory = [];
+    unreadNotificationCount = 0;
+    updateNotificationCountInTitle(0);
+    renderToastHistory();
+
+    if (btn) btn.disabled = false;
 }
 
 function bindTwofaFrequencyRadios() {

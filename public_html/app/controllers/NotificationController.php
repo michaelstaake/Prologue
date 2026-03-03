@@ -121,4 +121,24 @@ class NotificationController extends Controller {
         $this->saveSeenNotificationIds(Auth::user()->id, array_merge($existingIds, [$id]));
         $this->json(['success' => true]);
     }
+
+    public function clearAll() {
+        Auth::requireAuth();
+        Auth::csrfValidate();
+
+        $userId = Auth::user()->id;
+        $unreadIds = Database::query(
+            "SELECT id FROM notifications WHERE user_id = ? AND `read` = 0",
+            [$userId]
+        )->fetchAll(PDO::FETCH_COLUMN);
+
+        Database::query("UPDATE notifications SET `read` = 1 WHERE user_id = ? AND `read` = 0", [$userId]);
+
+        if (!empty($unreadIds)) {
+            $existingIds = $this->getSeenNotificationIds($userId);
+            $this->saveSeenNotificationIds($userId, array_merge($existingIds, $unreadIds));
+        }
+
+        $this->json(['success' => true]);
+    }
 }

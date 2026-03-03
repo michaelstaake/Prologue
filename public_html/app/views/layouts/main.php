@@ -53,7 +53,13 @@
                 border-left: 1px solid #3f3f46;
             }
             #notification-history-panel.mobile-open #notification-history-header {
+                justify-content: space-between;
+            }
+            #notification-history-panel.mobile-open #notification-history-header #notification-history-button {
                 display: none;
+            }
+            #notification-history-panel.mobile-open #notification-history-header #notification-history-title {
+                display: block !important;
             }
             #notification-icon-preview { display: none !important; }
             #mobile-overlay-backdrop { display: none; }
@@ -307,6 +313,7 @@
         <aside id="notification-history-panel" class="w-20 border-l border-zinc-800 bg-zinc-900/90 flex flex-col transition-all duration-200 ease-out">
             <div class="p-4 border-b border-zinc-700 flex items-center justify-center" id="notification-history-header">
                 <div id="notification-history-title" class="hidden font-semibold text-zinc-100 mr-3">Notifications</div>
+                <button id="notification-clear-all-btn" class="hidden text-xs text-zinc-400 hover:text-zinc-200 mr-auto" onclick="clearAllNotifications()">Clear all</button>
                 <button id="notification-history-button" class="relative w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-700 hover:bg-zinc-800" aria-label="Toggle notification history">
                     <i class="fa-regular fa-bell"></i>
                     <span id="notification-history-count" class="hidden absolute -top-2 -right-2 min-w-[1.25rem] h-5 px-1 rounded-full bg-emerald-600 text-white text-xs flex items-center justify-center">0</span>

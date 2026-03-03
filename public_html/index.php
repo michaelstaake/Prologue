@@ -292,6 +292,7 @@ $router->get('/notifications', 'NotificationController@getAll');
 $router->post('/api/notifications/seen', 'NotificationController@markSeen');
 $router->post('/api/notifications/sidebar-state', 'NotificationController@updateSidebarState');
 $router->post('/api/notifications/read', 'NotificationController@markRead');
+$router->post('/api/notifications/clear', 'NotificationController@clearAll');
 
 // Reports
 $router->get('/reports', 'ReportController@index');
