@@ -952,6 +952,49 @@ function formatToastTime(timestamp) {
     }
 }
 
+function getNotificationIconClass(toast) {
+    const meta = toast?.metadata;
+    const type = String(meta?.type || '').toLowerCase();
+    const title = String(meta?.title || '').toLowerCase();
+
+    if (type === 'message') return 'fa-solid fa-message';
+    if (type === 'call' || title === 'incoming call') return 'fa-solid fa-phone';
+    if (type === 'friend_request' || title === 'friend request'
+        || type === 'friend_request_accepted' || title === 'friend request accepted') return 'fa-solid fa-user-plus';
+    if ((type === 'report' && title === 'update available') || title === 'update available') return 'fa-solid fa-arrow-up-from-bracket';
+
+    return 'fa-solid fa-bell';
+}
+
+function renderNotificationIconPreview() {
+    const preview = document.getElementById('notification-icon-preview');
+    if (!preview) return;
+
+    if (isNotificationHistoryExpanded() || window.innerWidth < 1024) {
+        preview.classList.add('hidden');
+        return;
+    }
+
+    const now = Date.now();
+    const visibleToasts = toastHistory.filter(toast => {
+        const expiresAt = Number(toast?.expiresAt || 0);
+        return !(Number.isFinite(expiresAt) && expiresAt > 0 && expiresAt <= now);
+    });
+
+    if (visibleToasts.length === 0) {
+        preview.classList.add('hidden');
+        preview.innerHTML = '';
+        return;
+    }
+
+    preview.classList.remove('hidden');
+    preview.innerHTML = visibleToasts.map(toast => {
+        const iconClass = getNotificationIconClass(toast);
+        const color = toast.kind === 'error' ? 'text-red-300' : toast.kind === 'success' ? 'text-emerald-300' : 'text-zinc-400';
+        return `<div class="flex items-center justify-center border-b border-zinc-800 notification-icon-row"><i class="${iconClass} ${color} text-base"></i></div>`;
+    }).join('');
+}
+
 function renderToastHistory() {
     const list = document.getElementById('notification-history-list');
     const badge = document.getElementById('notification-history-count');
@@ -1022,6 +1065,7 @@ function renderToastHistory() {
     }
 
     scheduleToastExpirySweep();
+    renderNotificationIconPreview();
 }
 
 function getNotificationAction(toast) {
@@ -1150,6 +1194,11 @@ function bindNotificationHistory() {
             header.classList.toggle('justify-between', expanded);
         }
 
+        const iconPreview = document.getElementById('notification-icon-preview');
+        if (iconPreview) {
+            iconPreview.classList.toggle('hidden', expanded || isMobileLayout());
+        }
+
         syncToastHostPosition();
     };
 
@@ -1186,6 +1235,28 @@ function bindNotificationHistory() {
             handleToastHistoryClick(event);
         });
     }
+
+    // Reset panel state when crossing the mobile/desktop breakpoint
+    let wasMobile = isMobileLayout();
+    window.addEventListener('resize', () => {
+        const nowMobile = isMobileLayout();
+        if (wasMobile === nowMobile) return;
+        wasMobile = nowMobile;
+
+        // Clean up mobile-specific state
+        panel.classList.remove('mobile-open');
+        const backdrop = document.getElementById('mobile-overlay-backdrop');
+        if (backdrop) backdrop.classList.remove('visible');
+
+        // Clean up desktop-specific width classes
+        panel.classList.remove('w-96', 'max-w-[95vw]');
+        panel.classList.add('w-20');
+
+        // Reset to collapsed state
+        expanded = false;
+        window.NOTIFICATION_SIDEBAR_EXPANDED = false;
+        setExpanded(false);
+    });
 }
 
 function shouldSuppressNotificationToast(notification) {

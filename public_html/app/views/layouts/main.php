@@ -27,6 +27,13 @@
             0% { transform: scaleX(1); }
             100% { transform: scaleX(0); }
         }
+        #notification-icon-preview { min-height: 0; }
+        .notification-icon-row {
+            height: 4rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
         @media (max-width: 1023px) {
             #app-sidebar { display: none; }
             #app-sidebar.mobile-open {
@@ -48,6 +55,7 @@
             #notification-history-panel.mobile-open #notification-history-header {
                 display: none;
             }
+            #notification-icon-preview { display: none !important; }
             #mobile-overlay-backdrop { display: none; }
             #mobile-overlay-backdrop.visible {
                 display: block;
@@ -304,6 +312,7 @@
                     <span id="notification-history-count" class="hidden absolute -top-2 -right-2 min-w-[1.25rem] h-5 px-1 rounded-full bg-emerald-600 text-white text-xs flex items-center justify-center">0</span>
                 </button>
             </div>
+            <div id="notification-icon-preview" class="flex-1 overflow-auto"></div>
             <div id="notification-history-list" class="hidden flex-1 overflow-auto"></div>
         </aside>
     </div>
