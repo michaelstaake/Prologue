@@ -7,9 +7,12 @@ let lastRenderedMessagesSignature = '';
 let pendingPinReplaceMessageId = 0;
 let pinnedBannerLastScrollTop = 0;
 let pinnedBannerHiddenByScroll = false;
+let messageFormLastScrollTop = 0;
 
 const PINNED_BANNER_MOBILE_BREAKPOINT_QUERY = '(max-width: 767.98px)';
+const MESSAGE_FORM_MOBILE_BREAKPOINT_QUERY = '(max-width: 639.98px)';
 const PINNED_BANNER_SCROLL_DELTA_PX = 6;
+const MESSAGE_FORM_SCROLL_DELTA_PX = 6;
 
 function isPinnedBannerMobileViewport() {
     if (typeof window.matchMedia !== 'function') return false;
@@ -73,6 +76,85 @@ function bindPinnedBannerScrollBehavior(messagesBox) {
 
     window.addEventListener('resize', () => {
         setPinnedBannerScrollVisibility(true);
+    });
+}
+
+function isMessageFormMobileViewport() {
+    if (typeof window.matchMedia !== 'function') return false;
+    return window.matchMedia(MESSAGE_FORM_MOBILE_BREAKPOINT_QUERY).matches;
+}
+
+function setMessageFormScrollVisibility(isVisible) {
+    const form = document.getElementById('message-form');
+    if (!form) return;
+
+    if (!isMessageFormMobileViewport()) {
+        form.style.transform = '';
+        form.style.opacity = '';
+        form.style.pointerEvents = '';
+        form.style.transition = '';
+        form.style.maxHeight = '';
+        form.style.overflow = '';
+        form.style.padding = '';
+        form.style.borderTopWidth = '';
+        return;
+    }
+
+    form.style.transition = 'transform 0.25s ease, opacity 0.25s ease, max-height 0.25s ease, padding 0.25s ease';
+
+    if (isVisible) {
+        form.style.transform = '';
+        form.style.opacity = '';
+        form.style.pointerEvents = '';
+        form.style.maxHeight = '';
+        form.style.overflow = '';
+        form.style.padding = '';
+        form.style.borderTopWidth = '';
+    } else {
+        form.style.transform = 'translateY(100%)';
+        form.style.opacity = '0';
+        form.style.pointerEvents = 'none';
+        form.style.maxHeight = '0';
+        form.style.overflow = 'hidden';
+        form.style.padding = '0 1.5rem';
+        form.style.borderTopWidth = '0';
+    }
+}
+
+function bindMessageFormScrollBehavior(messagesBox) {
+    if (!messagesBox || messagesBox.dataset.formScrollBound === '1') return;
+
+    messagesBox.dataset.formScrollBound = '1';
+    messageFormLastScrollTop = Math.max(0, messagesBox.scrollTop || 0);
+
+    messagesBox.addEventListener('scroll', () => {
+        if (!isMessageFormMobileViewport()) return;
+
+        const currentScrollTop = Math.max(0, messagesBox.scrollTop || 0);
+        const delta = currentScrollTop - messageFormLastScrollTop;
+        const isNearBottom = (messagesBox.scrollHeight - messagesBox.clientHeight - currentScrollTop) < 50;
+
+        if (isNearBottom) {
+            setMessageFormScrollVisibility(true);
+            messageFormLastScrollTop = currentScrollTop;
+            return;
+        }
+
+        if (Math.abs(delta) < MESSAGE_FORM_SCROLL_DELTA_PX) {
+            return;
+        }
+
+        if (delta > 0) {
+            setMessageFormScrollVisibility(true);
+        } else {
+            setMessageFormScrollVisibility(false);
+        }
+
+        messageFormLastScrollTop = currentScrollTop;
+    }, { passive: true });
+
+    window.addEventListener('resize', () => {
+        setMessageFormScrollVisibility(true);
     });
 }
 
@@ -848,6 +930,7 @@ function bindMessageQuotesAndReactions() {
     }
     renderPinnedMessageBanner(initialPinnedMessage);
     bindPinnedBannerScrollBehavior(messagesBox);
+    bindMessageFormScrollBehavior(messagesBox);
 
     messagesBox.addEventListener('click', (event) => {
         const quotedMessageLink = event.target.closest('.js-quoted-message-link');
@@ -1143,6 +1226,8 @@ function bindEmojiDrawer() {
         `).join('') || '<div class="col-span-full text-xs text-zinc-400 py-4 text-center">No emoji found</div>';
     };
 
+    const closeBtn = document.getElementById('emoji-drawer-close');
+
     const setOpenState = (isOpen) => {
         drawer.classList.toggle('hidden', !isOpen);
         toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
@@ -1167,6 +1252,15 @@ function bindEmojiDrawer() {
         }
     });
 
+    if (closeBtn) {
+        closeBtn.addEventListener('click', (event) => {
+            event.preventDefault();
+            setOpenState(false);
+            search.value = '';
+            renderGrid(getDefaultEmojiItems());
+        });
+    }
+
     search.addEventListener('input', () => {
         renderGrid(findEmojiTypeaheadMatches(search.value));
     });
@@ -1179,6 +1273,12 @@ function bindEmojiDrawer() {
         if (!emoji) return;
 
         insertTextAtCursor(input, emoji);
+
+        if (isMessageFormMobileViewport()) {
+            setOpenState(false);
+            search.value = '';
+            renderGrid(getDefaultEmojiItems());
+        }
     });
 
     grid.addEventListener('mouseover', (event) => {

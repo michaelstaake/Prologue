@@ -532,12 +532,13 @@ class ChatController extends Controller {
 
         // Notify other members
         $members = Database::query("SELECT user_id FROM chat_members WHERE chat_id = ? AND user_id != ?", [$chatId, $userId])->fetchAll();
+        $senderUsername = Auth::user()->username;
         foreach ($members as $m) {
-            $notificationPreview = $rawContent;
-            if ($quotedMessageId > 0 && $quotedUsername !== '') {
-                $notificationPreview = '↪ ' . $quotedUsername . ' · ' . $notificationPreview;
+            $notificationPreview = mb_substr($rawContent, 0, 20);
+            if (mb_strlen($rawContent) > 20) {
+                $notificationPreview .= '…';
             }
-            Notification::create($m->user_id, 'message', 'New Message', mb_substr($notificationPreview, 0, 50), '/c/' . User::formatUserNumber($chat->chat_number));
+            Notification::create($m->user_id, 'message', $senderUsername . ' sent you a message', $notificationPreview, '/c/' . User::formatUserNumber($chat->chat_number));
         }
 
         $this->json(['success' => true]);

@@ -547,24 +547,30 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
         </div>
         <div id="message-composer-controls" class="w-full flex flex-wrap sm:flex-nowrap items-stretch gap-3 sm:gap-4 <?= $canSendMessages ? '' : 'hidden' ?>">
             <?php if ($attachmentsEnabled): ?>
-            <button type="button" id="attachments-toggle" class="order-2 sm:order-1 w-[calc(50%-0.375rem)] sm:w-14 rounded-3xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 min-h-12" aria-label="Open attachments menu" aria-expanded="false" aria-controls="attachments-drawer">
+            <button type="button" id="attachments-toggle" class="order-2 sm:order-1 w-[calc((100%-1.5rem)/3)] sm:w-14 rounded-3xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 min-h-12" aria-label="Open attachments menu" aria-expanded="false" aria-controls="attachments-drawer">
                 <i class="fa-solid fa-paperclip"></i>
             </button>
             <?php endif; ?>
-            <button type="button" id="emoji-toggle" class="hidden lg:block order-3 sm:order-2 w-14 rounded-3xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-700" aria-label="Open emoji picker" aria-expanded="false" aria-controls="emoji-drawer">
+            <button type="button" id="emoji-toggle" class="order-2 sm:order-2 w-[calc((100%-1.5rem)/3)] sm:w-14 rounded-3xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 min-h-12" aria-label="Open emoji picker" aria-expanded="false" aria-controls="emoji-drawer">
                 <i class="fa-regular fa-face-smile"></i>
             </button>
             <input type="text" id="message-input" maxlength="16384" class="order-1 sm:order-3 w-full sm:flex-1 bg-zinc-800 border border-zinc-700 rounded-3xl px-6 py-4" placeholder="Message..." required>
-            <button type="submit" class="order-2 sm:order-4 w-[calc(50%-0.375rem)] sm:w-auto bg-emerald-600 px-10 rounded-3xl min-h-12">Send</button>
+            <button type="submit" class="order-2 sm:order-4 w-[calc((100%-1.5rem)/3)] sm:w-auto bg-emerald-600 px-10 rounded-3xl min-h-12">Send</button>
         </div>
         <div id="message-disabled-notice" class="w-full bg-zinc-900 border border-zinc-700 rounded-2xl px-4 py-3 text-sm text-amber-300 <?= $canSendMessages ? 'hidden' : '' ?>"><?= htmlspecialchars($messageDisabledNoticeText, ENT_QUOTES, 'UTF-8') ?></div>
-        <div id="emoji-drawer" class="hidden absolute left-6 bottom-[calc(100%+0.75rem)] w-[32rem] max-w-[calc(100%-3rem)] bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl p-4 z-30">
-            <div class="flex gap-3 items-start">
-                <div class="flex-1 min-w-0">
+        <div id="emoji-drawer" class="hidden sm:absolute sm:left-6 sm:bottom-[calc(100%+0.75rem)] sm:w-[32rem] sm:max-w-[calc(100%-3rem)] sm:rounded-2xl sm:shadow-2xl fixed inset-0 sm:inset-auto z-50 sm:z-30 bg-zinc-900 sm:border sm:border-zinc-700 p-4 flex flex-col">
+            <div class="flex items-center justify-between mb-3 sm:hidden">
+                <h3 class="text-sm font-medium text-zinc-300">Emoji</h3>
+                <button type="button" id="emoji-drawer-close" class="text-zinc-400 hover:text-zinc-200 w-10 h-10 flex items-center justify-center" aria-label="Close emoji picker">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            <div class="flex gap-3 items-start flex-1 min-h-0">
+                <div class="flex-1 min-w-0 flex flex-col min-h-0">
                     <input type="text" id="emoji-search" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2 text-sm mb-3" placeholder="Search emoji (type char or code, e.g. 1f44d)">
-                    <div id="emoji-grid" class="grid grid-cols-6 justify-start gap-3 max-h-72 overflow-y-auto pr-1"></div>
+                    <div id="emoji-grid" class="grid grid-cols-6 justify-start gap-3 sm:max-h-72 flex-1 overflow-y-auto pr-1"></div>
                 </div>
-                <div id="emoji-preview" class="w-20 flex-shrink-0 flex flex-col items-center gap-2 pt-10">
+                <div id="emoji-preview" class="hidden sm:flex w-20 flex-shrink-0 flex-col items-center gap-2 pt-10">
                     <img id="emoji-preview-img" src="" alt="" class="w-14 h-14 hidden">
                     <div id="emoji-preview-label" class="text-xs text-zinc-400 text-center leading-tight break-words w-full hidden"></div>
                 </div>

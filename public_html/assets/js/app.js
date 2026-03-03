@@ -1168,6 +1168,14 @@ function bindSidebarToggle() {
 
     const isMobileLayout = () => window.innerWidth < 1024;
 
+    // Sync mobile top bar height to CSS variable for notification panel positioning
+    const mobileTopBar = document.getElementById('mobile-top-bar');
+    if (mobileTopBar) {
+        const syncHeight = () => document.documentElement.style.setProperty('--mobile-top-bar-h', mobileTopBar.offsetHeight + 'px');
+        syncHeight();
+        window.addEventListener('resize', syncHeight);
+    }
+
     const setSidebarOpen = (open) => {
         sidebar.classList.toggle('mobile-open', open);
         backdrop.classList.toggle('visible', open);
@@ -1187,6 +1195,16 @@ function bindSidebarToggle() {
         // Also close the notification panel if it's open on mobile
         const notifPanel = document.getElementById('notification-history-panel');
         if (notifPanel) notifPanel.classList.remove('mobile-open');
+    });
+
+    // Auto-close sidebar on mobile when a navigation link or chat item is clicked
+    sidebar.addEventListener('click', (event) => {
+        if (!isMobileLayout()) return;
+        if (!sidebar.classList.contains('mobile-open')) return;
+        const anchor = event.target instanceof Element ? event.target.closest('a[href], [data-chat-id]') : null;
+        if (anchor) {
+            setSidebarOpen(false);
+        }
     });
 }
 

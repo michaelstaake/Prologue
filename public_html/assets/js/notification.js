@@ -356,6 +356,25 @@ function updateFriendRequestBadges(count) {
     setCountBadgeState(document.getElementById('friends-requests-tab-badge'), count);
 }
 
+function updateMobileNotificationState() {
+    const mobileBadge = document.getElementById('notification-history-count-mobile');
+    const mobileButton = document.getElementById('notification-history-button-mobile');
+    const count = Math.max(unreadNotificationCount, toastHistory.length);
+
+    if (mobileBadge) {
+        setCountBadgeState(mobileBadge, count);
+    }
+    if (mobileButton) {
+        if (count > 0) {
+            mobileButton.disabled = false;
+            mobileButton.classList.remove('opacity-30', 'pointer-events-none');
+        } else {
+            mobileButton.disabled = true;
+            mobileButton.classList.add('opacity-30', 'pointer-events-none');
+        }
+    }
+}
+
 
 function applyNotificationSettingState(setting, enabled) {
     const isEnabled = Boolean(enabled);
@@ -829,12 +848,20 @@ async function fetchNotifications() {
         return total + 1;
     }, 0);
     updateNotificationCountInTitle(unreadNotificationCount);
+    updateMobileNotificationState();
     const incomingFriendRequestCount = Number(data.incoming_friend_request_count);
     if (Number.isFinite(incomingFriendRequestCount) && incomingFriendRequestCount >= 0) {
         updateFriendRequestBadges(incomingFriendRequestCount);
     }
     seenNotificationIds = serverSeenIds;
     const newlySeenIds = [];
+
+    // Track which notification IDs are already in toastHistory
+    const existingNotificationIds = new Set();
+    for (const toast of toastHistory) {
+        const nid = Number(toast?.metadata?.notificationId || 0);
+        if (nid > 0) existingNotificationIds.add(nid);
+    }
 
     for (const notification of notifications) {
         const notificationId = Number(notification.id);
@@ -862,8 +889,33 @@ async function fetchNotifications() {
             ) {
                 new Notification(notification.title, { body: notification.message });
             }
+        } else if (Number(notification.read) === 0 && !existingNotificationIds.has(notificationId)) {
+            // Restore unread but already-seen notifications into toast history
+            // so they persist across page reloads
+            const toastId = toastHistoryNextId++;
+            toastHistory.push({
+                id: toastId,
+                message: notification.title + ': ' + notification.message,
+                kind: 'info',
+                createdAt: notification.created_at || Date.now(),
+                isTemporary: false,
+                expiresAt: null,
+                metadata: {
+                    notificationId,
+                    type: String(notification.type || ''),
+                    title: String(notification.title || ''),
+                    link: notification.link ? String(notification.link) : null,
+                    persistent: true
+                }
+            });
+            existingNotificationIds.add(notificationId);
         }
     }
+
+    if (toastHistory.length > MAX_TOAST_HISTORY) {
+        toastHistory = toastHistory.slice(0, MAX_TOAST_HISTORY);
+    }
+    renderToastHistory();
 
     if (newlySeenIds.length > 0) {
         await markNotificationsSeen(newlySeenIds);
@@ -930,15 +982,7 @@ function renderToastHistory() {
         }
     }
 
-    const mobileBadge = document.getElementById('notification-history-count-mobile');
-    if (mobileBadge) {
-        if (visibleToasts.length > 0) {
-            mobileBadge.textContent = String(Math.min(visibleToasts.length, 99));
-            mobileBadge.classList.remove('hidden');
-        } else {
-            mobileBadge.classList.add('hidden');
-        }
-    }
+    updateMobileNotificationState();
 
     if (!list) return;
 
@@ -1038,10 +1082,19 @@ async function handleToastHistoryClick(event) {
         if (result.success) {
             unreadNotificationCount = Math.max(0, unreadNotificationCount - 1);
             updateNotificationCountInTitle(unreadNotificationCount);
+            updateMobileNotificationState();
         }
     }
 
     if (action?.href) {
+        // Close mobile notification panel before navigating
+        const panel = document.getElementById('notification-history-panel');
+        if (panel && panel.classList.contains('mobile-open')) {
+            panel.classList.remove('mobile-open');
+            const backdrop = document.getElementById('mobile-overlay-backdrop');
+            if (backdrop) backdrop.classList.remove('visible');
+        }
+
         if (action.openInNewTab) {
             window.open(action.href, '_blank', 'noopener,noreferrer');
         } else {
