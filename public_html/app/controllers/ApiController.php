@@ -1042,6 +1042,10 @@ class ApiController extends Controller {
                                          FROM call_participants cp
                                          WHERE cp.call_id = c.id
                                              AND cp.left_at IS NULL) AS participant_count,
+                                        (SELECT GROUP_CONCAT(DISTINCT cp_list.user_id ORDER BY cp_list.user_id SEPARATOR ',')
+                                         FROM call_participants cp_list
+                                         WHERE cp_list.call_id = c.id
+                                             AND cp_list.left_at IS NULL) AS participant_user_ids,
                                         (SELECT COUNT(*)
                                          FROM call_participants cp_self
                                          WHERE cp_self.call_id = c.id
@@ -1073,6 +1077,10 @@ class ApiController extends Controller {
                                          FROM call_participants cp
                                          WHERE cp.call_id = c.id
                                              AND cp.left_at IS NULL) AS participant_count,
+                                        (SELECT GROUP_CONCAT(DISTINCT cp_list.user_id ORDER BY cp_list.user_id SEPARATOR ',')
+                                         FROM call_participants cp_list
+                                         WHERE cp_list.call_id = c.id
+                                             AND cp_list.left_at IS NULL) AS participant_user_ids,
                                         (SELECT COUNT(*)
                                          FROM call_participants cp_self
                                          WHERE cp_self.call_id = c.id
@@ -1081,6 +1089,16 @@ class ApiController extends Controller {
                          FROM calls c
                          JOIN chats ch ON ch.id = c.chat_id
                          WHERE c.status = 'active'
+                             AND (
+                                 LOWER(TRIM(ch.type)) != 'group'
+                                 OR EXISTS (
+                                     SELECT 1
+                                     FROM call_participants cp_self_active
+                                     WHERE cp_self_active.call_id = c.id
+                                       AND cp_self_active.user_id = ?
+                                       AND cp_self_active.left_at IS NULL
+                                 )
+                             )
                              AND EXISTS (
                                      SELECT 1
                                      FROM chat_members cm
@@ -1089,7 +1107,7 @@ class ApiController extends Controller {
                              )
                          ORDER BY current_user_joined DESC, c.started_at DESC
                          LIMIT 1",
-                        [$userId, $userId]
+                        [$userId, $userId, $userId]
                 )->fetch();
 
                     $excludeCallId = (int)($call->id ?? 0);
@@ -1105,6 +1123,10 @@ class ApiController extends Controller {
                                  FROM call_participants cp
                                  WHERE cp.call_id = c.id
                                      AND cp.left_at IS NULL) AS participant_count,
+                                (SELECT GROUP_CONCAT(DISTINCT cp_list.user_id ORDER BY cp_list.user_id SEPARATOR ',')
+                                 FROM call_participants cp_list
+                                 WHERE cp_list.call_id = c.id
+                                     AND cp_list.left_at IS NULL) AS participant_user_ids,
                                 (SELECT COUNT(*)
                                  FROM call_participants cp_self
                                  WHERE cp_self.call_id = c.id
@@ -1113,6 +1135,7 @@ class ApiController extends Controller {
                          FROM calls c
                          JOIN chats ch ON ch.id = c.chat_id
                          WHERE c.status = 'active'
+                             AND LOWER(TRIM(ch.type)) != 'group'
                              AND c.started_by != ?
                              AND (? <= 0 OR c.id != ?)
                              AND EXISTS (

@@ -3,6 +3,20 @@ class CallController extends Controller {
     private const CALL_USER_LIMIT = 20;
     private const USER_LIMIT_REACHED_MESSAGE = 'User limit reached. Please try again later.';
 
+    private function supportsSystemEvents(): bool {
+        static $supports = null;
+        if ($supports !== null) {
+            return $supports;
+        }
+
+        $result = Database::query(
+            "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'chat_system_events'"
+        )->fetchColumn();
+
+        $supports = ((int)$result) > 0;
+        return $supports;
+    }
+
     private function getActiveParticipantCount(int $callId): int {
         return (int)Database::query(
             "SELECT COUNT(DISTINCT user_id)
@@ -150,14 +164,25 @@ class CallController extends Controller {
         $call = Database::query(
             "SELECT c.id,
                     c.chat_id,
+                    ch.type AS chat_type,
                     c.started_by,
                     c.started_at,
                     c.ended_at,
                     u.username AS starter_username,
+                    (
+                        SELECT u2.username
+                        FROM chat_members cm
+                        JOIN users u2 ON u2.id = cm.user_id
+                        WHERE cm.chat_id = c.chat_id
+                          AND cm.user_id != c.started_by
+                        ORDER BY cm.joined_at ASC
+                        LIMIT 1
+                    ) AS callee_username,
                     (SELECT COUNT(DISTINCT cp.user_id)
                      FROM call_participants cp
                      WHERE cp.call_id = c.id) AS participant_total
              FROM calls c
+             JOIN chats ch ON ch.id = c.chat_id
              JOIN users u ON u.id = c.started_by
              WHERE c.id = ?",
             [$callId]
@@ -184,11 +209,89 @@ class CallController extends Controller {
             $starterUsername = 'Someone';
         }
 
-        $content = $starterUsername . ' started a call (' . $durationLabel . ')';
+        $calleeUsername = trim((string)($call->callee_username ?? 'Someone'));
+        if ($calleeUsername === '') {
+            $calleeUsername = 'Someone';
+        }
+
+        $isGroupCall = Chat::isGroupType($call->chat_type ?? null);
+        $content = $isGroupCall
+            ? ($starterUsername . ' started a call (' . $durationLabel . ')')
+            : ($starterUsername . ' called ' . $calleeUsername . ' (' . $durationLabel . ')');
+
+        if (!$isGroupCall && $this->supportsSystemEvents()) {
+            Database::query(
+                "INSERT INTO chat_system_events (chat_id, event_type, content) VALUES (?, 'call_completed', ?)",
+                [(int)$call->chat_id, $content]
+            );
+            return;
+        }
+
         Database::query(
             "INSERT INTO messages (chat_id, user_id, content) VALUES (?, ?, ?)",
             [(int)$call->chat_id, (int)$call->started_by, $content]
         );
+    }
+
+    private function appendPrivateCallDeclinedMessage(int $chatId, int $declinerUserId): void {
+        if ($chatId <= 0 || $declinerUserId <= 0) {
+            return;
+        }
+
+        $chatType = Database::query("SELECT type FROM chats WHERE id = ?", [$chatId])->fetchColumn();
+        if (Chat::isGroupType($chatType)) {
+            return;
+        }
+
+        $declinerUsername = trim((string)Database::query("SELECT username FROM users WHERE id = ?", [$declinerUserId])->fetchColumn());
+        if ($declinerUsername === '') {
+            $declinerUsername = 'Someone';
+        }
+
+        $content = $declinerUsername . ' declined a call';
+
+        if ($this->supportsSystemEvents()) {
+            Database::query(
+                "INSERT INTO chat_system_events (chat_id, event_type, content) VALUES (?, 'call_declined', ?)",
+                [$chatId, $content]
+            );
+            return;
+        }
+
+        Database::query("INSERT INTO messages (chat_id, user_id, content) VALUES (?, ?, ?)", [$chatId, $declinerUserId, $content]);
+    }
+
+    private function appendGroupCallPresenceMessage(int $chatId, int $userId, string $action): void {
+        if ($chatId <= 0 || $userId <= 0) {
+            return;
+        }
+
+        if (!in_array($action, ['joined', 'left'], true)) {
+            return;
+        }
+
+        $chatType = Database::query("SELECT type FROM chats WHERE id = ?", [$chatId])->fetchColumn();
+        if (!Chat::isGroupType($chatType)) {
+            return;
+        }
+
+        $username = trim((string)Database::query("SELECT username FROM users WHERE id = ?", [$userId])->fetchColumn());
+        if ($username === '') {
+            $username = 'Someone';
+        }
+
+        $content = $username . ($action === 'joined' ? ' joined call' : ' left call');
+
+        if ($this->supportsSystemEvents()) {
+            $eventType = $action === 'joined' ? 'call_joined' : 'call_left';
+            Database::query(
+                "INSERT INTO chat_system_events (chat_id, event_type, content) VALUES (?, ?, ?)",
+                [$chatId, $eventType, $content]
+            );
+            return;
+        }
+
+        Database::query("INSERT INTO messages (chat_id, user_id, content) VALUES (?, ?, ?)", [$chatId, $userId, $content]);
     }
 
     public function startCall() {
@@ -201,7 +304,7 @@ class CallController extends Controller {
             $this->json(['error' => 'Invalid chat'], 400);
         }
 
-        $chat = Database::query("SELECT id, chat_number FROM chats WHERE id = ?", [$chatId])->fetch();
+        $chat = Database::query("SELECT id, chat_number, type FROM chats WHERE id = ?", [$chatId])->fetch();
         if (!$chat) {
             $this->json(['error' => 'Chat not found'], 404);
         }
@@ -222,8 +325,13 @@ class CallController extends Controller {
         $activeCall = Database::query("SELECT id FROM calls WHERE chat_id = ? AND status = 'active'", [$chatId])->fetch();
         if ($activeCall) {
             $activeCallId = (int)$activeCall->id;
+            $wasAlreadyActive = $this->isUserActivelyInCall($activeCallId, (int)$userId);
             $this->enforceCallCapacityOrFail($activeCallId, (int)$userId);
             $this->upsertActiveParticipant($activeCallId, (int)$userId, 0);
+
+            if (Chat::isGroupType($chat->type ?? null) && !$wasAlreadyActive) {
+                $this->appendGroupCallPresenceMessage((int)$chatId, (int)$userId, 'joined');
+            }
 
             $this->json(['call_id' => $activeCallId, 'joined_existing' => true]);
         }
@@ -233,6 +341,10 @@ class CallController extends Controller {
 
         // Add starter as participant
         $this->upsertActiveParticipant((int)$callId, (int)$userId, 0);
+
+        if (Chat::isGroupType($chat->type ?? null)) {
+            $this->appendGroupCallPresenceMessage((int)$chatId, (int)$userId, 'joined');
+        }
 
         $this->json(['call_id' => $callId, 'joined_existing' => false]);
     }
@@ -336,13 +448,17 @@ class CallController extends Controller {
 
         $this->upsertActiveParticipant((int)$callId, $userId, 0);
 
-        Database::query(
+        $leaveStatement = Database::query(
             "UPDATE call_participants
              SET left_at = COALESCE(left_at, NOW())
              WHERE call_id = ?
                AND user_id = ?",
             [$callId, $userId]
         );
+
+        if (Chat::isGroupType($call->chat_type ?? null) && $leaveStatement->rowCount() > 0) {
+            $this->appendGroupCallPresenceMessage((int)$call->chat_id, $userId, 'left');
+        }
 
         $ended = false;
         if (!Chat::isGroupType($call->chat_type ?? null) && (string)($call->status ?? '') === 'active') {
@@ -365,7 +481,7 @@ class CallController extends Controller {
 
             if ($endStatement->rowCount() > 0) {
                 $ended = true;
-                $this->appendCallHistoryMessage($callId);
+                $this->appendPrivateCallDeclinedMessage((int)$call->chat_id, $userId);
             }
         }
 
@@ -376,7 +492,7 @@ class CallController extends Controller {
                 'call',
                 'Call Declined',
                 (string)$user->username . ' declined your call',
-                '/c/' . User::formatUserNumber($chatNumber)
+                '/c/' . User::formatUserNumber((int)$call->chat_number)
             );
             $notifiedCaller = true;
         }
@@ -390,7 +506,13 @@ class CallController extends Controller {
         $callId = (int)($_POST['call_id'] ?? 0);
         $userId = Auth::user()->id;
 
-        $call = Database::query("SELECT c.id, c.chat_id, c.status FROM calls c WHERE c.id = ?", [$callId])->fetch();
+        $call = Database::query(
+            "SELECT c.id, c.chat_id, c.status, ch.type AS chat_type
+             FROM calls c
+             JOIN chats ch ON ch.id = c.chat_id
+             WHERE c.id = ?",
+            [$callId]
+        )->fetch();
         if (!$call) {
             $this->json(['error' => 'Call not found'], 404);
         }
@@ -400,7 +522,7 @@ class CallController extends Controller {
             $this->json(['error' => 'Access denied'], 403);
         }
 
-        Database::query(
+                $leaveStatement = Database::query(
             "UPDATE call_participants
              SET left_at = COALESCE(left_at, NOW())
              WHERE call_id = ?
@@ -410,6 +532,13 @@ class CallController extends Controller {
 
         if ((string)($call->status ?? '') !== 'active') {
             $this->json(['success' => true, 'ended' => true]);
+        }
+
+        if (Chat::isGroupType($call->chat_type ?? null)) {
+            if ($leaveStatement->rowCount() > 0) {
+                $this->appendGroupCallPresenceMessage((int)$call->chat_id, (int)$userId, 'left');
+            }
+            $this->json(['success' => true, 'ended' => false]);
         }
 
         $remainingParticipants = (int)Database::query(
@@ -461,7 +590,11 @@ class CallController extends Controller {
         }
 
         $call = Database::query(
-            "SELECT id FROM calls WHERE id = ? AND status = 'active'",
+            "SELECT c.id, c.chat_id, ch.type AS chat_type
+             FROM calls c
+             JOIN chats ch ON ch.id = c.chat_id
+             WHERE c.id = ?
+               AND c.status = 'active'",
             [$callId]
         )->fetch();
 
@@ -470,12 +603,16 @@ class CallController extends Controller {
             return;
         }
 
-        Database::query(
+        $leaveStatement = Database::query(
             "UPDATE call_participants
              SET left_at = COALESCE(left_at, NOW())
              WHERE call_id = ? AND user_id = ? AND left_at IS NULL",
             [$callId, $userId]
         );
+
+        if (Chat::isGroupType($call->chat_type ?? null) && $leaveStatement->rowCount() > 0) {
+            $this->appendGroupCallPresenceMessage((int)$call->chat_id, (int)$userId, 'left');
+        }
 
         $this->json(['success' => true]);
     }

@@ -291,8 +291,9 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
         <div class="flex flex-wrap items-center gap-2">
             <?php foreach ($groupMembersOrdered as $member): ?>
                 <?php $memberIsSelf = (int)($member->id ?? 0) === (int)$currentUserId; ?>
+                <?php $memberIsInCall = (int)($member->is_in_group_call ?? 0) === 1; ?>
                 <?php $friendLabel = $memberIsSelf ? 'You' : (((int)($member->is_friend ?? 0) === 1) ? 'Friend' : 'Not Friend'); ?>
-                <span class="inline-flex items-center gap-2 rounded-full px-3 py-1 border <?= $memberIsSelf ? 'bg-zinc-700 border-zinc-600' : 'bg-zinc-800 border-zinc-700' ?>" data-group-member-user-id="<?= (int)$member->id ?>" data-group-member-username="<?= htmlspecialchars((string)$member->username, ENT_QUOTES, 'UTF-8') ?>">
+                <span class="inline-flex items-center gap-2 rounded-full px-3 py-1 border <?= $memberIsSelf ? 'bg-zinc-700 border-zinc-600' : 'bg-zinc-800 border-zinc-700' ?> <?= $memberIsInCall ? 'border-b-2 border-b-emerald-400' : '' ?>" data-group-member-user-id="<?= (int)$member->id ?>" data-group-member-in-call="<?= $memberIsInCall ? '1' : '0' ?>" data-group-member-username="<?= htmlspecialchars((string)$member->username, ENT_QUOTES, 'UTF-8') ?>">
                     <span class="inline-block w-1.5 h-1.5 rounded-full <?= htmlspecialchars($member->effective_status_dot_class ?? 'bg-zinc-500', ENT_QUOTES, 'UTF-8') ?>" title="<?= htmlspecialchars($member->effective_status_label ?? 'Offline', ENT_QUOTES, 'UTF-8') ?>"></span>
                     <a href="<?= htmlspecialchars(base_url('/u/' . User::formatUserNumber($member->user_number)), ENT_QUOTES, 'UTF-8') ?>" class="hover:underline underline-offset-2" title="<?= htmlspecialchars($friendLabel, ENT_QUOTES, 'UTF-8') ?>" aria-label="<?= htmlspecialchars($friendLabel, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($member->username, ENT_QUOTES, 'UTF-8') ?></a>
                     <?php if ((int)$member->id === (int)$chat->created_by): ?>
@@ -438,6 +439,8 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
             <?php if ($message->is_system_event ?? false): ?>
                 <?php
                     $isNewPrologueCluster = !$previousWasSystemEvent;
+                    $systemEventType = (string)($message->event_type ?? '');
+                    $isCallSystemEvent = strpos($systemEventType, 'call_') === 0;
                     $sysFullTimestamp = (string)($message->created_at ?? '');
                     $sysCompactTimestamp = preg_replace('/:(\d{2})(?!.*:\d{2})/', '', $sysFullTimestamp);
                     $systemContentRaw = (string)($message->content ?? '');
@@ -457,7 +460,7 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                 <div class="flex gap-3 <?= $isNewPrologueCluster ? 'mt-4' : 'mt-1' ?>">
                     <div class="w-10 shrink-0">
                         <?php if ($isNewPrologueCluster): ?>
-                            <div class="w-10 h-10 rounded-full border border-zinc-700 flex items-center justify-center font-semibold mt-0.5 bg-emerald-700 text-emerald-100">P</div>
+                            <div class="w-10 h-10 rounded-full border <?= $isCallSystemEvent ? 'border-zinc-700 bg-zinc-900 text-zinc-400' : 'border-zinc-700 bg-emerald-700 text-emerald-100' ?> flex items-center justify-center font-semibold mt-0.5"><?= $isCallSystemEvent ? '<i class="fa-solid fa-phone text-xs" aria-hidden="true"></i>' : 'P' ?></div>
                         <?php else: ?>
                             <div class="w-10 h-10"></div>
                         <?php endif; ?>
@@ -465,10 +468,10 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                     <div class="min-w-0 flex-1">
                         <?php if ($isNewPrologueCluster): ?>
                             <div class="flex items-center gap-2 mb-0.5">
-                                <span class="text-sm font-semibold leading-5 prologue-accent">Prologue</span>
+                                <span class="text-sm font-semibold leading-5 <?= $isCallSystemEvent ? 'text-zinc-400' : 'prologue-accent' ?>">Prologue</span>
                             </div>
                         <?php endif; ?>
-                        <div class="text-zinc-200 text-[17px] leading-6"><?= $systemContentHtml ?></div>
+                        <div class="<?= $isCallSystemEvent ? 'text-zinc-400 text-[15px]' : 'text-zinc-200 text-[17px]' ?> leading-6"><?= $systemContentHtml ?></div>
                         <div class="relative mt-0.5">
                             <div class="text-xs flex items-center gap-3">
                                 <span class="text-zinc-500" data-utc="<?= htmlspecialchars($sysFullTimestamp, ENT_QUOTES, 'UTF-8') ?>" title="<?= htmlspecialchars($sysFullTimestamp, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($sysCompactTimestamp, ENT_QUOTES, 'UTF-8') ?></span>

@@ -350,6 +350,46 @@ function ensureCurrentChatContext(call) {
     }
 }
 
+function parseActiveCallParticipantIds(call) {
+    const raw = String(call?.participant_user_ids || '').trim();
+    if (!raw) return new Set();
+
+    return new Set(
+        raw
+            .split(',')
+            .map((value) => Number(value))
+            .filter((value) => Number.isFinite(value) && value > 0)
+    );
+}
+
+function updateGroupMemberCallIndicators(activeCall) {
+    const chatView = document.getElementById('chat-view');
+    const renderedChatId = Number(chatView?.dataset?.chatId || 0);
+    const renderedChatType = normalizeChatType(chatView?.dataset?.chatType || 'personal');
+
+    if (renderedChatId <= 0 || renderedChatType !== 'group') {
+        return;
+    }
+
+    const memberNodes = document.querySelectorAll('[data-group-member-user-id]');
+    if (!memberNodes.length) {
+        return;
+    }
+
+    const activeChatId = Number(activeCall?.chat_id || 0);
+    const participantIds = (activeChatId > 0 && activeChatId === renderedChatId)
+        ? parseActiveCallParticipantIds(activeCall)
+        : new Set();
+
+    memberNodes.forEach((node) => {
+        const userId = Number(node.getAttribute('data-group-member-user-id') || 0);
+        const isInCall = userId > 0 && participantIds.has(userId);
+        node.classList.toggle('border-b-2', isInCall);
+        node.classList.toggle('border-b-emerald-400', isInCall);
+        node.setAttribute('data-group-member-in-call', isInCall ? '1' : '0');
+    });
+}
+
 function bindGlobalCallBarInteractions() {
     const callBar = document.getElementById('chat-call-status-bar');
     if (!callBar || callBar.dataset.bound === '1') return;
@@ -493,6 +533,21 @@ function parseCallStartedAtMs(startedAt) {
 function updateCallDurationUI() {
     const overlayDuration = document.getElementById('call-overlay-duration');
     const barDuration = document.getElementById('chat-call-status-duration');
+    const activeChatType = normalizeChatType(currentChat?.type || globalCallContext?.chat_type || 'personal');
+    const isGroupCall = activeChatType === 'group';
+
+    if (isGroupCall) {
+        if (overlayDuration) {
+            overlayDuration.textContent = '00:00';
+            overlayDuration.classList.add('hidden');
+        }
+        if (barDuration) {
+            barDuration.textContent = '00:00';
+            barDuration.classList.add('hidden');
+        }
+        return;
+    }
+
     const hasStart = Number(callDurationStartedAtMs || 0) > 0;
 
     if (!hasStart) {
@@ -558,6 +613,8 @@ function getChatCallState(call) {
         return { state: null, callId: 0, ringingDirection: null, incomingAlert: false };
     }
 
+    const chatType = normalizeChatType(call?.chat_type || currentChat?.type || globalCallContext?.chat_type || 'personal');
+    const isGroupCall = chatType === 'group';
     const participantCount = Math.max(0, Number(call?.participant_count || 0));
     const startedBy = Number(call?.started_by || 0);
     const me = Number(currentUserId || 0);
@@ -567,12 +624,21 @@ function getChatCallState(call) {
         && safeCurrentCallId === callId
         && participantCount > 0;
     const currentUserJoined = Number(call?.current_user_joined || 0) > 0 || shouldInferCurrentUserJoined;
-    const incomingAlert = startedBy > 0 && me > 0 && startedBy !== me && !currentUserJoined;
+    const incomingAlert = !isGroupCall && startedBy > 0 && me > 0 && startedBy !== me && !currentUserJoined;
 
     if (!currentUserJoined) {
-        if (callId === declinedCallId || participantCount > 1) {
+        if (isGroupCall) {
             return {
-                state: 'joinable',
+                state: null,
+                callId,
+                ringingDirection: null,
+                incomingAlert: false
+            };
+        }
+
+        if (callId === declinedCallId) {
+            return {
+                state: null,
                 callId,
                 ringingDirection: null,
                 incomingAlert: false
@@ -588,6 +654,20 @@ function getChatCallState(call) {
     }
 
     if (participantCount <= 1) {
+        if (isGroupCall) {
+            const isLocalMutedGroupCall = Boolean(isMuted)
+                && Number.isFinite(safeCurrentCallId)
+                && safeCurrentCallId > 0
+                && safeCurrentCallId === callId;
+
+            return {
+                state: isLocalMutedGroupCall ? 'muted' : 'active',
+                callId,
+                ringingDirection: null,
+                incomingAlert: false
+            };
+        }
+
         // If the current user has already accepted this call as the callee (currentCallId matches
         // and isCallOfferer is false), treat as active even if participant_count hasn't caught up
         // yet on the server, so the ringtone isn't restarted on every poll cycle.
@@ -816,6 +896,7 @@ function syncCallRingingState(callState) {
 
 async function applyActiveCallSnapshot(activeCall, options = {}) {
     const callState = getChatCallState(activeCall || null);
+    updateGroupMemberCallIndicators(activeCall || null);
     latestChatCallId = Number(callState?.callId || 0);
     clearStalePersistedCallOverlayMode(latestChatCallId);
 
@@ -864,6 +945,7 @@ async function applyActiveCallSnapshot(activeCall, options = {}) {
 
     const leftAloneAfterConnected = safeCurrentCallId > 0
         && safeCurrentCallId === safeActiveCallId
+        && normalizeChatType(activeCall?.chat_type || currentChat?.type || globalCallContext?.chat_type || 'personal') !== 'group'
         && currentUserJoined
         && participantCount <= 1
         && hadCallPeerConnected;
@@ -893,7 +975,7 @@ async function applyActiveCallSnapshot(activeCall, options = {}) {
     if (activeCall) {
         setGlobalCallContext(activeCall);
         persistActiveCallSession(activeCall);
-        if (currentUserJoined && safeActiveCallId > 0) {
+        if (currentUserJoined && safeActiveCallId > 0 && normalizeChatType(activeCall?.chat_type || currentChat?.type || globalCallContext?.chat_type || 'personal') !== 'group') {
             startCallDurationCounter(activeCall?.started_at || globalCallContext?.started_at || null);
         } else if (safeCurrentCallId <= 0) {
             stopCallDurationCounter();
@@ -935,7 +1017,7 @@ async function refreshGlobalCallState(options = {}) {
         const snapshot = await fetchCurrentActiveCall();
         const activeCall = snapshot?.call || null;
         const incomingCall = snapshot?.incomingCall || null;
-        if (activeCall) {
+        if (activeCall && !currentChat) {
             ensureCurrentChatContext(activeCall);
         }
 
@@ -1078,7 +1160,11 @@ async function startVoiceCall(options = {}) {
 
     currentCallId = start.call_id;
     setChatUserInActiveCall(true);
-    startCallDurationCounter(Date.now());
+    if (normalizeChatType(currentChat?.type || 'personal') !== 'group') {
+        startCallDurationCounter(Date.now());
+    } else {
+        stopCallDurationCounter();
+    }
     if (typeof stopAllNotificationSounds === 'function') {
         stopAllNotificationSounds();
     }
@@ -1107,8 +1193,13 @@ async function startVoiceCall(options = {}) {
         stopCallRingingAudio();
         setChatCallStatusBar(isMuted ? 'muted' : 'active');
     } else {
-        setChatCallStatusBar('ringing');
-        syncCallRingingState({ state: 'ringing', callId: Number(currentCallId || 0), ringingDirection: 'outgoing', incomingAlert: false });
+        if (normalizeChatType(currentChat?.type || 'personal') === 'group') {
+            stopCallRingingAudio();
+            setChatCallStatusBar(isMuted ? 'muted' : 'active');
+        } else {
+            setChatCallStatusBar('ringing');
+            syncCallRingingState({ state: 'ringing', callId: Number(currentCallId || 0), ringingDirection: 'outgoing', incomingAlert: false });
+        }
     }
     const rawMicStream = await navigator.mediaDevices.getUserMedia(getSavedAudioConstraints());
     const processedStream = setupMicGainPipeline(rawMicStream);

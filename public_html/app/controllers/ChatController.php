@@ -511,10 +511,29 @@ class ChatController extends Controller {
                              ORDER BY CASE WHEN u.id = ? THEN 0 ELSE 1 END ASC, u.username ASC",
                             [$currentUserId, $currentUserId, $currentUserId, $chat->id, (int)$chat->created_by]
             )->fetchAll();
+
+            $activeCallParticipantMap = [];
+            if ($isGroupChat && !empty($members)) {
+                $activeParticipantIds = Database::query(
+                    "SELECT DISTINCT cp.user_id
+                     FROM calls c
+                     JOIN call_participants cp ON cp.call_id = c.id
+                     WHERE c.chat_id = ?
+                       AND c.status = 'active'
+                       AND cp.left_at IS NULL",
+                    [(int)$chat->id]
+                )->fetchAll(PDO::FETCH_COLUMN);
+
+                foreach ($activeParticipantIds as $activeParticipantId) {
+                    $activeCallParticipantMap[(int)$activeParticipantId] = true;
+                }
+            }
+
             foreach ($members as $m) {
                 $m->formatted_user_number = User::formatUserNumber($m->user_number);
                 $m->avatar_url = User::avatarUrl($m);
                 User::attachEffectiveStatus($m);
+                $m->is_in_group_call = isset($activeCallParticipantMap[(int)($m->id ?? 0)]) ? 1 : 0;
             }
         }
 

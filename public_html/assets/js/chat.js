@@ -3666,16 +3666,18 @@ function renderMessages(messages, options = {}) {
     messages.forEach((msg, index) => {
         if (msg.is_system_event) {
             const isNewPrologueCluster = !previousWasSystemEvent;
+            const systemEventType = String(msg?.event_type || '');
+            const isCallSystemEvent = systemEventType.startsWith('call_');
             const sysFullTimestamp = String(msg.created_at || '');
             const sysCompactTimestamp = formatCompactMessageTimestamp(sysFullTimestamp);
             chunks.push(`
                 <div class="flex gap-3 ${isNewPrologueCluster ? 'mt-4' : 'mt-1'}">
                     <div class="w-10 shrink-0">
-                        ${isNewPrologueCluster ? '<div class="w-10 h-10 rounded-full border border-zinc-700 flex items-center justify-center font-semibold mt-0.5 bg-emerald-700 text-emerald-100">P</div>' : '<div class="w-10 h-10"></div>'}
+                        ${isNewPrologueCluster ? `<div class="w-10 h-10 rounded-full border ${isCallSystemEvent ? 'border-zinc-700 bg-zinc-900 text-zinc-400' : 'border-zinc-700 bg-emerald-700 text-emerald-100'} flex items-center justify-center font-semibold mt-0.5">${isCallSystemEvent ? '<i class="fa-solid fa-phone text-xs" aria-hidden="true"></i>' : 'P'}</div>` : '<div class="w-10 h-10"></div>'}
                     </div>
                     <div class="min-w-0 flex-1">
-                        ${isNewPrologueCluster ? '<div class="flex items-center gap-2 mb-0.5"><span class="text-sm font-semibold leading-5 prologue-accent">Prologue</span></div>' : ''}
-                        <div class="text-zinc-200 text-[17px] leading-6">${renderPlainTextWithEmoji(String(msg.content || ''))}</div>
+                        ${isNewPrologueCluster ? `<div class="flex items-center gap-2 mb-0.5"><span class="text-sm font-semibold leading-5 ${isCallSystemEvent ? 'text-zinc-400' : 'prologue-accent'}">Prologue</span></div>` : ''}
+                        <div class="${isCallSystemEvent ? 'text-zinc-400 text-[15px]' : 'text-zinc-200 text-[17px]'} leading-6">${renderPlainTextWithEmoji(String(msg.content || ''))}</div>
                         <div class="relative mt-0.5">
                             <div class="text-xs flex items-center gap-3">
                                 <span class="text-zinc-500" data-utc="${escapeHtml(sysFullTimestamp)}" title="${escapeHtml(sysFullTimestamp)}">${escapeHtml(sysCompactTimestamp)}</span>
