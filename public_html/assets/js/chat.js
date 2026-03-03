@@ -2888,6 +2888,12 @@ async function pollMessages(options = {}) {
     const messages = data.messages || [];
     const typingUsers = data.typing_users || [];
     const pinnedMessage = normalizePinnedMessage(data.pinned_message);
+    if (currentChat && data.group_edit_window !== undefined) {
+        currentChat.group_edit_window = String(data.group_edit_window || 'never');
+    }
+    if (currentChat && data.group_delete_window !== undefined) {
+        currentChat.group_delete_window = String(data.group_delete_window || 'never');
+    }
     const forceRender = options.forceRender === true;
     const activeChatId = Number(currentChat.id || 0);
     const nextMessagesSignature = buildMessagesSignature(messages);
@@ -2963,6 +2969,8 @@ function buildMessagesSignature(messages) {
                 .join(',')
             : '';
 
+        const editedAt = String(msg?.edited_at || '');
+
         return [
             messageId,
             createdAt,
@@ -2970,7 +2978,8 @@ function buildMessagesSignature(messages) {
             content,
             mentionMapFingerprint,
             attachmentFingerprint,
-            reactionFingerprint
+            reactionFingerprint,
+            editedAt
         ].join('|');
     }).join('\n');
 }
@@ -3287,6 +3296,17 @@ function renderMessages(messages, options = {}) {
         }
     }
 
+    const quotedMessageIds = new Set();
+    messages.forEach((m) => {
+        const qid = Number(m?.quoted_message_id || 0);
+        if (qid > 0) quotedMessageIds.add(qid);
+    });
+    messages.forEach((m) => {
+        if (!m?.is_system_event && m?.is_quoted === undefined) {
+            m.is_quoted = quotedMessageIds.has(Number(m?.id || 0));
+        }
+    });
+
     let previousUserId = null;
     let previousWasSystemEvent = false;
     const chunks = [];
@@ -3331,9 +3351,23 @@ function renderMessages(messages, options = {}) {
         const mentionMap = normalizeMentionMap(msg?.mention_map || {});
         const mentionMapJson = escapeHtml(JSON.stringify(mentionMap));
         const reactionBadgesMarkup = renderReactionBadgesMarkup(msg.id, Array.isArray(msg?.reactions) ? msg.reactions : []);
+        const editedAt = String(msg?.edited_at || '');
+        const isQuoted = !!(msg?.is_quoted);
+        const hasAttachments = Array.isArray(msg?.attachments) && msg.attachments.length > 0;
+
+        let editButton = '';
+        let deleteButton = '';
+        if (normalizeChatType(currentChat?.type) === 'group') {
+            if (canEditMessage(msg, isQuoted)) {
+                editButton = `<button type="button" class="text-zinc-400 hover:text-zinc-300 js-edit-link" title="Edit" aria-label="Edit" data-edit-message-id="${Number(msg.id)}"><i class="fa-solid fa-pen" aria-hidden="true"></i></button>`;
+            }
+            if (canDeleteMessage(msg, hasAttachments)) {
+                deleteButton = `<button type="button" class="text-zinc-400 hover:text-zinc-300 js-delete-link" title="Delete" aria-label="Delete" data-delete-message-id="${Number(msg.id)}"><i class="fa-solid fa-trash" aria-hidden="true"></i></button>`;
+            }
+        }
 
         chunks.push(`
-            <div class="flex gap-3 ${isNewGroup ? 'mt-4' : 'mt-1'} group" data-message-id="${Number(msg.id)}">
+            <div class="flex gap-3 ${isNewGroup ? 'mt-4' : 'mt-1'} group" data-message-id="${Number(msg.id)}" data-message-user-id="${messageUserId}" data-message-created-at="${escapeHtml(fullTimestamp)}" data-message-is-quoted="${isQuoted ? '1' : '0'}" data-message-has-attachments="${hasAttachments ? '1' : '0'}" data-message-edited-at="${escapeHtml(editedAt)}">
                 <div class="w-10 shrink-0">
                     ${isNewGroup ? renderAvatarMarkup(msg, 'w-10 h-10 mt-0.5', 'text-sm') : '<div class="w-10 h-10"></div>'}
                 </div>
@@ -3346,8 +3380,11 @@ function renderMessages(messages, options = {}) {
                         ${renderReactionPickerMarkup(msg.id)}
                         <div class="text-xs flex items-center gap-3">
                             <span class="text-zinc-500" data-utc="${escapeHtml(fullTimestamp)}" title="${escapeHtml(fullTimestamp)}">${escapeHtml(compactTimestamp)}</span>
+                            ${editedAt ? '<span class="text-zinc-500 italic">(edited)</span>' : ''}
                             <div class="flex items-center gap-3 md:opacity-0 md:group-hover:opacity-100 md:pointer-events-none md:group-hover:pointer-events-auto md:transition-opacity md:duration-150 md:ease-out">
                                 <button type="button" class="text-zinc-400 hover:text-zinc-300 js-quote-link" title="Quote" aria-label="Quote" data-quote-message-id="${Number(msg.id)}" data-quote-username="${escapeHtml(String(msg.username || ''))}" data-quote-user-number="${escapeHtml(String(msg.user_number || ''))}" data-quote-content="${escapeHtml(String(msg.content || ''))}" data-quote-mention-map="${mentionMapJson}"><i class="fa-solid fa-reply" aria-hidden="true"></i></button>
+                                ${editButton}
+                                ${deleteButton}
                                 <button type="button" class="text-zinc-400 hover:text-zinc-300 js-pin-link" title="Pin" aria-label="Pin" data-pin-message-id="${Number(msg.id)}"><i class="fa-solid fa-thumbtack" aria-hidden="true"></i></button>
                                 <button type="button" class="text-zinc-400 hover:text-zinc-300 js-react-link" title="React" aria-label="React" data-react-message-id="${Number(msg.id)}"><i class="fa-solid fa-thumbs-up" aria-hidden="true"></i></button>
                             </div>
@@ -3390,4 +3427,246 @@ function renderMessages(messages, options = {}) {
     }
 
     box.scrollTop = box.scrollHeight;
+}
+
+function isWithinWindow(windowValue, createdAt) {
+    if (windowValue === 'never') return false;
+    if (windowValue === 'forever') return true;
+    const seconds = parseInt(windowValue, 10);
+    if (isNaN(seconds) || seconds <= 0) return false;
+    const messageTime = new Date(createdAt + (createdAt.includes('Z') || createdAt.includes('+') ? '' : 'Z')).getTime();
+    if (isNaN(messageTime)) return false;
+    return (Date.now() - messageTime) <= seconds * 1000;
+}
+
+function canEditMessage(msg, isQuoted) {
+    if (!currentChat || normalizeChatType(currentChat.type) !== 'group') return false;
+    if (isQuoted) return false;
+    const isOwn = Number(msg.user_id) === Number(currentUserId);
+    const isAdmin = !!(currentChat.is_admin);
+    if (!isOwn && !isAdmin) return false;
+    if (isAdmin) return true;
+    return isWithinWindow(currentChat.group_edit_window || 'never', String(msg.created_at || ''));
+}
+
+function canDeleteMessage(msg, hasAttachments) {
+    if (!currentChat || normalizeChatType(currentChat.type) !== 'group') return false;
+    if (hasAttachments) return false;
+    const isOwn = Number(msg.user_id) === Number(currentUserId);
+    const isAdmin = !!(currentChat.is_admin);
+    if (!isOwn && !isAdmin) return false;
+    if (isAdmin) return true;
+    return isWithinWindow(currentChat.group_delete_window || 'never', String(msg.created_at || ''));
+}
+
+function bindMessageEditAndDelete() {
+    const messagesContainer = document.getElementById('messages');
+    if (!messagesContainer) return;
+
+    messagesContainer.addEventListener('click', (event) => {
+        const editBtn = event.target.closest('.js-edit-link');
+        if (editBtn) {
+            event.preventDefault();
+            const messageId = Number(editBtn.dataset.editMessageId || 0);
+            if (messageId > 0) startEditMessage(messageId);
+            return;
+        }
+
+        const deleteBtn = event.target.closest('.js-delete-link');
+        if (deleteBtn) {
+            event.preventDefault();
+            const messageId = Number(deleteBtn.dataset.deleteMessageId || 0);
+            if (messageId > 0) promptDeleteMessage(messageId);
+            return;
+        }
+
+        const saveBtn = event.target.closest('.js-edit-save');
+        if (saveBtn) {
+            event.preventDefault();
+            const messageId = Number(saveBtn.dataset.editMessageId || 0);
+            if (messageId > 0) submitEditMessage(messageId);
+            return;
+        }
+
+        const cancelBtn = event.target.closest('.js-edit-cancel');
+        if (cancelBtn) {
+            event.preventDefault();
+            const messageId = Number(cancelBtn.dataset.editMessageId || 0);
+            if (messageId > 0) cancelEditMessage(messageId);
+            return;
+        }
+    });
+}
+
+function startEditMessage(messageId) {
+    const messageDiv = document.querySelector(`[data-message-id="${messageId}"]`);
+    if (!messageDiv) return;
+    const contentDiv = messageDiv.querySelector('.js-message-content');
+    if (!contentDiv) return;
+
+    const rawContent = contentDiv.dataset.rawContent || '';
+    contentDiv.dataset.originalContent = contentDiv.innerHTML;
+    contentDiv.innerHTML = `
+        <div class="flex flex-col gap-2">
+            <input type="text" class="js-edit-input w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2 text-zinc-100 text-[15px]" value="${escapeHtml(rawContent)}" maxlength="16384">
+            <div class="flex gap-2">
+                <button type="button" class="js-edit-save text-xs px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white" data-edit-message-id="${messageId}">Save</button>
+                <button type="button" class="js-edit-cancel text-xs px-3 py-1 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-zinc-200" data-edit-message-id="${messageId}">Cancel</button>
+            </div>
+        </div>
+    `;
+    const input = contentDiv.querySelector('.js-edit-input');
+    if (input) {
+        input.focus();
+        input.setSelectionRange(input.value.length, input.value.length);
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); submitEditMessage(messageId); }
+            if (e.key === 'Escape') { e.preventDefault(); cancelEditMessage(messageId); }
+        });
+    }
+}
+
+async function submitEditMessage(messageId) {
+    const messageDiv = document.querySelector(`[data-message-id="${messageId}"]`);
+    if (!messageDiv) return;
+    const input = messageDiv.querySelector('.js-edit-input');
+    if (!input) return;
+    const newContent = input.value.trim();
+    if (!newContent) {
+        showToast('Message cannot be empty', 'error');
+        return;
+    }
+
+    try {
+        const result = await postForm('/api/messages/edit', {
+            csrf_token: getCsrfToken(),
+            message_id: messageId,
+            content: newContent
+        });
+        if (result.error) {
+            showToast(result.error, 'error');
+            cancelEditMessage(messageId);
+            return;
+        }
+        await pollMessages({ scrollMode: 'preserve', forceRender: true });
+    } catch (e) {
+        showToast('Failed to edit message', 'error');
+        cancelEditMessage(messageId);
+    }
+}
+
+function cancelEditMessage(messageId) {
+    const messageDiv = document.querySelector(`[data-message-id="${messageId}"]`);
+    if (!messageDiv) return;
+    const contentDiv = messageDiv.querySelector('.js-message-content');
+    if (!contentDiv || !contentDiv.dataset.originalContent) return;
+    contentDiv.innerHTML = contentDiv.dataset.originalContent;
+    delete contentDiv.dataset.originalContent;
+}
+
+function promptDeleteMessage(messageId) {
+    const modal = document.getElementById('delete-message-modal');
+    const idInput = document.getElementById('delete-message-id');
+    if (!modal || !idInput) return;
+    idInput.value = messageId;
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+}
+
+function bindDeleteMessageModal() {
+    const modal = document.getElementById('delete-message-modal');
+    if (!modal) return;
+    const form = document.getElementById('delete-message-form');
+    const cancelBtn = document.getElementById('delete-message-cancel');
+    const idInput = document.getElementById('delete-message-id');
+
+    const closeModal = () => {
+        modal.classList.add('hidden');
+        modal.setAttribute('aria-hidden', 'true');
+        if (idInput) idInput.value = '';
+    };
+
+    if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeModal();
+    });
+
+    if (form) {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const messageId = Number(idInput?.value || 0);
+            if (messageId <= 0) return;
+            closeModal();
+            try {
+                const result = await postForm('/api/messages/delete', {
+                    csrf_token: getCsrfToken(),
+                    message_id: messageId
+                });
+                if (result.error) {
+                    showToast(result.error, 'error');
+                    return;
+                }
+                await pollMessages({ scrollMode: 'preserve', forceRender: true });
+            } catch (err) {
+                showToast('Failed to delete message', 'error');
+            }
+        });
+    }
+}
+
+function bindMessageSettingsModal() {
+    const modal = document.getElementById('message-settings-modal');
+    if (!modal) return;
+    const form = document.getElementById('message-settings-form');
+    const cancelBtn = document.getElementById('message-settings-cancel');
+    const editSelect = document.getElementById('message-settings-edit-window');
+    const deleteSelect = document.getElementById('message-settings-delete-window');
+
+    const closeModal = () => {
+        modal.classList.add('hidden');
+        modal.setAttribute('aria-hidden', 'true');
+    };
+
+    if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeModal();
+    });
+
+    window.openMessageSettingsModal = () => {
+        if (!currentChat) return;
+        if (editSelect) editSelect.value = currentChat.group_edit_window || 'never';
+        if (deleteSelect) deleteSelect.value = currentChat.group_delete_window || 'never';
+        modal.classList.remove('hidden');
+        modal.setAttribute('aria-hidden', 'false');
+    };
+
+    if (form) {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!currentChat) return;
+            const editWindow = editSelect?.value || 'never';
+            const deleteWindow = deleteSelect?.value || 'never';
+            closeModal();
+            try {
+                const result = await postForm('/api/chats/group/message-settings', {
+                    csrf_token: getCsrfToken(),
+                    chat_id: currentChat.id,
+                    edit_window: editWindow,
+                    delete_window: deleteWindow
+                });
+                if (result.error) {
+                    showToast(result.error, 'error');
+                    return;
+                }
+                currentChat.group_edit_window = editWindow;
+                currentChat.group_delete_window = deleteWindow;
+                showToast('Message settings saved');
+                await pollMessages({ scrollMode: 'preserve', forceRender: true });
+            } catch (err) {
+                showToast('Failed to save settings', 'error');
+            }
+        });
+    }
 }

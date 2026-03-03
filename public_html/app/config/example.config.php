@@ -251,6 +251,7 @@ CREATE TABLE messages (
 	quoted_content TEXT NULL,
 	bot_name VARCHAR(100) NULL,
 	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	edited_at TIMESTAMP NULL,
 	FOREIGN KEY (chat_id) REFERENCES chats(id) ON DELETE CASCADE,
 	FOREIGN KEY (user_id) REFERENCES users(id),
 	FOREIGN KEY (quoted_message_id) REFERENCES messages(id) ON DELETE SET NULL,

@@ -146,7 +146,7 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
 };
 ?>
 
-    <div class="flex-1 flex flex-col h-full" id="chat-view" data-chat-id="<?= (int)$chat->id ?>" data-chat-number="<?= htmlspecialchars($chat->chat_number, ENT_QUOTES, 'UTF-8') ?>" data-chat-type="<?= htmlspecialchars($chat->type ?? 'personal', ENT_QUOTES, 'UTF-8') ?>" data-chat-owner-id="<?= (int)$chat->created_by ?>" data-current-user-id="<?= (int)$currentUserId ?>" data-first-unseen-message-id="<?= (int)($firstUnseenMessageId ?? 0) ?>" data-personal-user-id="<?= (int)$personalChatUserId ?>" data-can-send-messages="<?= $canSendMessages ? '1' : '0' ?>" data-message-restriction-reason="<?= htmlspecialchars($messageRestrictionReason, ENT_QUOTES, 'UTF-8') ?>" data-can-start-calls="<?= $canStartCalls ? '1' : '0' ?>" data-current-username="<?= htmlspecialchars($currentUserUsername, ENT_QUOTES, 'UTF-8') ?>" data-peer-username="<?= htmlspecialchars($personalChatPeerUsername, ENT_QUOTES, 'UTF-8') ?>">
+    <div class="flex-1 flex flex-col h-full" id="chat-view" data-chat-id="<?= (int)$chat->id ?>" data-chat-number="<?= htmlspecialchars($chat->chat_number, ENT_QUOTES, 'UTF-8') ?>" data-chat-type="<?= htmlspecialchars($chat->type ?? 'personal', ENT_QUOTES, 'UTF-8') ?>" data-chat-owner-id="<?= (int)$chat->created_by ?>" data-current-user-id="<?= (int)$currentUserId ?>" data-first-unseen-message-id="<?= (int)($firstUnseenMessageId ?? 0) ?>" data-personal-user-id="<?= (int)$personalChatUserId ?>" data-can-send-messages="<?= $canSendMessages ? '1' : '0' ?>" data-message-restriction-reason="<?= htmlspecialchars($messageRestrictionReason, ENT_QUOTES, 'UTF-8') ?>" data-can-start-calls="<?= $canStartCalls ? '1' : '0' ?>" data-current-username="<?= htmlspecialchars($currentUserUsername, ENT_QUOTES, 'UTF-8') ?>" data-peer-username="<?= htmlspecialchars($personalChatPeerUsername, ENT_QUOTES, 'UTF-8') ?>" data-is-admin="<?= $isCurrentUserAdmin ? '1' : '0' ?>" data-group-edit-window="<?= htmlspecialchars($groupEditWindow ?? 'never', ENT_QUOTES, 'UTF-8') ?>" data-group-delete-window="<?= htmlspecialchars($groupDeleteWindow ?? 'never', ENT_QUOTES, 'UTF-8') ?>">
     <div class="h-16 border-b border-zinc-800 flex items-center px-6 justify-between">
         <div class="flex items-center gap-4 relative">
             <div class="flex items-center gap-2">
@@ -170,6 +170,9 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                 <button type="button" data-chat-action="add-user" class="w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-zinc-800">Add User</button>
                 <?php if ($isGroupOwner): ?>
                 <button type="button" data-chat-action="rename-chat" class="w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-zinc-800">Rename Chat</button>
+                <?php endif; ?>
+                <?php if ($isGroupOwner || $isCurrentUserAdmin): ?>
+                <button type="button" data-chat-action="message-settings" class="w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-zinc-800">Message Settings</button>
                 <?php endif; ?>
                 <?php if ($canTakeGroupOwnership): ?>
                 <button type="button" data-chat-action="take-ownership" class="w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-zinc-800">Take Ownership</button>
@@ -339,7 +342,7 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                 $quotedMentionMap = $message->quote_mention_map ?? (object)[];
                 $quotedDisplayContent = $renderStoredMentionsToPlain($quotedContent, $quotedMentionMap);
             ?>
-            <div class="flex gap-3 <?= $isNewGroup ? 'mt-4' : 'mt-1' ?> group" data-message-id="<?= (int)$message->id ?>">
+            <div class="flex gap-3 <?= $isNewGroup ? 'mt-4' : 'mt-1' ?> group" data-message-id="<?= (int)$message->id ?>" data-message-user-id="<?= (int)$message->user_id ?>" data-message-created-at="<?= htmlspecialchars((string)$message->created_at, ENT_QUOTES, 'UTF-8') ?>" data-message-is-quoted="<?= !empty($message->is_quoted) ? '1' : '0' ?>" data-message-has-attachments="<?= !empty($message->has_attachments) ? '1' : '0' ?>" data-message-edited-at="<?= htmlspecialchars((string)($message->edited_at ?? ''), ENT_QUOTES, 'UTF-8') ?>">
                 <div class="w-10 shrink-0">
                     <?php if ($isNewGroup): ?>
                         <?php if ($avatarUrl): ?>
@@ -450,8 +453,45 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
 
                         <div class="text-xs flex items-center gap-3">
                             <span class="text-zinc-500" data-utc="<?= htmlspecialchars($fullTimestamp, ENT_QUOTES, 'UTF-8') ?>" title="<?= htmlspecialchars($fullTimestamp, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($compactTimestamp, ENT_QUOTES, 'UTF-8') ?></span>
+                            <?php if (!empty($message->edited_at)): ?>
+                                <span class="text-zinc-500 italic">(edited)</span>
+                            <?php endif; ?>
                             <div class="flex items-center gap-3 md:opacity-0 md:group-hover:opacity-100 md:pointer-events-none md:group-hover:pointer-events-auto md:transition-opacity md:duration-150 md:ease-out">
                                 <button type="button" class="text-zinc-400 hover:text-zinc-300 js-quote-link" title="Quote" aria-label="Quote" data-quote-message-id="<?= (int)$message->id ?>" data-quote-username="<?= htmlspecialchars((string)$message->username, ENT_QUOTES, 'UTF-8') ?>" data-quote-user-number="<?= htmlspecialchars((string)$message->user_number, ENT_QUOTES, 'UTF-8') ?>" data-quote-content="<?= htmlspecialchars((string)$message->content, ENT_QUOTES, 'UTF-8') ?>" data-quote-mention-map="<?= htmlspecialchars($mentionMapJson, ENT_QUOTES, 'UTF-8') ?>"><i class="fa-solid fa-reply" aria-hidden="true"></i></button>
+                                <?php if ($isGroupChat && !empty($message->is_quoted) === false): ?>
+                                    <?php
+                                        $canEditThis = false;
+                                        if ((int)$message->user_id === (int)$currentUserId || $isCurrentUserAdmin) {
+                                            if ($isCurrentUserAdmin) {
+                                                $canEditThis = true;
+                                            } else {
+                                                $ew = $groupEditWindow ?? 'never';
+                                                if ($ew === 'forever') { $canEditThis = true; }
+                                                elseif ($ew !== 'never' && (int)$ew > 0) { $canEditThis = (time() - strtotime($message->created_at)) <= (int)$ew; }
+                                            }
+                                        }
+                                    ?>
+                                    <?php if ($canEditThis): ?>
+                                    <button type="button" class="text-zinc-400 hover:text-zinc-300 js-edit-link" title="Edit" aria-label="Edit" data-edit-message-id="<?= (int)$message->id ?>"><i class="fa-solid fa-pen" aria-hidden="true"></i></button>
+                                    <?php endif; ?>
+                                <?php endif; ?>
+                                <?php if ($isGroupChat && empty($message->has_attachments)): ?>
+                                    <?php
+                                        $canDeleteThis = false;
+                                        if ((int)$message->user_id === (int)$currentUserId || $isCurrentUserAdmin) {
+                                            if ($isCurrentUserAdmin) {
+                                                $canDeleteThis = true;
+                                            } else {
+                                                $dw = $groupDeleteWindow ?? 'never';
+                                                if ($dw === 'forever') { $canDeleteThis = true; }
+                                                elseif ($dw !== 'never' && (int)$dw > 0) { $canDeleteThis = (time() - strtotime($message->created_at)) <= (int)$dw; }
+                                            }
+                                        }
+                                    ?>
+                                    <?php if ($canDeleteThis): ?>
+                                    <button type="button" class="text-zinc-400 hover:text-zinc-300 js-delete-link" title="Delete" aria-label="Delete" data-delete-message-id="<?= (int)$message->id ?>"><i class="fa-solid fa-trash" aria-hidden="true"></i></button>
+                                    <?php endif; ?>
+                                <?php endif; ?>
                                 <button type="button" class="text-zinc-400 hover:text-zinc-300 js-pin-link" title="Pin" aria-label="Pin" data-pin-message-id="<?= (int)$message->id ?>"><i class="fa-solid fa-thumbtack" aria-hidden="true"></i></button>
                                 <button type="button" class="text-zinc-400 hover:text-zinc-300 js-react-link" title="React" aria-label="React" data-react-message-id="<?= (int)$message->id ?>"><i class="fa-solid fa-thumbs-up" aria-hidden="true"></i></button>
                             </div>
@@ -654,6 +694,60 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
         </div>
     </div>
 </div>
+
+<?php if ($isGroupOwner || $isCurrentUserAdmin): ?>
+<div id="message-settings-modal" class="hidden fixed inset-0 bg-black/70 z-50 p-4 md:p-6" aria-hidden="true">
+    <div class="h-full w-full flex items-center justify-center">
+        <div class="w-full max-w-md bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl p-6" role="dialog" aria-modal="true" aria-labelledby="message-settings-modal-title">
+            <h2 id="message-settings-modal-title" class="text-lg font-semibold text-zinc-100">Message Settings</h2>
+            <p class="mt-2 text-sm text-zinc-400">Control how long members can edit or delete their messages.</p>
+            <form id="message-settings-form" class="mt-4 space-y-4">
+                <div>
+                    <label for="message-settings-edit-window" class="block text-sm text-zinc-300 mb-1">Edit Messages</label>
+                    <select id="message-settings-edit-window" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-zinc-100">
+                        <option value="never">Never</option>
+                        <option value="600">For 10 Minutes</option>
+                        <option value="3600">For 1 Hour</option>
+                        <option value="86400">For 1 Day</option>
+                        <option value="forever">Forever</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="message-settings-delete-window" class="block text-sm text-zinc-300 mb-1">Delete Messages</label>
+                    <select id="message-settings-delete-window" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-zinc-100">
+                        <option value="never">Never</option>
+                        <option value="600">For 10 Minutes</option>
+                        <option value="3600">For 1 Hour</option>
+                        <option value="86400">For 1 Day</option>
+                        <option value="forever">Forever</option>
+                    </select>
+                </div>
+                <div class="flex items-center justify-end gap-3">
+                    <button type="button" id="message-settings-cancel" class="px-4 py-2 rounded-xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-zinc-200">Cancel</button>
+                    <button type="submit" id="message-settings-submit" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
+<div id="delete-message-modal" class="hidden fixed inset-0 bg-black/70 z-50 p-4 md:p-6" aria-hidden="true">
+    <div class="h-full w-full flex items-center justify-center">
+        <div class="w-full max-w-md bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl p-6" role="dialog" aria-modal="true" aria-labelledby="delete-message-modal-title">
+            <h2 id="delete-message-modal-title" class="text-lg font-semibold text-zinc-100">Delete message</h2>
+            <p class="mt-2 text-sm text-zinc-400">Are you sure you want to delete this message? This cannot be undone.</p>
+            <form id="delete-message-form" class="mt-4">
+                <input type="hidden" id="delete-message-id" value="">
+                <div class="flex items-center justify-end gap-3">
+                    <button type="button" id="delete-message-cancel" class="px-4 py-2 rounded-xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-zinc-200">Cancel</button>
+                    <button type="submit" id="delete-message-submit" class="px-4 py-2 rounded-xl bg-red-700 hover:bg-red-600 text-white">Delete</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <?php endif; ?>
 
 <div id="attachment-lightbox" class="hidden fixed inset-0 bg-black/90 z-50 p-6">

@@ -391,6 +391,25 @@ class ChatController extends Controller {
         $pendingAttachments = Attachment::listPendingForChatUser((int)$chat->id, (int)$currentUserId);
         $pinnedMessage = $this->getPinnedMessageForChat((int)$chat->id);
 
+        $groupEditWindow = 'never';
+        $groupDeleteWindow = 'never';
+        if (Chat::isGroupType($chat->type ?? null)) {
+            $groupEditWindow = $this->getGroupMessageWindow('edit', (int)$chat->id);
+            $groupDeleteWindow = $this->getGroupMessageWindow('delete', (int)$chat->id);
+
+            $quotedIds = Database::query(
+                "SELECT DISTINCT quoted_message_id FROM messages WHERE chat_id = ? AND quoted_message_id IS NOT NULL",
+                [(int)$chat->id]
+            )->fetchAll(PDO::FETCH_COLUMN);
+            $quotedIdSet = array_flip($quotedIds ?: []);
+            foreach ($messages as $message) {
+                if (!($message->is_system_event ?? false)) {
+                    $message->is_quoted = isset($quotedIdSet[(int)$message->id]);
+                    $message->has_attachments = !empty($message->attachments) && is_array($message->attachments) && count($message->attachments) > 0;
+                }
+            }
+        }
+
         $this->view('chat', [
             'chat' => $chat,
             'chatTitle' => $chatTitle,
@@ -404,6 +423,8 @@ class ChatController extends Controller {
             'messageRestrictionReason' => $messageRestrictionReason,
             'canStartCalls' => $canStartCalls,
             'pinnedMessage' => $pinnedMessage,
+            'groupEditWindow' => $groupEditWindow,
+            'groupDeleteWindow' => $groupDeleteWindow,
             'csrf' => $this->csrfToken()
         ]);
     }
@@ -1316,6 +1337,188 @@ class ChatController extends Controller {
                 [$chatId, $eventContent]
             );
         }
+
+        $this->json(['success' => true]);
+    }
+
+    private function getGroupMessageSettingKey(string $type, int $chatId): string {
+        return 'group_' . $type . '_window_' . $chatId;
+    }
+
+    private function getGroupMessageWindow(string $type, int $chatId): string {
+        return (string)(Setting::get($this->getGroupMessageSettingKey($type, $chatId)) ?? 'never');
+    }
+
+    private function isWithinWindow(string $window, string $createdAt): bool {
+        if ($window === 'never') return false;
+        if ($window === 'forever') return true;
+        $seconds = (int)$window;
+        if ($seconds <= 0) return false;
+        $messageTime = strtotime($createdAt);
+        if ($messageTime === false) return false;
+        return (time() - $messageTime) <= $seconds;
+    }
+
+    private function messageIsQuoted(int $messageId, int $chatId): bool {
+        return (bool)Database::query(
+            "SELECT 1 FROM messages WHERE chat_id = ? AND quoted_message_id = ? LIMIT 1",
+            [$chatId, $messageId]
+        )->fetch();
+    }
+
+    private function messageHasAttachments(int $messageId): bool {
+        return (bool)Database::query(
+            "SELECT 1 FROM attachments WHERE message_id = ? AND status = 'submitted' LIMIT 1",
+            [$messageId]
+        )->fetch();
+    }
+
+    public function editMessage() {
+        Auth::requireAuth();
+        Auth::csrfValidate();
+
+        $messageId = (int)($_POST['message_id'] ?? 0);
+        $newContent = trim($_POST['content'] ?? '');
+        $authUser = Auth::user();
+        $currentUserId = (int)$authUser->id;
+        $isAdmin = strtolower((string)($authUser->role ?? '')) === 'admin';
+
+        if ($messageId <= 0 || $newContent === '') {
+            $this->json(['error' => 'Invalid payload'], 400);
+        }
+
+        if (mb_strlen($newContent) > 16384) {
+            $this->json(['error' => 'Message exceeds the maximum length of 16,384 characters'], 400);
+        }
+
+        $message = Database::query(
+            "SELECT m.id, m.chat_id, m.user_id, m.content, m.created_at
+             FROM messages m
+             JOIN chat_members cm ON cm.chat_id = m.chat_id AND cm.user_id = ?
+             WHERE m.id = ?
+             LIMIT 1",
+            [$currentUserId, $messageId]
+        )->fetch();
+        if (!$message) {
+            $this->json(['error' => 'Message not found'], 404);
+        }
+
+        $chatId = (int)$message->chat_id;
+        $chat = Database::query("SELECT id, type FROM chats WHERE id = ?", [$chatId])->fetch();
+        if (!$chat || !Chat::isGroupType($chat->type ?? null)) {
+            $this->json(['error' => 'Editing is only available in group chats'], 403);
+        }
+
+        $isOwner = (int)$message->user_id === $currentUserId;
+        if (!$isOwner && !$isAdmin) {
+            $this->json(['error' => 'Access denied'], 403);
+        }
+
+        if ($this->messageIsQuoted($messageId, $chatId)) {
+            $this->json(['error' => 'Cannot edit a message that has been quoted'], 403);
+        }
+
+        if (!$isAdmin) {
+            $editWindow = $this->getGroupMessageWindow('edit', $chatId);
+            if (!$this->isWithinWindow($editWindow, (string)$message->created_at)) {
+                $this->json(['error' => 'Edit window has expired'], 403);
+            }
+        }
+
+        $encodedContent = Message::encodeMentionsForChat($chatId, $newContent);
+        Database::query(
+            "UPDATE messages SET content = ?, edited_at = NOW() WHERE id = ?",
+            [$encodedContent, $messageId]
+        );
+
+        $this->json(['success' => true]);
+    }
+
+    public function deleteMessage() {
+        Auth::requireAuth();
+        Auth::csrfValidate();
+
+        $messageId = (int)($_POST['message_id'] ?? 0);
+        $authUser = Auth::user();
+        $currentUserId = (int)$authUser->id;
+        $isAdmin = strtolower((string)($authUser->role ?? '')) === 'admin';
+
+        if ($messageId <= 0) {
+            $this->json(['error' => 'Invalid payload'], 400);
+        }
+
+        $message = Database::query(
+            "SELECT m.id, m.chat_id, m.user_id, m.created_at
+             FROM messages m
+             JOIN chat_members cm ON cm.chat_id = m.chat_id AND cm.user_id = ?
+             WHERE m.id = ?
+             LIMIT 1",
+            [$currentUserId, $messageId]
+        )->fetch();
+        if (!$message) {
+            $this->json(['error' => 'Message not found'], 404);
+        }
+
+        $chatId = (int)$message->chat_id;
+        $chat = Database::query("SELECT id, type FROM chats WHERE id = ?", [$chatId])->fetch();
+        if (!$chat || !Chat::isGroupType($chat->type ?? null)) {
+            $this->json(['error' => 'Deleting is only available in group chats'], 403);
+        }
+
+        $isOwner = (int)$message->user_id === $currentUserId;
+        if (!$isOwner && !$isAdmin) {
+            $this->json(['error' => 'Access denied'], 403);
+        }
+
+        if ($this->messageHasAttachments($messageId)) {
+            $this->json(['error' => 'Cannot delete a message that has attachments'], 403);
+        }
+
+        if (!$isAdmin) {
+            $deleteWindow = $this->getGroupMessageWindow('delete', $chatId);
+            if (!$this->isWithinWindow($deleteWindow, (string)$message->created_at)) {
+                $this->json(['error' => 'Delete window has expired'], 403);
+            }
+        }
+
+        Database::query("DELETE FROM messages WHERE id = ?", [$messageId]);
+
+        $this->json(['success' => true]);
+    }
+
+    public function updateGroupMessageSettings() {
+        Auth::requireAuth();
+        Auth::csrfValidate();
+
+        $chatId = (int)($_POST['chat_id'] ?? 0);
+        $editWindow = trim($_POST['edit_window'] ?? 'never');
+        $deleteWindow = trim($_POST['delete_window'] ?? 'never');
+        $authUser = Auth::user();
+        $currentUserId = (int)$authUser->id;
+        $isAdmin = strtolower((string)($authUser->role ?? '')) === 'admin';
+
+        $allowedValues = ['never', '600', '3600', '86400', 'forever'];
+        if ($chatId <= 0 || !in_array($editWindow, $allowedValues, true) || !in_array($deleteWindow, $allowedValues, true)) {
+            $this->json(['error' => 'Invalid payload'], 400);
+        }
+
+        $chat = Database::query("SELECT id, type, created_by FROM chats WHERE id = ?", [$chatId])->fetch();
+        if (!$chat || !Chat::isGroupType($chat->type ?? null)) {
+            $this->json(['error' => 'Chat not found'], 404);
+        }
+
+        $isGroupOwner = (int)$chat->created_by === $currentUserId;
+        if (!$isGroupOwner && !$isAdmin) {
+            $this->json(['error' => 'Access denied'], 403);
+        }
+
+        $member = Database::query("SELECT id FROM chat_members WHERE chat_id = ? AND user_id = ?", [$chatId, $currentUserId])->fetch();
+        if (!$member) {
+            $this->json(['error' => 'Access denied'], 403);
+        }
+
+        Setting::set($this->getGroupMessageSettingKey('edit', $chatId), $editWindow);
+        Setting::set($this->getGroupMessageSettingKey('delete', $chatId), $deleteWindow);
 
         $this->json(['success' => true]);
     }

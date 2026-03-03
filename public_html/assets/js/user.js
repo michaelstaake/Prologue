@@ -1405,6 +1405,13 @@ function bindChatHeaderMenu() {
             return;
         }
 
+        if (action === 'message-settings') {
+            if (typeof window.openMessageSettingsModal === 'function') {
+                window.openMessageSettingsModal();
+            }
+            return;
+        }
+
         if (action === 'take-ownership') {
             if (typeof window.takeCurrentGroupOwnership === 'function') {
                 await window.takeCurrentGroupOwnership();

@@ -260,6 +260,8 @@ $router->get('/c/{chat_number}', 'ChatController@show');
 $router->post('/api/bot/send', 'ApiKeyController@botSendMessage');
 $router->post('/api/messages', 'ChatController@sendMessage'); // also used by web
 $router->post('/api/messages/react', 'ChatController@reactMessage');
+$router->post('/api/messages/edit', 'ChatController@editMessage');
+$router->post('/api/messages/delete', 'ChatController@deleteMessage');
 $router->post('/api/messages/pin', 'ApiController@pinMessage');
 $router->post('/api/messages/unpin', 'ApiController@unpinMessage');
 $router->post('/api/posts', 'PostController@create');
@@ -275,6 +277,7 @@ $router->post('/api/chats/group/take-ownership', 'ChatController@takeGroupOwners
 $router->post('/api/chats/group/leave', 'ChatController@leaveGroup');
 $router->post('/api/chats/group/delete', 'ChatController@deleteGroup');
 $router->post('/api/chats/rename', 'ChatController@renameChat');
+$router->post('/api/chats/group/message-settings', 'ChatController@updateGroupMessageSettings');
 $router->post('/api/status', 'ApiController@updateStatus');
 
 // Calls

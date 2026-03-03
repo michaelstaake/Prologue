@@ -612,7 +612,8 @@ class ApiController extends Controller {
     public function getMessages($params) {
         Auth::requireAuth();
         $chatId = (int)($params['chat_id'] ?? 0);
-        $userId = Auth::user()->id;
+        $authUser = Auth::user();
+        $userId = $authUser->id;
         $supportsLastSeen = $this->supportsLastSeenMessageId();
 
         $allowed = Database::query("SELECT id FROM chat_members WHERE chat_id = ? AND user_id = ?", [$chatId, $userId])->fetch();
@@ -620,16 +621,20 @@ class ApiController extends Controller {
             $this->json(['error' => 'Access denied'], 403);
         }
 
+        $chatRow = null;
         if ($this->supportsChatSoftDelete()) {
-            $chat = Database::query("SELECT id, deleted_at FROM chats WHERE id = ?", [$chatId])->fetch();
-            if (!$chat || $this->chatIsSoftDeleted($chat)) {
+            $chatRow = Database::query("SELECT id, type, deleted_at FROM chats WHERE id = ?", [$chatId])->fetch();
+            if (!$chatRow || $this->chatIsSoftDeleted($chatRow)) {
                 $this->json(['error' => 'Chat not found'], 404);
             }
+        }
+        if (!$chatRow) {
+            $chatRow = Database::query("SELECT id, type FROM chats WHERE id = ?", [$chatId])->fetch();
         }
 
         try {
             $messages = Database::query(
-                "SELECT m.id, m.chat_id, m.user_id, m.content, m.created_at,
+                "SELECT m.id, m.chat_id, m.user_id, m.content, m.created_at, m.edited_at,
                         m.quoted_message_id, m.quoted_user_id, m.quoted_content, m.bot_name,
                         u.username, u.email AS user_email, u.user_number, u.avatar_filename, u.presence_status, u.last_active_at,
                         qu.username AS quoted_username, qu.user_number AS quoted_user_number
@@ -642,7 +647,7 @@ class ApiController extends Controller {
                 [$chatId]
             )->fetchAll();
         } catch (Throwable $e) {
-            if (stripos($e->getMessage(), 'avatar_filename') === false) {
+            if (stripos($e->getMessage(), 'avatar_filename') === false && stripos($e->getMessage(), 'edited_at') === false) {
                 throw $e;
             }
 
@@ -673,6 +678,26 @@ class ApiController extends Controller {
         Message::attachQuoteMentionMaps($messages);
         Message::attachReactions($messages, (int)$userId);
         Attachment::attachSubmittedToMessages($messages);
+
+        $isGroupChat = Chat::isGroupType($chatRow->type ?? null);
+        $groupEditWindow = 'never';
+        $groupDeleteWindow = 'never';
+        if ($isGroupChat) {
+            $groupEditWindow = (string)(Setting::get('group_edit_window_' . $chatId) ?? 'never');
+            $groupDeleteWindow = (string)(Setting::get('group_delete_window_' . $chatId) ?? 'never');
+
+            $quotedIds = Database::query(
+                "SELECT DISTINCT quoted_message_id FROM messages WHERE chat_id = ? AND quoted_message_id IS NOT NULL",
+                [$chatId]
+            )->fetchAll(PDO::FETCH_COLUMN);
+            $quotedIdSet = array_flip($quotedIds ?: []);
+            foreach ($messages as $msg) {
+                if (!($msg->is_system_event ?? false)) {
+                    $msg->is_quoted = isset($quotedIdSet[(int)$msg->id]);
+                    $msg->has_attachments = !empty($msg->attachments) && is_array($msg->attachments) && count($msg->attachments) > 0;
+                }
+            }
+        }
 
         if ($this->supportsSystemEvents()) {
             $systemEvents = Database::query(
@@ -727,7 +752,12 @@ class ApiController extends Controller {
 
         $pinnedMessage = $this->getPinnedMessageForChat($chatId);
 
-        $this->json(['messages' => $messages, 'typing_users' => $typingUsers, 'pinned_message' => $pinnedMessage]);
+        $response = ['messages' => $messages, 'typing_users' => $typingUsers, 'pinned_message' => $pinnedMessage];
+        if ($isGroupChat) {
+            $response['group_edit_window'] = $groupEditWindow;
+            $response['group_delete_window'] = $groupDeleteWindow;
+        }
+        $this->json($response);
     }
 
     public function pinMessage() {

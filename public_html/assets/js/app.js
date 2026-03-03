@@ -543,7 +543,10 @@ async function init() {
             personal_user_id: Number(chatView.dataset.personalUserId || 0),
             can_send_messages: String(chatView.dataset.canSendMessages || '1') === '1',
             message_restriction_reason: String(chatView.dataset.messageRestrictionReason || ''),
-            can_start_calls: String(chatView.dataset.canStartCalls || '1') === '1'
+            can_start_calls: String(chatView.dataset.canStartCalls || '1') === '1',
+            is_admin: String(chatView.dataset.isAdmin || '0') === '1',
+            group_edit_window: String(chatView.dataset.groupEditWindow || 'never'),
+            group_delete_window: String(chatView.dataset.groupDeleteWindow || 'never')
         };
 
         // Extract usernames for call overlay labels
@@ -567,6 +570,9 @@ async function init() {
         bindLeaveGroupModal();
         bindDeleteGroupModal();
         bindTakeOwnershipModal();
+        bindMessageSettingsModal();
+        bindDeleteMessageModal();
+        bindMessageEditAndDelete();
         bindChatHeaderMenu();
         bindMessageQuotesAndReactions();
         maybePromptForNewGroupName();

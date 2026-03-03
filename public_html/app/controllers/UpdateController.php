@@ -64,6 +64,9 @@ class UpdateController extends Controller {
                     KEY idx_totp_recovery_user (user_id)
                 )",
             ],
+            '0.1.3' => [
+                "ALTER TABLE messages ADD COLUMN edited_at TIMESTAMP NULL AFTER created_at",
+            ],
         ];
     }
 
