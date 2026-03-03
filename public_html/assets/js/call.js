@@ -10,6 +10,7 @@ const CALL_OVERLAY_STORAGE_KEY = 'prologue.activeCallOverlayMode';
 const CALL_PREFERRED_MIC_KEY = 'prologue.preferredMicDeviceId';
 const CALL_PREFERRED_CAMERA_KEY = 'prologue.preferredCameraDeviceId';
 const CALL_MIC_VOLUME_KEY = 'prologue.micVolume';
+const CALL_SPEAKER_VOLUME_KEY = 'prologue.speakerVolume';
 const CALL_SELF_FOCUS_PEER_ID = -1;
 let micGainNode = null;
 let micGainSource = null;
@@ -1450,6 +1451,16 @@ function getSavedMicVolume() {
     return 1.0;
 }
 
+function getSavedSpeakerVolume() {
+    const saved = localStorage.getItem(CALL_SPEAKER_VOLUME_KEY);
+    if (saved !== null) return parseFloat(saved);
+    return 1.0;
+}
+
+function applyRemoteSpeakerVolume(vol) {
+    remoteAudioElements.forEach(el => { el.volume = vol; });
+}
+
 function setupMicGainPipeline(rawStream) {
     teardownMicGainPipeline();
     const ctx = getOrCreateAudioContext();
@@ -1542,6 +1553,15 @@ function openCallSettingsModal() {
             const vol = this.value / 100;
             localStorage.setItem(CALL_MIC_VOLUME_KEY, String(vol));
             if (micGainNode) micGainNode.gain.value = vol;
+        };
+    }
+    const speakerSlider = document.getElementById('call-settings-speaker-volume');
+    if (speakerSlider) {
+        speakerSlider.value = Math.round(getSavedSpeakerVolume() * 100);
+        speakerSlider.oninput = function() {
+            const vol = this.value / 100;
+            localStorage.setItem(CALL_SPEAKER_VOLUME_KEY, String(vol));
+            applyRemoteSpeakerVolume(vol);
         };
     }
     startSettingsLevelMeter();
@@ -1859,7 +1879,7 @@ function ensureRemoteAudioElement(peerId) {
     audioElement.playsInline = true;
     audioElement.controls = false;
     audioElement.muted = false;
-    audioElement.volume = 1;
+    audioElement.volume = getSavedSpeakerVolume();
     audioElement.dataset.peerId = String(peerId);
     audioElement.className = 'fixed w-px h-px opacity-0 pointer-events-none -z-10';
     document.body.appendChild(audioElement);
