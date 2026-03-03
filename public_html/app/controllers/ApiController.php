@@ -685,17 +685,17 @@ class ApiController extends Controller {
         if ($isGroupChat) {
             $groupEditWindow = (string)(Setting::get('group_edit_window_' . $chatId) ?? 'never');
             $groupDeleteWindow = (string)(Setting::get('group_delete_window_' . $chatId) ?? 'never');
+        }
 
-            $quotedIds = Database::query(
-                "SELECT DISTINCT quoted_message_id FROM messages WHERE chat_id = ? AND quoted_message_id IS NOT NULL",
-                [$chatId]
-            )->fetchAll(PDO::FETCH_COLUMN);
-            $quotedIdSet = array_flip($quotedIds ?: []);
-            foreach ($messages as $msg) {
-                if (!($msg->is_system_event ?? false)) {
-                    $msg->is_quoted = isset($quotedIdSet[(int)$msg->id]);
-                    $msg->has_attachments = !empty($msg->attachments) && is_array($msg->attachments) && count($msg->attachments) > 0;
-                }
+        $quotedIds = Database::query(
+            "SELECT DISTINCT quoted_message_id FROM messages WHERE chat_id = ? AND quoted_message_id IS NOT NULL",
+            [$chatId]
+        )->fetchAll(PDO::FETCH_COLUMN);
+        $quotedIdSet = array_flip($quotedIds ?: []);
+        foreach ($messages as $msg) {
+            if (!($msg->is_system_event ?? false)) {
+                $msg->is_quoted = isset($quotedIdSet[(int)$msg->id]);
+                $msg->has_attachments = !empty($msg->attachments) && is_array($msg->attachments) && count($msg->attachments) > 0;
             }
         }
 

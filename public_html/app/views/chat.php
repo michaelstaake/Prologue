@@ -458,11 +458,11 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                             <?php endif; ?>
                             <div class="flex items-center gap-3 md:opacity-0 md:group-hover:opacity-100 md:pointer-events-none md:group-hover:pointer-events-auto md:transition-opacity md:duration-150 md:ease-out">
                                 <button type="button" class="text-zinc-400 hover:text-zinc-300 js-quote-link" title="Quote" aria-label="Quote" data-quote-message-id="<?= (int)$message->id ?>" data-quote-username="<?= htmlspecialchars((string)$message->username, ENT_QUOTES, 'UTF-8') ?>" data-quote-user-number="<?= htmlspecialchars((string)$message->user_number, ENT_QUOTES, 'UTF-8') ?>" data-quote-content="<?= htmlspecialchars((string)$message->content, ENT_QUOTES, 'UTF-8') ?>" data-quote-mention-map="<?= htmlspecialchars($mentionMapJson, ENT_QUOTES, 'UTF-8') ?>"><i class="fa-solid fa-reply" aria-hidden="true"></i></button>
-                                <?php if ($isGroupChat && !empty($message->is_quoted) === false): ?>
+                                <?php if (empty($message->is_quoted)): ?>
                                     <?php
                                         $canEditThis = false;
                                         if ((int)$message->user_id === (int)$currentUserId || $isCurrentUserAdmin) {
-                                            if ($isCurrentUserAdmin) {
+                                            if ($isPersonalChat || $isCurrentUserAdmin) {
                                                 $canEditThis = true;
                                             } else {
                                                 $ew = $groupEditWindow ?? 'never';
@@ -475,11 +475,11 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                                     <button type="button" class="text-zinc-400 hover:text-zinc-300 js-edit-link" title="Edit" aria-label="Edit" data-edit-message-id="<?= (int)$message->id ?>"><i class="fa-solid fa-pen" aria-hidden="true"></i></button>
                                     <?php endif; ?>
                                 <?php endif; ?>
-                                <?php if ($isGroupChat && empty($message->has_attachments)): ?>
+                                <?php if (empty($message->is_quoted) && empty($message->has_attachments)): ?>
                                     <?php
                                         $canDeleteThis = false;
                                         if ((int)$message->user_id === (int)$currentUserId || $isCurrentUserAdmin) {
-                                            if ($isCurrentUserAdmin) {
+                                            if ($isPersonalChat || $isCurrentUserAdmin) {
                                                 $canDeleteThis = true;
                                             } else {
                                                 $dw = $groupDeleteWindow ?? 'never';
@@ -732,6 +732,8 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
 </div>
 <?php endif; ?>
 
+<?php endif; ?>
+
 <div id="delete-message-modal" class="hidden fixed inset-0 bg-black/70 z-50 p-4 md:p-6" aria-hidden="true">
     <div class="h-full w-full flex items-center justify-center">
         <div class="w-full max-w-md bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl p-6" role="dialog" aria-modal="true" aria-labelledby="delete-message-modal-title">
@@ -747,8 +749,6 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
         </div>
     </div>
 </div>
-
-<?php endif; ?>
 
 <div id="attachment-lightbox" class="hidden fixed inset-0 bg-black/90 z-50 p-6">
     <button type="button" id="attachment-lightbox-close" class="absolute top-5 right-5 text-zinc-200 hover:text-white text-2xl" aria-label="Close image preview">

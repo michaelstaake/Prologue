@@ -3357,13 +3357,11 @@ function renderMessages(messages, options = {}) {
 
         let editButton = '';
         let deleteButton = '';
-        if (normalizeChatType(currentChat?.type) === 'group') {
-            if (canEditMessage(msg, isQuoted)) {
-                editButton = `<button type="button" class="text-zinc-400 hover:text-zinc-300 js-edit-link" title="Edit" aria-label="Edit" data-edit-message-id="${Number(msg.id)}"><i class="fa-solid fa-pen" aria-hidden="true"></i></button>`;
-            }
-            if (canDeleteMessage(msg, hasAttachments)) {
-                deleteButton = `<button type="button" class="text-zinc-400 hover:text-zinc-300 js-delete-link" title="Delete" aria-label="Delete" data-delete-message-id="${Number(msg.id)}"><i class="fa-solid fa-trash" aria-hidden="true"></i></button>`;
-            }
+        if (canEditMessage(msg, isQuoted)) {
+            editButton = `<button type="button" class="text-zinc-400 hover:text-zinc-300 js-edit-link" title="Edit" aria-label="Edit" data-edit-message-id="${Number(msg.id)}"><i class="fa-solid fa-pen" aria-hidden="true"></i></button>`;
+        }
+        if (canDeleteMessage(msg, hasAttachments)) {
+            deleteButton = `<button type="button" class="text-zinc-400 hover:text-zinc-300 js-delete-link" title="Delete" aria-label="Delete" data-delete-message-id="${Number(msg.id)}"><i class="fa-solid fa-trash" aria-hidden="true"></i></button>`;
         }
 
         chunks.push(`
@@ -3440,22 +3438,24 @@ function isWithinWindow(windowValue, createdAt) {
 }
 
 function canEditMessage(msg, isQuoted) {
-    if (!currentChat || normalizeChatType(currentChat.type) !== 'group') return false;
+    if (!currentChat) return false;
     if (isQuoted) return false;
     const isOwn = Number(msg.user_id) === Number(currentUserId);
     const isAdmin = !!(currentChat.is_admin);
     if (!isOwn && !isAdmin) return false;
-    if (isAdmin) return true;
+    const isPersonal = normalizeChatType(currentChat.type) === 'personal';
+    if (isPersonal || isAdmin) return true;
     return isWithinWindow(currentChat.group_edit_window || 'never', String(msg.created_at || ''));
 }
 
 function canDeleteMessage(msg, hasAttachments) {
-    if (!currentChat || normalizeChatType(currentChat.type) !== 'group') return false;
-    if (hasAttachments) return false;
+    if (!currentChat) return false;
+    if (msg?.is_quoted || hasAttachments) return false;
     const isOwn = Number(msg.user_id) === Number(currentUserId);
     const isAdmin = !!(currentChat.is_admin);
     if (!isOwn && !isAdmin) return false;
-    if (isAdmin) return true;
+    const isPersonal = normalizeChatType(currentChat.type) === 'personal';
+    if (isPersonal || isAdmin) return true;
     return isWithinWindow(currentChat.group_delete_window || 'never', String(msg.created_at || ''));
 }
 

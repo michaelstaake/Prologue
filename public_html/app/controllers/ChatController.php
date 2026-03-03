@@ -396,17 +396,17 @@ class ChatController extends Controller {
         if (Chat::isGroupType($chat->type ?? null)) {
             $groupEditWindow = $this->getGroupMessageWindow('edit', (int)$chat->id);
             $groupDeleteWindow = $this->getGroupMessageWindow('delete', (int)$chat->id);
+        }
 
-            $quotedIds = Database::query(
-                "SELECT DISTINCT quoted_message_id FROM messages WHERE chat_id = ? AND quoted_message_id IS NOT NULL",
-                [(int)$chat->id]
-            )->fetchAll(PDO::FETCH_COLUMN);
-            $quotedIdSet = array_flip($quotedIds ?: []);
-            foreach ($messages as $message) {
-                if (!($message->is_system_event ?? false)) {
-                    $message->is_quoted = isset($quotedIdSet[(int)$message->id]);
-                    $message->has_attachments = !empty($message->attachments) && is_array($message->attachments) && count($message->attachments) > 0;
-                }
+        $quotedIds = Database::query(
+            "SELECT DISTINCT quoted_message_id FROM messages WHERE chat_id = ? AND quoted_message_id IS NOT NULL",
+            [(int)$chat->id]
+        )->fetchAll(PDO::FETCH_COLUMN);
+        $quotedIdSet = array_flip($quotedIds ?: []);
+        foreach ($messages as $message) {
+            if (!($message->is_system_event ?? false)) {
+                $message->is_quoted = isset($quotedIdSet[(int)$message->id]);
+                $message->has_attachments = !empty($message->attachments) && is_array($message->attachments) && count($message->attachments) > 0;
             }
         }
 
@@ -1405,10 +1405,11 @@ class ChatController extends Controller {
 
         $chatId = (int)$message->chat_id;
         $chat = Database::query("SELECT id, type FROM chats WHERE id = ?", [$chatId])->fetch();
-        if (!$chat || !Chat::isGroupType($chat->type ?? null)) {
-            $this->json(['error' => 'Editing is only available in group chats'], 403);
+        if (!$chat) {
+            $this->json(['error' => 'Chat not found'], 404);
         }
 
+        $isGroupChat = Chat::isGroupType($chat->type ?? null);
         $isOwner = (int)$message->user_id === $currentUserId;
         if (!$isOwner && !$isAdmin) {
             $this->json(['error' => 'Access denied'], 403);
@@ -1418,7 +1419,7 @@ class ChatController extends Controller {
             $this->json(['error' => 'Cannot edit a message that has been quoted'], 403);
         }
 
-        if (!$isAdmin) {
+        if ($isGroupChat && !$isAdmin) {
             $editWindow = $this->getGroupMessageWindow('edit', $chatId);
             if (!$this->isWithinWindow($editWindow, (string)$message->created_at)) {
                 $this->json(['error' => 'Edit window has expired'], 403);
@@ -1461,20 +1462,25 @@ class ChatController extends Controller {
 
         $chatId = (int)$message->chat_id;
         $chat = Database::query("SELECT id, type FROM chats WHERE id = ?", [$chatId])->fetch();
-        if (!$chat || !Chat::isGroupType($chat->type ?? null)) {
-            $this->json(['error' => 'Deleting is only available in group chats'], 403);
+        if (!$chat) {
+            $this->json(['error' => 'Chat not found'], 404);
         }
 
+        $isGroupChat = Chat::isGroupType($chat->type ?? null);
         $isOwner = (int)$message->user_id === $currentUserId;
         if (!$isOwner && !$isAdmin) {
             $this->json(['error' => 'Access denied'], 403);
+        }
+
+        if ($this->messageIsQuoted($messageId, $chatId)) {
+            $this->json(['error' => 'Cannot delete a message that has been quoted'], 403);
         }
 
         if ($this->messageHasAttachments($messageId)) {
             $this->json(['error' => 'Cannot delete a message that has attachments'], 403);
         }
 
-        if (!$isAdmin) {
+        if ($isGroupChat && !$isAdmin) {
             $deleteWindow = $this->getGroupMessageWindow('delete', $chatId);
             if (!$this->isWithinWindow($deleteWindow, (string)$message->created_at)) {
                 $this->json(['error' => 'Delete window has expired'], 403);
