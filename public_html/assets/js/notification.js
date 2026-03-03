@@ -1283,64 +1283,6 @@ function shouldSuppressNotificationToast(notification) {
     return notificationChatNumber !== '' && notificationChatNumber === currentChatNumber;
 }
 
-function clearAcceptedCallNotifications() {
-    if (!currentChat) return;
-
-    const currentChatNumber = String(currentChat.chat_number || '').replace(/\D/g, '');
-    if (!currentChatNumber) return;
-
-    let removedUnread = 0;
-
-    toastHistory = toastHistory.filter((toast) => {
-        const metadata = toast?.metadata || {};
-        const type = String(metadata.type || '').toLowerCase();
-        if (type !== 'call') {
-            return true;
-        }
-
-        const link = String(metadata.link || '');
-        const linkMatch = link.match(/\/c\/([^/?#]+)/);
-        const notificationChatNumber = linkMatch ? linkMatch[1].replace(/\D/g, '') : '';
-        const isCurrentChatCall = notificationChatNumber !== '' && notificationChatNumber === currentChatNumber;
-
-        if (!isCurrentChatCall) {
-            return true;
-        }
-
-        if (metadata.notificationId) {
-            removedUnread += 1;
-        }
-
-        clearActiveToastPopup(toast.id);
-        return false;
-    });
-
-    for (const [toastId, activeToast] of activeToastPopups.entries()) {
-        const metadata = activeToast?.metadata || {};
-        const type = String(metadata.type || '').toLowerCase();
-        if (type !== 'call') continue;
-
-        const link = String(metadata.link || '');
-        const linkMatch = link.match(/\/c\/([^/?#]+)/);
-        const notificationChatNumber = linkMatch ? linkMatch[1].replace(/\D/g, '') : '';
-        const isCurrentChatCall = notificationChatNumber !== '' && notificationChatNumber === currentChatNumber;
-
-        if (!isCurrentChatCall) continue;
-
-        if (metadata.notificationId) {
-            removedUnread += 1;
-        }
-
-        clearActiveToastPopup(toastId);
-    }
-
-    if (removedUnread > 0) {
-        unreadNotificationCount = Math.max(0, unreadNotificationCount - removedUnread);
-        updateNotificationCountInTitle(unreadNotificationCount);
-    }
-
-    renderToastHistory();
-}
 
 function setTwofaSettingsStatus(text, kind) {
     var statusEl = document.getElementById('twofa-settings-status');

@@ -148,7 +148,7 @@ async function declineIncomingCallById(callId) {
 
     declinedCallId = declinedId;
     stopCallRingingAudio();
-    clearAcceptedCallNotifications();
+
 
     const result = await postForm('/api/calls/decline', {
         csrf_token: getCsrfToken(),
@@ -2870,7 +2870,7 @@ async function acceptCall() {
     // so a poll firing during that window can't restart the audio.
     declinedCallId = lastIncomingCallAlertId;
     stopCallRingingAudio();
-    clearAcceptedCallNotifications();
+
     declinedCallId = 0;
     ensureCurrentChatContext(globalCallContext);
     await startVoiceCall();
@@ -2886,7 +2886,7 @@ async function joinCall() {
     declinedCallId = 0;
     lastIncomingCallAlertId = joinId;
     stopCallRingingAudio();
-    clearAcceptedCallNotifications();
+
     ensureCurrentChatContext(globalCallContext);
     await startVoiceCall();
 }

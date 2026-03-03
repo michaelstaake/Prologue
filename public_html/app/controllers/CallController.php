@@ -61,14 +61,6 @@ class CallController extends Controller {
         }
     }
 
-    private function clearCallNotificationsForUser(int $userId, string $chatNumber): void {
-        $callLink = '/c/' . User::formatUserNumber($chatNumber);
-        Database::query(
-            "DELETE FROM notifications WHERE user_id = ? AND type = 'call' AND link = ?",
-            [$userId, $callLink]
-        );
-    }
-
     private function ensureCallSignalTableExists(): void {
         Database::query(
             "CREATE TABLE IF NOT EXISTS call_signals (
@@ -233,8 +225,6 @@ class CallController extends Controller {
             $this->enforceCallCapacityOrFail($activeCallId, (int)$userId);
             $this->upsertActiveParticipant($activeCallId, (int)$userId, 0);
 
-            $this->clearCallNotificationsForUser((int)$userId, (string)$chat->chat_number);
-
             $this->json(['call_id' => $activeCallId, 'joined_existing' => true]);
         }
 
@@ -243,11 +233,6 @@ class CallController extends Controller {
 
         // Add starter as participant
         $this->upsertActiveParticipant((int)$callId, (int)$userId, 0);
-
-        $members = Database::query("SELECT user_id FROM chat_members WHERE chat_id = ? AND user_id != ?", [$chatId, $userId])->fetchAll();
-        foreach ($members as $m) {
-            Notification::create($m->user_id, 'call', 'Incoming Call', Auth::user()->username . ' started a call', '/c/' . User::formatUserNumber($chat->chat_number));
-        }
 
         $this->json(['call_id' => $callId, 'joined_existing' => false]);
     }
@@ -358,9 +343,6 @@ class CallController extends Controller {
                AND user_id = ?",
             [$callId, $userId]
         );
-
-        $chatNumber = (string)$call->chat_number;
-        $this->clearCallNotificationsForUser($userId, $chatNumber);
 
         $ended = false;
         if (!Chat::isGroupType($call->chat_type ?? null) && (string)($call->status ?? '') === 'active') {
