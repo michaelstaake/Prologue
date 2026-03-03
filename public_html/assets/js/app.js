@@ -595,11 +595,22 @@ function normalizeAttachment(attachment) {
         file_size: Number(attachment.file_size || 0),
         width: Number(attachment.width || 0),
         height: Number(attachment.height || 0),
-        url: String(attachment.url || '')
+        url: String(attachment.url || ''),
+        expires_at: String(attachment.expires_at || ''),
+        expiry_seconds: Number(attachment.expiry_seconds || 0),
+        is_deleted: Boolean(attachment.is_deleted),
+        delete_reason: String(attachment.delete_reason || '')
     };
 }
 
-function renderMessageAttachments(attachments) {
+function formatAttachmentExpiryLabel(expirySeconds) {
+    const seconds = Number(expirySeconds || 0);
+    if (seconds === 3600) return '1h';
+    if (seconds === 86400) return '24h';
+    return 'None';
+}
+
+function renderMessageAttachments(attachments, canDelete = false) {
     if (!Array.isArray(attachments) || attachments.length === 0) {
         return '';
     }
@@ -608,8 +619,24 @@ function renderMessageAttachments(attachments) {
         .map(normalizeAttachment)
         .filter(Boolean)
         .map((attachment) => {
+            if (attachment.is_deleted) {
+                const reason = attachment.delete_reason === 'expired' ? 'Expired attachment' : 'Deleted attachment';
+                return `
+                    <div class="w-44 bg-zinc-800/70 border border-zinc-700 rounded-xl p-2">
+                        <div class="w-full h-24 rounded-lg border border-zinc-700 bg-zinc-900/70 flex flex-col items-center justify-center gap-1.5">
+                            <i class="fa-solid fa-file-circle-xmark text-2xl text-zinc-500"></i>
+                            <span class="text-xs text-zinc-400 text-center px-2">${escapeHtml(reason)}</span>
+                        </div>
+                        <div class="mt-2 text-xs text-zinc-500 truncate" title="${escapeHtml(attachment.original_name)}">${escapeHtml(attachment.original_name)}</div>
+                    </div>
+                `;
+            }
+
             const category = getAttachmentCategory(attachment.file_extension);
             const downloadAttr = escapeHtml(attachment.original_name || `${attachment.file_name}.${attachment.file_extension}`);
+            const deleteButton = canDelete
+                ? `<button type="button" class="text-red-300 hover:text-red-200 js-attachment-delete" data-attachment-id="${attachment.id}" title="Delete attachment" aria-label="Delete attachment"><i class="fa-solid fa-trash"></i></button>`
+                : '';
 
             if (category === 'image') {
                 return `
@@ -624,9 +651,12 @@ function renderMessageAttachments(attachments) {
                         </button>
                         <div class="mt-2 text-xs text-zinc-400 flex items-center justify-between gap-2">
                             <span>${escapeHtml(formatFileSize(attachment.file_size))}</span>
-                            <a href="${escapeHtml(attachment.url)}" download="${downloadAttr}" class="text-zinc-300 hover:text-zinc-100" title="Download">
-                                <i class="fa-solid fa-download"></i>
-                            </a>
+                            <div class="flex items-center gap-2">
+                                ${deleteButton}
+                                <a href="${escapeHtml(attachment.url)}" download="${downloadAttr}" class="text-zinc-300 hover:text-zinc-100" title="Download">
+                                    <i class="fa-solid fa-download"></i>
+                                </a>
+                            </div>
                         </div>
                     </div>
                 `;
@@ -642,9 +672,12 @@ function renderMessageAttachments(attachments) {
                     </a>
                     <div class="mt-2 text-xs text-zinc-400 flex items-center justify-between gap-2">
                         <span class="truncate" title="${escapeHtml(attachment.original_name)}">${escapeHtml(attachment.original_name)}</span>
-                        <a href="${escapeHtml(attachment.url)}" download="${downloadAttr}" class="text-zinc-300 hover:text-zinc-100 shrink-0" title="Download">
-                            <i class="fa-solid fa-download"></i>
-                        </a>
+                        <div class="flex items-center gap-2 shrink-0">
+                            ${deleteButton}
+                            <a href="${escapeHtml(attachment.url)}" download="${downloadAttr}" class="text-zinc-300 hover:text-zinc-100" title="Download">
+                                <i class="fa-solid fa-download"></i>
+                            </a>
+                        </div>
                     </div>
                 </div>
             `;

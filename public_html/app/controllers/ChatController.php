@@ -547,6 +547,7 @@ class ChatController extends Controller {
 
         $messages = [];
         if ($isMember || $isReadOnlyPublicViewer) {
+            Attachment::cleanupExpiredForChat((int)$chat->id);
             try {
                 $messages = Database::query(
                     "SELECT m.*, u.username, u.email AS user_email, u.user_number, u.avatar_filename, u.presence_status, u.last_active_at,
@@ -806,6 +807,7 @@ class ChatController extends Controller {
         Auth::csrfValidate();
 
         $chatId = (int)($_POST['chat_id'] ?? 0);
+        $expirySeconds = Attachment::normalizeExpirySeconds($_POST['expiry_seconds'] ?? 0);
         $user = Auth::user();
         $userId = (int)$user->id;
 
@@ -843,7 +845,7 @@ class ChatController extends Controller {
             $this->json(['error' => 'No file uploaded'], 400);
         }
 
-        $result = Attachment::createPendingFromUpload($chatId, $user, $_FILES['attachment']);
+        $result = Attachment::createPendingFromUpload($chatId, $user, $_FILES['attachment'], $expirySeconds);
         if (!empty($result['success'])) {
             $this->json($result);
         }
@@ -856,18 +858,85 @@ class ChatController extends Controller {
         Auth::csrfValidate();
 
         $attachmentId = (int)($_POST['attachment_id'] ?? 0);
+        $authUser = Auth::user();
+        $userId = (int)$authUser->id;
+        $isAdmin = strtolower((string)($authUser->role ?? '')) === 'admin';
+
+        if ($attachmentId <= 0) {
+            $this->json(['error' => 'Invalid payload'], 400);
+        }
+
+        $attachment = Database::query(
+            "SELECT a.id, a.chat_id, a.user_id, a.message_id, a.status, a.submitted_at, m.created_at AS message_created_at, c.type
+             FROM attachments a
+             JOIN chat_members cm ON cm.chat_id = a.chat_id AND cm.user_id = ?
+             JOIN chats c ON c.id = a.chat_id
+             LEFT JOIN messages m ON m.id = a.message_id
+             WHERE a.id = ?
+             LIMIT 1",
+            [$userId, $attachmentId]
+        )->fetch();
+
+        if (!$attachment) {
+            $this->json(['error' => 'Attachment not found'], 404);
+        }
+
+        $isOwner = (int)$attachment->user_id === $userId;
+        if ($attachment->status === 'pending') {
+            if (!$isOwner) {
+                $this->json(['error' => 'Access denied'], 403);
+            }
+
+            $deleted = Attachment::deletePendingByIdForUser($attachmentId, $userId);
+            if (!$deleted) {
+                $this->json(['error' => 'Attachment not found'], 404);
+            }
+
+            $this->json(['success' => true]);
+        }
+
+        if ($attachment->status !== 'submitted') {
+            $this->json(['error' => 'Attachment not found'], 404);
+        }
+
+        if (!$isOwner && !$isAdmin) {
+            $this->json(['error' => 'Access denied'], 403);
+        }
+
+        $isGroupChat = Chat::isGroupType($attachment->type ?? null);
+        if ($isGroupChat && !$isAdmin) {
+            $deleteWindow = $this->getGroupMessageWindow('delete', (int)$attachment->chat_id);
+            $attachmentTimestamp = (string)($attachment->message_created_at ?? $attachment->submitted_at ?? '');
+            if (!$this->isWithinWindow($deleteWindow, $attachmentTimestamp)) {
+                $this->json(['error' => 'Delete window has expired'], 403);
+            }
+        }
+
+        if (!Attachment::deleteSubmittedById($attachmentId, 'manual')) {
+            $this->json(['error' => 'Unable to delete attachment'], 500);
+        }
+
+        $this->json(['success' => true]);
+    }
+
+    public function updateAttachmentExpiry() {
+        Auth::requireAuth();
+        Auth::csrfValidate();
+
+        $attachmentId = (int)($_POST['attachment_id'] ?? 0);
+        $expirySeconds = Attachment::normalizeExpirySeconds($_POST['expiry_seconds'] ?? 0);
         $userId = (int)Auth::user()->id;
 
         if ($attachmentId <= 0) {
             $this->json(['error' => 'Invalid payload'], 400);
         }
 
-        $deleted = Attachment::deletePendingByIdForUser($attachmentId, $userId);
-        if (!$deleted) {
+        $updated = Attachment::updatePendingExpiryForUser($attachmentId, $userId, $expirySeconds);
+        if (!$updated) {
             $this->json(['error' => 'Attachment not found'], 404);
         }
 
-        $this->json(['success' => true]);
+        $this->json(['success' => true, 'expiry_seconds' => $expirySeconds]);
     }
 
     public function getMessages($params) {
@@ -888,6 +957,8 @@ class ChatController extends Controller {
                 $this->json(['error' => 'Chat not found'], 404);
             }
         }
+
+        Attachment::cleanupExpiredForChat($chatId);
 
         $lastSeenMessageId = $supportsLastSeen ? (int)($member->last_seen_message_id ?? 0) : 0;
 
@@ -2217,13 +2288,6 @@ class ChatController extends Controller {
         )->fetch();
     }
 
-    private function messageHasAttachments(int $messageId): bool {
-        return (bool)Database::query(
-            "SELECT 1 FROM attachments WHERE message_id = ? AND status = 'submitted' LIMIT 1",
-            [$messageId]
-        )->fetch();
-    }
-
     public function editMessage() {
         Auth::requireAuth();
         Auth::csrfValidate();
@@ -2327,15 +2391,15 @@ class ChatController extends Controller {
             $this->json(['error' => 'Cannot delete a message that has been quoted'], 403);
         }
 
-        if ($this->messageHasAttachments($messageId)) {
-            $this->json(['error' => 'Cannot delete a message that has attachments'], 403);
-        }
-
         if ($isGroupChat && !$isAdmin) {
             $deleteWindow = $this->getGroupMessageWindow('delete', $chatId);
             if (!$this->isWithinWindow($deleteWindow, (string)$message->created_at)) {
                 $this->json(['error' => 'Delete window has expired'], 403);
             }
+        }
+
+        if (!Attachment::deleteSubmittedForMessage($messageId)) {
+            $this->json(['error' => 'Unable to delete attachments for this message'], 500);
         }
 
         Database::query("DELETE FROM messages WHERE id = ?", [$messageId]);

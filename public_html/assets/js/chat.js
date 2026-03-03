@@ -1358,9 +1358,17 @@ function renderPendingAttachmentList() {
             <div class="bg-zinc-800/70 border border-zinc-700 rounded-xl p-2">
                 ${preview}
                 <div class="mt-2 text-xs text-zinc-400 truncate" title="${escapeHtml(attachment.original_name)}">${escapeHtml(attachment.original_name)}</div>
+                <div class="mt-1.5 flex items-center justify-between gap-2">
+                    <label class="text-[11px] text-zinc-500" for="pending-attachment-expiry-${attachment.id}">Expiry</label>
+                    <select id="pending-attachment-expiry-${attachment.id}" class="bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-[11px] text-zinc-200" data-attachment-expiry="${attachment.id}">
+                        <option value="0" ${Number(attachment.expiry_seconds || 0) === 0 ? 'selected' : ''}>None</option>
+                        <option value="3600" ${Number(attachment.expiry_seconds || 0) === 3600 ? 'selected' : ''}>1 hour</option>
+                        <option value="86400" ${Number(attachment.expiry_seconds || 0) === 86400 ? 'selected' : ''}>24 hours</option>
+                    </select>
+                </div>
                 <div class="mt-1 text-xs text-zinc-500 flex items-center justify-between gap-2">
-                    <span>${escapeHtml(formatFileSize(attachment.file_size))}</span>
-                    <button type="button" class="text-red-300 hover:text-red-200" data-attachment-delete="${attachment.id}">
+                    <span>${escapeHtml(formatFileSize(attachment.file_size))} · ${escapeHtml(formatAttachmentExpiryLabel(attachment.expiry_seconds || 0))}</span>
+                    <button type="button" class="text-red-300 hover:text-red-200" data-attachment-delete="${attachment.id}" title="Delete pending attachment" aria-label="Delete pending attachment">
                         <i class="fa-solid fa-trash"></i>
                     </button>
                 </div>
@@ -1369,7 +1377,7 @@ function renderPendingAttachmentList() {
     }).join('');
 }
 
-async function uploadAttachmentFile(file) {
+async function uploadAttachmentFile(file, expirySeconds = 0) {
     if (!currentChat) return;
     if (normalizeChatType(currentChat.type) === 'personal' && currentChat.can_send_messages === false) {
         showToast(getPersonalChatMessageRestrictionToast(currentChat.message_restriction_reason), 'error');
@@ -1380,6 +1388,7 @@ async function uploadAttachmentFile(file) {
     formData.append('csrf_token', getCsrfToken());
     formData.append('chat_id', String(currentChat.id));
     formData.append('attachment', file);
+    formData.append('expiry_seconds', String(Number(expirySeconds || 0)));
 
     const response = await fetch('/api/attachments/upload', {
         method: 'POST',
@@ -1435,6 +1444,31 @@ async function deletePendingAttachment(attachmentId) {
     renderPendingAttachmentList();
 }
 
+async function updatePendingAttachmentExpiry(attachmentId, expirySeconds) {
+    const id = Number(attachmentId || 0);
+    const seconds = Number(expirySeconds || 0);
+    if (!Number.isFinite(id) || id <= 0) return;
+    if (![0, 3600, 86400].includes(seconds)) return;
+
+    const result = await postForm('/api/attachments/expiry', {
+        csrf_token: getCsrfToken(),
+        attachment_id: String(id),
+        expiry_seconds: String(seconds)
+    });
+
+    if (!result.success) {
+        showToast(result.error || 'Unable to update attachment expiry', 'error');
+        renderPendingAttachmentList();
+        return;
+    }
+
+    pendingAttachments = pendingAttachments.map((attachment) => {
+        if (Number(attachment.id) !== id) return attachment;
+        return { ...attachment, expiry_seconds: seconds };
+    });
+    renderPendingAttachmentList();
+}
+
 function bindAttachmentsDrawer() {
     const toggle = document.getElementById('attachments-toggle');
     const drawer = document.getElementById('attachments-drawer');
@@ -1473,7 +1507,7 @@ function bindAttachmentsDrawer() {
         if (files.length === 0) return;
 
         for (const file of files) {
-            await uploadAttachmentFile(file);
+            await uploadAttachmentFile(file, 0);
         }
 
         input.value = '';
@@ -1485,6 +1519,16 @@ function bindAttachmentsDrawer() {
         event.preventDefault();
         deletePendingAttachment(deleteButton.getAttribute('data-attachment-delete')).catch(() => {
             showToast('Unable to delete attachment', 'error');
+        });
+    });
+
+    list.addEventListener('change', (event) => {
+        const select = event.target.closest('[data-attachment-expiry]');
+        if (!select) return;
+        const attachmentId = Number(select.getAttribute('data-attachment-expiry') || 0);
+        const expirySeconds = Number(select.value || 0);
+        updatePendingAttachmentExpiry(attachmentId, expirySeconds).catch(() => {
+            showToast('Unable to update attachment expiry', 'error');
         });
     });
 
@@ -3662,6 +3706,7 @@ function renderMessages(messages, options = {}) {
         const editedAt = String(msg?.edited_at || '');
         const isQuoted = !!(msg?.is_quoted);
         const hasAttachments = Array.isArray(msg?.attachments) && msg.attachments.length > 0;
+        const canDeleteAttachments = canDeleteAttachmentFromMessage(msg);
         const isGroupReadOnlyViewer = normalizeChatType(currentChat?.type) === 'group' && !Boolean(currentChat?.is_group_member);
         const canReplyToMessage = !isGroupReadOnlyViewer && !isCurrentUserGroupMuted();
         const canPinMessage = !isGroupReadOnlyViewer && canCurrentUserPinMessages();
@@ -3671,7 +3716,7 @@ function renderMessages(messages, options = {}) {
         if (canEditMessage(msg, isQuoted)) {
             editButton = `<button type="button" class="text-zinc-400 hover:text-zinc-300 js-edit-link" title="Edit" aria-label="Edit" data-edit-message-id="${Number(msg.id)}"><i class="fa-solid fa-pen" aria-hidden="true"></i></button>`;
         }
-        if (canDeleteMessage(msg, hasAttachments)) {
+        if (canDeleteMessage(msg)) {
             deleteButton = `<button type="button" class="text-zinc-400 hover:text-zinc-300 js-delete-link" title="Delete" aria-label="Delete" data-delete-message-id="${Number(msg.id)}"><i class="fa-solid fa-trash" aria-hidden="true"></i></button>`;
         }
 
@@ -3694,7 +3739,7 @@ function renderMessages(messages, options = {}) {
                     ${isNewGroup ? `<div class="flex items-center gap-2 mb-0.5">${profileUrl ? `<a href="${escapeHtml(profileUrl)}" class="text-sm font-semibold leading-5 inline-block prologue-accent hover:text-emerald-300 hover:underline underline-offset-2">${escapeHtml(msg.username)}</a>` : `<div class="text-sm font-semibold leading-5 inline-block prologue-accent">${escapeHtml(msg.username)}</div>`}${showStatus ? `<span class="inline-block w-1.5 h-1.5 rounded-full ${escapeHtml(statusDotClass)}" title="${escapeHtml(statusLabel)}"></span>` : ''}</div>` : ''}
                     ${renderQuotedMessageBlock(msg)}
                     <div class="text-zinc-200 text-[17px] leading-6 js-message-content" data-raw-content="${escapeHtml(msg.content)}" data-mention-map="${mentionMapJson}">${renderMessageContent(msg.content, mentionMap)}</div>
-                    ${renderMessageAttachments(msg.attachments)}
+                    ${renderMessageAttachments(msg.attachments, canDeleteAttachments)}
                     <div class="relative mt-0.5">
                         ${renderReactionPickerMarkup(msg.id)}
                         <div class="text-xs flex items-center gap-3">
@@ -3789,9 +3834,19 @@ function canEditMessage(msg, isQuoted) {
     return isWithinWindow(currentChat.group_edit_window || 'never', String(msg.created_at || ''));
 }
 
-function canDeleteMessage(msg, hasAttachments) {
+function canDeleteMessage(msg) {
     if (!currentChat) return false;
-    if (msg?.is_quoted || hasAttachments) return false;
+    if (msg?.is_quoted) return false;
+    const isOwn = Number(msg.user_id) === Number(currentUserId);
+    const isAdmin = !!(currentChat.is_admin);
+    if (!isOwn && !isAdmin) return false;
+    const isPersonal = normalizeChatType(currentChat.type) === 'personal';
+    if (isPersonal || isAdmin) return true;
+    return isWithinWindow(currentChat.group_delete_window || 'never', String(msg.created_at || ''));
+}
+
+function canDeleteAttachmentFromMessage(msg) {
+    if (!currentChat) return false;
     const isOwn = Number(msg.user_id) === Number(currentUserId);
     const isAdmin = !!(currentChat.is_admin);
     if (!isOwn && !isAdmin) return false;
@@ -3821,6 +3876,14 @@ function bindMessageEditAndDelete() {
             return;
         }
 
+        const attachmentDeleteBtn = event.target.closest('.js-attachment-delete');
+        if (attachmentDeleteBtn) {
+            event.preventDefault();
+            const attachmentId = Number(attachmentDeleteBtn.dataset.attachmentId || 0);
+            if (attachmentId > 0) deleteSubmittedAttachment(attachmentId);
+            return;
+        }
+
         const saveBtn = event.target.closest('.js-edit-save');
         if (saveBtn) {
             event.preventDefault();
@@ -3837,6 +3900,24 @@ function bindMessageEditAndDelete() {
             return;
         }
     });
+}
+
+async function deleteSubmittedAttachment(attachmentId) {
+    try {
+        const result = await postForm('/api/attachments/delete', {
+            csrf_token: getCsrfToken(),
+            attachment_id: attachmentId
+        });
+
+        if (result.error) {
+            showToast(result.error, 'error');
+            return;
+        }
+
+        await pollMessages({ scrollMode: 'preserve', forceRender: true });
+    } catch (error) {
+        showToast('Failed to delete attachment', 'error');
+    }
 }
 
 function startEditMessage(messageId) {

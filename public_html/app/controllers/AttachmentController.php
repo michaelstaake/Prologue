@@ -41,7 +41,7 @@ class AttachmentController extends Controller {
         // Look up the attachment record. If it is a dedup reference, resolve the
         // physical file location from the source attachment via the LEFT JOINs.
         $record = Database::query(
-            "SELECT a.original_name,
+            "SELECT a.original_name, a.status, a.deleted_at, a.expires_at, a.user_id,
                     COALESCE(src.file_name,      a.file_name)      AS physical_file_name,
                     COALESCE(src_u.user_number,  u.user_number)    AS physical_user_number
              FROM attachments a
@@ -55,6 +55,25 @@ class AttachmentController extends Controller {
 
         if (!$record) {
             ErrorHandler::abort(404, 'Not found');
+        }
+
+        $status = strtolower(trim((string)($record->status ?? '')));
+        if ($status === 'pending' && (int)$record->user_id !== (int)Auth::user()->id) {
+            ErrorHandler::abort(404, 'Not found');
+        }
+
+        if ($status === 'submitted') {
+            if (!empty($record->deleted_at)) {
+                ErrorHandler::abort(404, 'Not found');
+            }
+
+            $expiresAt = trim((string)($record->expires_at ?? ''));
+            if ($expiresAt !== '') {
+                $expiresAtTs = strtotime($expiresAt);
+                if ($expiresAtTs !== false && $expiresAtTs <= time()) {
+                    ErrorHandler::abort(404, 'Not found');
+                }
+            }
         }
 
         $physicalUserNumber = preg_replace('/\D+/', '', (string)$record->physical_user_number);

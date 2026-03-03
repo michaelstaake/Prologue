@@ -530,6 +530,21 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                         </div>
                     <?php endif; ?>
                     <div class="text-zinc-200 text-[17px] leading-6 js-message-content" data-raw-content="<?= htmlspecialchars($message->content, ENT_QUOTES, 'UTF-8') ?>" data-mention-map="<?= htmlspecialchars($mentionMapJson, ENT_QUOTES, 'UTF-8') ?>"><?= nl2br(htmlspecialchars($message->content, ENT_QUOTES, 'UTF-8')) ?></div>
+                    <?php
+                        $canDeleteAttachmentThisMessage = false;
+                        if ((int)$message->user_id === (int)$currentUserId || $isCurrentUserAdmin) {
+                            if ($isPersonalChat || $isCurrentUserAdmin) {
+                                $canDeleteAttachmentThisMessage = true;
+                            } else {
+                                $dwAttachment = $groupDeleteWindow ?? 'never';
+                                if ($dwAttachment === 'forever') {
+                                    $canDeleteAttachmentThisMessage = true;
+                                } elseif ($dwAttachment !== 'never' && (int)$dwAttachment > 0) {
+                                    $canDeleteAttachmentThisMessage = (time() - strtotime($message->created_at)) <= (int)$dwAttachment;
+                                }
+                            }
+                        }
+                    ?>
                     <?php if (!empty($message->attachments) && is_array($message->attachments)): ?>
                         <div class="mt-3 flex flex-wrap gap-3">
                             <?php foreach ($message->attachments as $attachment): ?>
@@ -539,13 +554,22 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                                     $attachmentUrl = htmlspecialchars($attachment->url ?? '', ENT_QUOTES, 'UTF-8');
                                     $attachmentName = htmlspecialchars($attachment->original_name ?? 'Attachment', ENT_QUOTES, 'UTF-8');
                                     $attachmentDownloadName = htmlspecialchars($attachment->original_name ?? (($attachment->file_name ?? '') . '.' . $attachmentExt), ENT_QUOTES, 'UTF-8');
+                                    $attachmentIsDeleted = !empty($attachment->is_deleted);
+                                    $attachmentDeleteReason = strtolower((string)($attachment->delete_reason ?? 'manual'));
+                                    $attachmentDeleteLabel = $attachmentDeleteReason === 'expired' ? 'Expired attachment' : 'Deleted attachment';
                                     $attachmentSizeLabel = number_format(((int)$attachment->file_size) / 1024, 1) . ' KB';
                                     if ((int)$attachment->file_size >= 1024 * 1024) {
                                         $attachmentSizeLabel = number_format(((int)$attachment->file_size) / (1024 * 1024), 2) . ' MB';
                                     }
                                 ?>
                                 <div class="w-44 bg-zinc-800/70 border border-zinc-700 rounded-xl p-2">
-                                    <?php if ($attachmentCategory === 'image'): ?>
+                                    <?php if ($attachmentIsDeleted): ?>
+                                        <div class="w-full h-24 rounded-lg border border-zinc-700 bg-zinc-900/70 flex flex-col items-center justify-center gap-1.5">
+                                            <i class="fa-solid fa-file-circle-xmark text-2xl text-zinc-500"></i>
+                                            <span class="text-xs text-zinc-400 text-center px-2"><?= htmlspecialchars($attachmentDeleteLabel, ENT_QUOTES, 'UTF-8') ?></span>
+                                        </div>
+                                        <div class="mt-2 text-xs text-zinc-500 truncate" title="<?= $attachmentName ?>"><?= $attachmentName ?></div>
+                                    <?php elseif ($attachmentCategory === 'image'): ?>
                                         <button
                                             type="button"
                                             class="js-lightbox-trigger block w-full"
@@ -563,9 +587,16 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                                         </button>
                                         <div class="mt-2 text-xs text-zinc-400 flex items-center justify-between gap-2">
                                             <span><?= htmlspecialchars($attachmentSizeLabel, ENT_QUOTES, 'UTF-8') ?></span>
-                                            <a href="<?= $attachmentUrl ?>" download="<?= $attachmentDownloadName ?>" class="text-zinc-300 hover:text-zinc-100" title="Download">
-                                                <i class="fa-solid fa-download"></i>
-                                            </a>
+                                            <div class="flex items-center gap-2">
+                                                <?php if ($canDeleteAttachmentThisMessage): ?>
+                                                    <button type="button" class="text-red-300 hover:text-red-200 js-attachment-delete" data-attachment-id="<?= (int)$attachment->id ?>" title="Delete attachment" aria-label="Delete attachment">
+                                                        <i class="fa-solid fa-trash"></i>
+                                                    </button>
+                                                <?php endif; ?>
+                                                <a href="<?= $attachmentUrl ?>" download="<?= $attachmentDownloadName ?>" class="text-zinc-300 hover:text-zinc-100" title="Download">
+                                                    <i class="fa-solid fa-download"></i>
+                                                </a>
+                                            </div>
                                         </div>
                                     <?php else: ?>
                                         <a href="<?= $attachmentUrl ?>" download="<?= $attachmentDownloadName ?>" class="block w-full">
@@ -576,9 +607,16 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                                         </a>
                                         <div class="mt-2 text-xs text-zinc-400 flex items-center justify-between gap-2">
                                             <span class="truncate" title="<?= $attachmentName ?>"><?= $attachmentName ?></span>
-                                            <a href="<?= $attachmentUrl ?>" download="<?= $attachmentDownloadName ?>" class="text-zinc-300 hover:text-zinc-100 shrink-0" title="Download">
-                                                <i class="fa-solid fa-download"></i>
-                                            </a>
+                                            <div class="flex items-center gap-2 shrink-0">
+                                                <?php if ($canDeleteAttachmentThisMessage): ?>
+                                                    <button type="button" class="text-red-300 hover:text-red-200 js-attachment-delete" data-attachment-id="<?= (int)$attachment->id ?>" title="Delete attachment" aria-label="Delete attachment">
+                                                        <i class="fa-solid fa-trash"></i>
+                                                    </button>
+                                                <?php endif; ?>
+                                                <a href="<?= $attachmentUrl ?>" download="<?= $attachmentDownloadName ?>" class="text-zinc-300 hover:text-zinc-100" title="Download">
+                                                    <i class="fa-solid fa-download"></i>
+                                                </a>
+                                            </div>
                                         </div>
                                     <?php endif; ?>
                                 </div>
@@ -627,7 +665,7 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                                     <button type="button" class="text-zinc-400 hover:text-zinc-300 js-edit-link" title="Edit" aria-label="Edit" data-edit-message-id="<?= (int)$message->id ?>"><i class="fa-solid fa-pen" aria-hidden="true"></i></button>
                                     <?php endif; ?>
                                 <?php endif; ?>
-                                <?php if (empty($message->is_quoted) && empty($message->has_attachments)): ?>
+                                <?php if (empty($message->is_quoted)): ?>
                                     <?php
                                         $canDeleteThis = false;
                                         if ((int)$message->user_id === (int)$currentUserId || $isCurrentUserAdmin) {

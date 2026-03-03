@@ -95,6 +95,12 @@ class UpdateController extends Controller {
                  SET cm.role = 'moderator'
                  WHERE c.type = 'group' AND c.created_by = cm.user_id",
             ],
+            '0.2.2' => [
+                "ALTER TABLE attachments ADD COLUMN expires_at TIMESTAMP NULL AFTER status",
+                "ALTER TABLE attachments ADD COLUMN deleted_at TIMESTAMP NULL AFTER expires_at",
+                "ALTER TABLE attachments ADD COLUMN delete_reason ENUM('manual','expired','message_deleted') NULL AFTER deleted_at",
+                "ALTER TABLE attachments ADD KEY idx_attachments_expiry (status, deleted_at, expires_at)",
+            ],
         ];
     }
 

@@ -20,8 +20,17 @@ class Attachment extends Model {
         'png' => 'image', 'jpg' => 'image', 'webp' => 'image',
     ];
 
+    private const EXPIRY_OPTIONS = [0, 3600, 86400];
+
+    private const DELETE_REASONS = ['manual', 'expired', 'message_deleted'];
+
     public static function extensionCategory(string $ext): string {
         return self::EXT_CATEGORY[$ext] ?? 'file';
+    }
+
+    public static function normalizeExpirySeconds($raw): int {
+        $seconds = (int)$raw;
+        return in_array($seconds, self::EXPIRY_OPTIONS, true) ? $seconds : 0;
     }
 
     public static function acceptedExtensions(): array {
@@ -94,7 +103,7 @@ class Attachment extends Model {
     public static function listPendingForChatUser(int $chatId, int $userId): array {
         try {
             $rows = Database::query(
-                "SELECT a.id, a.original_name, a.file_name, a.file_extension, a.mime_type, a.file_size, a.width, a.height, a.created_at, u.user_number
+                "SELECT a.id, a.original_name, a.file_name, a.file_extension, a.mime_type, a.file_size, a.width, a.height, a.created_at, a.expires_at, u.user_number
                  FROM attachments a
                  JOIN users u ON u.id = a.user_id
                  WHERE chat_id = ? AND user_id = ? AND status = 'pending'
@@ -107,12 +116,15 @@ class Attachment extends Model {
 
         foreach ($rows as $row) {
             $row->url = self::publicUrl((string)$row->user_number, (string)$row->file_name, (string)$row->file_extension);
+            $row->expiry_seconds = self::inferExpirySeconds($row->expires_at ?? null);
         }
 
         return $rows;
     }
 
-    public static function createPendingFromUpload(int $chatId, $user, array $file): array {
+    public static function createPendingFromUpload(int $chatId, $user, array $file, int $expirySeconds = 0): array {
+        $expirySeconds = self::normalizeExpirySeconds($expirySeconds);
+        $expiresAt = self::expiryTimestampFromSeconds($expirySeconds);
         $attachmentLogging = Setting::get('attachment_logging') === '1';
         $logFailure = function(string $reason, string $step) use ($attachmentLogging, $chatId, $user, $file): void {
             if (!$attachmentLogging) return;
@@ -194,6 +206,8 @@ class Attachment extends Model {
                  FROM attachments a
                  JOIN users u ON u.id = a.user_id
                  WHERE a.file_hash = ? AND a.file_extension = ? AND a.dedup_source_id IS NULL
+                   AND a.deleted_at IS NULL
+                   AND (a.status = 'pending' OR (a.status = 'submitted' AND (a.expires_at IS NULL OR a.expires_at > NOW())))
                  LIMIT 1",
                 [$fileHash, $nameExt]
             )->fetch();
@@ -210,9 +224,9 @@ class Attachment extends Model {
                 $dedupHeight = $dedupSource->height !== null ? (int)$dedupSource->height : null;
 
                 Database::query(
-                    "INSERT INTO attachments (chat_id, user_id, original_name, file_name, file_extension, mime_type, file_size, width, height, file_hash, dedup_source_id, status)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
-                    [$chatId, $userId, $originalName, $fileBase, $nameExt, $mime, $dedupStoredSize, $dedupWidth, $dedupHeight, $fileHash, (int)$dedupSource->id]
+                    "INSERT INTO attachments (chat_id, user_id, original_name, file_name, file_extension, mime_type, file_size, width, height, file_hash, dedup_source_id, status, expires_at)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)",
+                    [$chatId, $userId, $originalName, $fileBase, $nameExt, $mime, $dedupStoredSize, $dedupWidth, $dedupHeight, $fileHash, (int)$dedupSource->id, $expiresAt]
                 );
 
                 $id = (int)Database::getInstance()->lastInsertId();
@@ -243,6 +257,8 @@ class Attachment extends Model {
                         'file_size' => $dedupStoredSize,
                         'width' => $dedupWidth,
                         'height' => $dedupHeight,
+                        'expires_at' => $expiresAt,
+                        'expiry_seconds' => $expirySeconds,
                         'url' => self::publicUrl($userNumber, $fileBase, $nameExt)
                     ]
                 ];
@@ -305,9 +321,9 @@ class Attachment extends Model {
         }
 
         Database::query(
-            "INSERT INTO attachments (chat_id, user_id, original_name, file_name, file_extension, mime_type, file_size, width, height, file_hash, status)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
-            [$chatId, $userId, $originalName, $fileBase, $nameExt, $mime, $storedSize, $width, $height, $fileHash]
+            "INSERT INTO attachments (chat_id, user_id, original_name, file_name, file_extension, mime_type, file_size, width, height, file_hash, status, expires_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)",
+            [$chatId, $userId, $originalName, $fileBase, $nameExt, $mime, $storedSize, $width, $height, $fileHash, $expiresAt]
         );
 
         $id = (int)Database::getInstance()->lastInsertId();
@@ -336,9 +352,36 @@ class Attachment extends Model {
                 'file_size' => $storedSize,
                 'width' => $width,
                 'height' => $height,
+                'expires_at' => $expiresAt,
+                'expiry_seconds' => $expirySeconds,
                 'url' => self::publicUrl($userNumber, $fileBase, $nameExt)
             ]
         ];
+    }
+
+    public static function updatePendingExpiryForUser(int $attachmentId, int $userId, int $expirySeconds): bool {
+        if ($attachmentId <= 0 || $userId <= 0) {
+            return false;
+        }
+
+        $expirySeconds = self::normalizeExpirySeconds($expirySeconds);
+        $expiresAt = self::expiryTimestampFromSeconds($expirySeconds);
+
+        $statement = Database::query(
+            "UPDATE attachments
+             SET expires_at = ?
+             WHERE id = ? AND user_id = ? AND status = 'pending'",
+            [$expiresAt, $attachmentId, $userId]
+        );
+
+        if ($statement->rowCount() > 0) {
+            return true;
+        }
+
+        return (bool)Database::query(
+            "SELECT 1 FROM attachments WHERE id = ? AND user_id = ? AND status = 'pending' LIMIT 1",
+            [$attachmentId, $userId]
+        )->fetch();
     }
 
     public static function deletePendingByIdForUser(int $attachmentId, int $userId): bool {
@@ -422,7 +465,8 @@ class Attachment extends Model {
         $placeholders = implode(',', array_fill(0, count($messageIds), '?'));
         try {
             $rows = Database::query(
-                "SELECT a.id, a.user_id, a.message_id, a.original_name, a.file_name, a.file_extension, a.mime_type, a.file_size, a.width, a.height, u.user_number
+                "SELECT a.id, a.user_id, a.message_id, a.original_name, a.file_name, a.file_extension, a.mime_type, a.file_size, a.width, a.height,
+                        a.expires_at, a.deleted_at, a.delete_reason, u.user_number
                  FROM attachments a
                  JOIN users u ON u.id = a.user_id
                  WHERE a.status = 'submitted' AND a.message_id IN ($placeholders)
@@ -435,13 +479,154 @@ class Attachment extends Model {
 
         $byMessage = [];
         foreach ($rows as $row) {
-            $row->url = self::publicUrl((string)$row->user_number, (string)$row->file_name, (string)$row->file_extension);
+            $isExpired = self::isExpiredTimestamp($row->expires_at ?? null);
+            $isDeleted = !empty($row->deleted_at) || $isExpired;
+            $row->is_deleted = $isDeleted;
+            if ($isDeleted) {
+                $reason = strtolower(trim((string)($row->delete_reason ?? '')));
+                if (!in_array($reason, self::DELETE_REASONS, true)) {
+                    $reason = $isExpired ? 'expired' : 'manual';
+                }
+                $row->delete_reason = $reason;
+                $row->url = '';
+            } else {
+                $row->delete_reason = null;
+                $row->url = self::publicUrl((string)$row->user_number, (string)$row->file_name, (string)$row->file_extension);
+            }
             $byMessage[(int)$row->message_id][] = $row;
         }
 
         foreach ($messages as $message) {
             $message->attachments = $byMessage[(int)$message->id] ?? [];
         }
+    }
+
+    public static function cleanupExpiredForChat(int $chatId): int {
+        if ($chatId <= 0) {
+            return 0;
+        }
+
+        try {
+            $rows = Database::query(
+                "SELECT id
+                 FROM attachments
+                 WHERE chat_id = ?
+                   AND status = 'submitted'
+                   AND deleted_at IS NULL
+                   AND expires_at IS NOT NULL
+                   AND expires_at <= NOW()
+                 ORDER BY expires_at ASC",
+                [$chatId]
+            )->fetchAll();
+        } catch (Throwable $e) {
+            return 0;
+        }
+
+        $deletedCount = 0;
+        foreach ($rows as $row) {
+            if (self::deleteSubmittedById((int)$row->id, 'expired')) {
+                $deletedCount++;
+            }
+        }
+
+        return $deletedCount;
+    }
+
+    public static function deleteSubmittedById(int $attachmentId, string $reason = 'manual'): bool {
+        if ($attachmentId <= 0) {
+            return false;
+        }
+
+        $reason = self::normalizeDeleteReason($reason);
+        $row = Database::query(
+            "SELECT a.id, a.status, a.file_name, a.file_extension, a.dedup_source_id, a.deleted_at, u.user_number
+             FROM attachments a
+             JOIN users u ON u.id = a.user_id
+             WHERE a.id = ?
+             LIMIT 1",
+            [$attachmentId]
+        )->fetch();
+
+        if (!$row || strtolower((string)$row->status) !== 'submitted') {
+            return false;
+        }
+
+        if (!empty($row->deleted_at)) {
+            return true;
+        }
+
+        if ($row->dedup_source_id === null) {
+            $released = self::releaseOwnedFile(
+                (string)$row->user_number,
+                (string)$row->file_name,
+                (string)$row->file_extension,
+                $attachmentId
+            );
+            if (!$released) {
+                return false;
+            }
+        }
+
+        Database::query(
+            "UPDATE attachments
+             SET deleted_at = NOW(), delete_reason = ?
+             WHERE id = ? AND status = 'submitted' AND deleted_at IS NULL",
+            [$reason, $attachmentId]
+        );
+
+        return true;
+    }
+
+    public static function deleteSubmittedForMessage(int $messageId): bool {
+        if ($messageId <= 0) {
+            return false;
+        }
+
+        try {
+            $rows = Database::query(
+                "SELECT a.id, a.file_name, a.file_extension, a.dedup_source_id, a.deleted_at, u.user_number
+                 FROM attachments a
+                 JOIN users u ON u.id = a.user_id
+                 WHERE a.message_id = ? AND a.status = 'submitted'",
+                [$messageId]
+            )->fetchAll();
+        } catch (Throwable $e) {
+            return false;
+        }
+
+        if (count($rows) === 0) {
+            return true;
+        }
+
+        $deletingIds = [];
+        foreach ($rows as $row) {
+            $deletingIds[] = (int)$row->id;
+        }
+
+        foreach ($rows as $row) {
+            if ($row->dedup_source_id !== null || !empty($row->deleted_at)) {
+                continue;
+            }
+
+            $userNumber = preg_replace('/\D+/', '', (string)($row->user_number ?? ''));
+            if (!preg_match('/^\d{16}$/', $userNumber)) {
+                continue;
+            }
+
+            $released = self::releaseOwnedFile(
+                $userNumber,
+                (string)$row->file_name,
+                (string)$row->file_extension,
+                (int)$row->id,
+                $deletingIds
+            );
+
+            if (!$released) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     public static function cleanupPendingForUser($user): void {
@@ -571,7 +756,12 @@ class Attachment extends Model {
             "SELECT a.id, a.file_name, a.file_extension, u.user_number
              FROM attachments a
              JOIN users u ON u.id = a.user_id
-             WHERE a.dedup_source_id = ?" . $excludeClause . "
+                         WHERE a.dedup_source_id = ?
+                             AND a.deleted_at IS NULL
+                             AND (
+                                        a.status = 'pending'
+                                        OR (a.status = 'submitted' AND (a.expires_at IS NULL OR a.expires_at > NOW()))
+                             )" . $excludeClause . "
              LIMIT 1",
             $params
         )->fetch();
@@ -745,6 +935,51 @@ class Attachment extends Model {
         }
 
         return null;
+    }
+
+    private static function expiryTimestampFromSeconds(int $expirySeconds): ?string {
+        $seconds = self::normalizeExpirySeconds($expirySeconds);
+        if ($seconds <= 0) {
+            return null;
+        }
+
+        return date('Y-m-d H:i:s', time() + $seconds);
+    }
+
+    private static function inferExpirySeconds($expiresAt): int {
+        if ($expiresAt === null || trim((string)$expiresAt) === '') {
+            return 0;
+        }
+
+        $expiresAtTs = strtotime((string)$expiresAt);
+        if ($expiresAtTs === false) {
+            return 0;
+        }
+
+        $remaining = $expiresAtTs - time();
+        if ($remaining <= 0) {
+            return 0;
+        }
+
+        return $remaining > 12 * 3600 ? 86400 : 3600;
+    }
+
+    private static function isExpiredTimestamp($expiresAt): bool {
+        if ($expiresAt === null || trim((string)$expiresAt) === '') {
+            return false;
+        }
+
+        $timestamp = strtotime((string)$expiresAt);
+        if ($timestamp === false) {
+            return false;
+        }
+
+        return $timestamp <= time();
+    }
+
+    private static function normalizeDeleteReason(string $reason): string {
+        $normalized = strtolower(trim($reason));
+        return in_array($normalized, self::DELETE_REASONS, true) ? $normalized : 'manual';
     }
 
     private static function isSafeAttachmentFileBase(string $fileBase): bool {

@@ -723,6 +723,8 @@ class ApiController extends Controller {
             $this->json(['error' => 'Access denied'], 403);
         }
 
+        Attachment::cleanupExpiredForChat($chatId);
+
         try {
             $messages = Database::query(
                 "SELECT m.id, m.chat_id, m.user_id, m.content, m.created_at, m.edited_at,

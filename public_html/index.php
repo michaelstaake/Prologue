@@ -269,6 +269,7 @@ $router->post('/api/posts/react', 'PostController@react');
 $router->post('/api/posts/delete', 'PostController@delete');
 $router->post('/api/attachments/upload', 'ChatController@uploadAttachment');
 $router->post('/api/attachments/delete', 'ChatController@deleteAttachment');
+$router->post('/api/attachments/expiry', 'ChatController@updateAttachmentExpiry');
 $router->post('/api/chats/typing', 'ApiController@updateTyping');
 $router->post('/api/chats/group/create', 'ChatController@createGroup');
 $router->post('/api/chats/group/add-member', 'ChatController@addGroupMember');
