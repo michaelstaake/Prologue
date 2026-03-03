@@ -961,7 +961,48 @@ class ApiController extends Controller {
                         [$userId, $userId]
                 )->fetch();
 
-                $this->json(['call' => $call ?: null]);
+                    $excludeCallId = (int)($call->id ?? 0);
+                    $incomingCall = Database::query(
+                        "SELECT c.id,
+                                c.chat_id,
+                                c.started_by,
+                                c.status,
+                                c.started_at,
+                                ch.chat_number,
+                                ch.type AS chat_type,
+                                (SELECT COUNT(DISTINCT cp.user_id)
+                                 FROM call_participants cp
+                                 WHERE cp.call_id = c.id
+                                     AND cp.left_at IS NULL) AS participant_count,
+                                (SELECT COUNT(*)
+                                 FROM call_participants cp_self
+                                 WHERE cp_self.call_id = c.id
+                                     AND cp_self.user_id = ?
+                                     AND cp_self.left_at IS NULL) AS current_user_joined
+                         FROM calls c
+                         JOIN chats ch ON ch.id = c.chat_id
+                         WHERE c.status = 'active'
+                             AND c.started_by != ?
+                             AND (? <= 0 OR c.id != ?)
+                             AND EXISTS (
+                                 SELECT 1
+                                 FROM chat_members cm
+                                 WHERE cm.chat_id = c.chat_id
+                                 AND cm.user_id = ?
+                             )
+                             AND NOT EXISTS (
+                                 SELECT 1
+                                 FROM call_participants cp_self_active
+                                 WHERE cp_self_active.call_id = c.id
+                                 AND cp_self_active.user_id = ?
+                                 AND cp_self_active.left_at IS NULL
+                             )
+                         ORDER BY c.started_at DESC
+                         LIMIT 1",
+                        [$userId, $userId, $excludeCallId, $excludeCallId, $userId, $userId]
+                    )->fetch();
+
+                    $this->json(['call' => $call ?: null, 'incoming_call' => $incomingCall ?: null]);
         }
 
     public function getCallSignal($params) {

@@ -761,6 +761,7 @@ async function init() {
             can_send_messages: String(chatView.dataset.canSendMessages || '1') === '1',
             message_restriction_reason: String(chatView.dataset.messageRestrictionReason || ''),
             can_start_calls: String(chatView.dataset.canStartCalls || '1') === '1',
+            user_in_active_call: String(chatView.dataset.userInActiveCall || '0') === '1',
             is_admin: String(chatView.dataset.isAdmin || '0') === '1',
             group_edit_window: String(chatView.dataset.groupEditWindow || 'never'),
             group_delete_window: String(chatView.dataset.groupDeleteWindow || 'never')
@@ -794,6 +795,7 @@ async function init() {
         bindMessageQuotesAndReactions();
         maybePromptForNewGroupName();
         setChatComposerEnabled(currentChat.can_send_messages !== false, currentChat.message_restriction_reason || '');
+        setChatUserInActiveCall(currentChat.user_in_active_call === true);
         setChatCallEnabled(currentChat.can_start_calls !== false);
         refreshChatCallStatusBar({ force: true });
         if (chatPollIntervalId) {

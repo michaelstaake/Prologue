@@ -26,6 +26,31 @@ class CallController extends Controller {
         return $count > 0;
     }
 
+    private function isUserInJoinedActiveCall(int $userId, int $excludeChatId = 0): bool {
+        if ($userId <= 0) {
+            return false;
+        }
+
+        $params = [$userId];
+        $excludeChatFilter = '';
+        if ($excludeChatId > 0) {
+            $excludeChatFilter = ' AND c.chat_id != ?';
+            $params[] = $excludeChatId;
+        }
+
+        $count = (int)Database::query(
+            "SELECT COUNT(*)
+             FROM calls c
+             JOIN call_participants cp ON cp.call_id = c.id
+             WHERE c.status = 'active'
+               AND cp.user_id = ?
+               AND cp.left_at IS NULL" . $excludeChatFilter,
+            $params
+        )->fetchColumn();
+
+        return $count > 0;
+    }
+
     private function enforceCallCapacityOrFail(int $callId, int $userId): void {
         if ($this->isUserActivelyInCall($callId, $userId)) {
             return;
@@ -196,6 +221,10 @@ class CallController extends Controller {
 
         if ($this->isPersonalChatPeerBanned($chatId, (int)$userId)) {
             $this->json(['error' => "You can't call a banned user"], 403);
+        }
+
+        if ($this->isUserInJoinedActiveCall((int)$userId, $chatId)) {
+            $this->json(['error' => 'You are already in an active call'], 409);
         }
 
         $activeCall = Database::query("SELECT id FROM calls WHERE chat_id = ? AND status = 'active'", [$chatId])->fetch();

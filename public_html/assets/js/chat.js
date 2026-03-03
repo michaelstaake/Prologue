@@ -2951,6 +2951,10 @@ async function pollMessages(options = {}) {
     if (Object.prototype.hasOwnProperty.call(data, 'can_start_call')) {
         setChatCallEnabled(Boolean(data.can_start_call));
     }
+
+    if (Object.prototype.hasOwnProperty.call(data, 'user_in_active_call')) {
+        setChatUserInActiveCall(Boolean(data.user_in_active_call));
+    }
 }
 
 function buildMessagesSignature(messages) {

@@ -195,6 +195,19 @@
             <button id="decline-call-btn" onclick="declineCall()" class="hidden bg-red-600 hover:bg-red-500 text-white px-3 py-1 rounded-full text-xs font-medium">Decline</button>
         </div>
 
+        <div id="incoming-call-waiting-overlay" class="hidden fixed inset-0 z-[90] bg-black/70 backdrop-blur-sm p-4">
+            <div class="h-full w-full flex items-center justify-center">
+                <div class="relative z-[91] w-full max-w-md bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl p-6">
+                    <h2 id="incoming-call-waiting-title" class="text-lg font-semibold text-zinc-100">Incoming call waiting</h2>
+                    <p id="incoming-call-waiting-subtitle" class="mt-2 text-sm text-zinc-400">You are currently in an active call. You can decline the new call, or end your current call and join the incoming call.</p>
+                    <div class="mt-5 flex items-center justify-end gap-3">
+                        <button type="button" id="incoming-call-waiting-decline-btn" onclick="declineIncomingCallWaiting()" class="px-4 py-2 rounded-xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-zinc-200">Decline New Call</button>
+                        <button type="button" id="incoming-call-waiting-switch-btn" onclick="switchToIncomingCallWaiting()" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white">End Current &amp; Join</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     <div id="app-layout" class="flex flex-1 min-h-0">
         <aside id="app-sidebar" class="w-72 sidebar border-r border-zinc-800 flex flex-col">
             <a href="<?= htmlspecialchars(base_url('/'), ENT_QUOTES, 'UTF-8') ?>" class="p-4 border-b border-zinc-700 flex items-center gap-3 hover:bg-zinc-800/40 transition">

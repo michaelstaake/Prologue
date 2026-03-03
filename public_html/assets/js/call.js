@@ -20,6 +20,33 @@ let settingsLevelAnalyser = null;
 let callParticipantsRenderSignature = '';
 let callConnectingOverlayTimeout = null;
 let callLeaveBeaconBound = false;
+let currentUserInActiveCall = false;
+let incomingCallWaitingCandidate = null;
+
+function applyVoiceCallButtonState() {
+    const voiceCallButton = document.getElementById('start-voice-call-button');
+    if (!voiceCallButton) return;
+
+    const canStartCalls = !currentChat || currentChat.can_start_calls !== false;
+    const inActiveCall = (currentChat && currentChat.user_in_active_call === true) || currentUserInActiveCall;
+
+    voiceCallButton.classList.toggle('hidden', inActiveCall);
+    voiceCallButton.disabled = inActiveCall || !canStartCalls;
+    voiceCallButton.classList.toggle('opacity-50', !inActiveCall && !canStartCalls);
+    voiceCallButton.classList.toggle('cursor-not-allowed', !inActiveCall && !canStartCalls);
+    voiceCallButton.setAttribute('title', (!inActiveCall && !canStartCalls) ? "You can't call a banned user" : '');
+}
+
+function setChatUserInActiveCall(inActiveCall) {
+    const isInActiveCall = Boolean(inActiveCall);
+    currentUserInActiveCall = isInActiveCall;
+
+    if (currentChat) {
+        currentChat.user_in_active_call = isInActiveCall;
+    }
+
+    applyVoiceCallButtonState();
+}
 
 function hideCallConnectingOverlay() {
     if (callConnectingOverlayTimeout) {
@@ -64,6 +91,129 @@ function showCallConnectingOverlay(options = {}) {
     callConnectingOverlayTimeout = setTimeout(() => {
         hideCallConnectingOverlay();
     }, safeDuration);
+}
+
+function setIncomingCallWaitingOverlayBusy(isBusy) {
+    const declineButton = document.getElementById('incoming-call-waiting-decline-btn');
+    const switchButton = document.getElementById('incoming-call-waiting-switch-btn');
+    const nextBusy = Boolean(isBusy);
+
+    if (declineButton) {
+        declineButton.disabled = nextBusy;
+        declineButton.classList.toggle('opacity-60', nextBusy);
+        declineButton.classList.toggle('cursor-not-allowed', nextBusy);
+    }
+    if (switchButton) {
+        switchButton.disabled = nextBusy;
+        switchButton.classList.toggle('opacity-60', nextBusy);
+        switchButton.classList.toggle('cursor-not-allowed', nextBusy);
+    }
+}
+
+function hideIncomingCallWaitingOverlay() {
+    const overlay = document.getElementById('incoming-call-waiting-overlay');
+    if (overlay) {
+        overlay.classList.add('hidden');
+    }
+
+    incomingCallWaitingCandidate = null;
+    setIncomingCallWaitingOverlayBusy(false);
+}
+
+function showIncomingCallWaitingOverlay(call) {
+    const safeCallId = Number(call?.id || 0);
+    if (safeCallId <= 0) {
+        hideIncomingCallWaitingOverlay();
+        return;
+    }
+
+    const overlay = document.getElementById('incoming-call-waiting-overlay');
+    if (!overlay) return;
+
+    incomingCallWaitingCandidate = {
+        id: safeCallId,
+        chat_id: Number(call?.chat_id || 0),
+        chat_type: normalizeChatType(call?.chat_type || 'personal')
+    };
+
+    overlay.classList.remove('hidden');
+    setIncomingCallWaitingOverlayBusy(false);
+}
+
+async function declineIncomingCallById(callId) {
+    const declinedId = Number(callId || 0);
+    if (declinedId <= 0) {
+        return { success: false, ended: false };
+    }
+
+    declinedCallId = declinedId;
+    stopCallRingingAudio();
+    clearAcceptedCallNotifications();
+
+    const result = await postForm('/api/calls/decline', {
+        csrf_token: getCsrfToken(),
+        call_id: String(declinedId)
+    });
+
+    if (!result.success) {
+        showToast(result.error || 'Unable to decline call', 'error');
+        return { success: false, ended: false };
+    }
+
+    const ended = Number(result.ended || 0) > 0;
+    if (ended) {
+        lastIncomingCallAlertId = 0;
+        latestChatCallId = 0;
+    }
+
+    return { success: true, ended };
+}
+
+async function declineIncomingCallWaiting() {
+    const pendingCallId = Number(incomingCallWaitingCandidate?.id || 0);
+    if (pendingCallId <= 0) {
+        hideIncomingCallWaitingOverlay();
+        return;
+    }
+
+    setIncomingCallWaitingOverlayBusy(true);
+    const result = await declineIncomingCallById(pendingCallId);
+    setIncomingCallWaitingOverlayBusy(false);
+
+    if (result.success) {
+        hideIncomingCallWaitingOverlay();
+        refreshGlobalCallState({ force: true }).catch(() => {});
+    }
+}
+
+async function switchToIncomingCallWaiting() {
+    const pendingCall = incomingCallWaitingCandidate;
+    const pendingCallId = Number(pendingCall?.id || 0);
+    if (pendingCallId <= 0) {
+        hideIncomingCallWaitingOverlay();
+        return;
+    }
+
+    setIncomingCallWaitingOverlayBusy(true);
+
+    const activeCallId = Number(currentCallId || 0);
+    if (activeCallId > 0) {
+        await postForm('/api/calls/end', {
+            csrf_token: getCsrfToken(),
+            call_id: String(activeCallId)
+        }).catch(() => {});
+
+        await cleanupLocalCallSession({ restorePresence: false });
+        setChatUserInActiveCall(false);
+    }
+
+    declinedCallId = 0;
+    lastIncomingCallAlertId = pendingCallId;
+    latestChatCallId = pendingCallId;
+    ensureCurrentChatContext(pendingCall);
+    hideIncomingCallWaitingOverlay();
+    await startVoiceCall({ joiningOverlayMode: 'reconnecting', showJoinConnectingOverlay: true });
+    refreshGlobalCallState({ force: true }).catch(() => {});
 }
 
 function normalizeCallOverlayMode(mode) {
@@ -225,16 +375,7 @@ function setChatCallEnabled(enabled) {
         currentChat.can_start_calls = isEnabled;
     }
 
-    const voiceCallButton = document.getElementById('start-voice-call-button');
-
-    [voiceCallButton].forEach((button) => {
-        if (!button) return;
-
-        button.disabled = !isEnabled;
-        button.classList.toggle('opacity-50', !isEnabled);
-        button.classList.toggle('cursor-not-allowed', !isEnabled);
-        button.setAttribute('title', isEnabled ? '' : "You can't call a banned user");
-    });
+    applyVoiceCallButtonState();
 }
 
 
@@ -528,6 +669,7 @@ function stopCallRingingAudio() {
 async function cleanupLocalCallSession(options = {}) {
     const restorePresence = options.restorePresence !== false;
     hideCallConnectingOverlay();
+    hideIncomingCallWaitingOverlay();
 
     if (screenStream) {
         screenStream.getTracks().forEach(track => track.stop());
@@ -681,6 +823,24 @@ async function applyActiveCallSnapshot(activeCall, options = {}) {
     const safeActiveCallId = Number(activeCall?.id || 0);
     const participantCount = Math.max(0, Number(activeCall?.participant_count || 0));
     const currentUserJoined = Number(activeCall?.current_user_joined || 0) > 0;
+    const incomingCandidate = options.incomingCallCandidate || null;
+    const incomingCandidateId = Number(incomingCandidate?.id || 0);
+    const hasIncomingCandidate = incomingCandidateId > 0 && incomingCandidateId !== safeCurrentCallId;
+    const incomingWhileBusy = safeCurrentCallId > 0
+        && Boolean(localStream)
+        && (
+            (safeActiveCallId > 0 && safeActiveCallId !== safeCurrentCallId && callState.incomingAlert)
+            || hasIncomingCandidate
+        );
+
+    if (incomingWhileBusy) {
+        showIncomingCallWaitingOverlay(hasIncomingCandidate ? incomingCandidate : activeCall);
+    } else {
+        hideIncomingCallWaitingOverlay();
+    }
+
+    const locallyJoinedActiveCall = safeCurrentCallId > 0 && Boolean(localStream);
+    setChatUserInActiveCall((currentUserJoined && safeActiveCallId > 0) || locallyJoinedActiveCall);
 
     // Read the persisted session NOW, before persistActiveCallSession() overwrites it below.
     // isReconnectingCall is true only if the user was previously joined to this exact call
@@ -694,7 +854,9 @@ async function applyActiveCallSnapshot(activeCall, options = {}) {
         hadCallPeerConnected = true;
     }
 
-    const callEndedForCurrentUser = safeCurrentCallId > 0 && (!safeActiveCallId || safeActiveCallId !== safeCurrentCallId);
+    const callEndedForCurrentUser = safeCurrentCallId > 0
+        && !incomingWhileBusy
+        && (!safeActiveCallId || (safeActiveCallId !== safeCurrentCallId && currentUserJoined));
     if (callEndedForCurrentUser) {
         await cleanupLocalCallSession({ restorePresence: true });
         return;
@@ -759,7 +921,10 @@ async function applyActiveCallSnapshot(activeCall, options = {}) {
 async function fetchCurrentActiveCall() {
     const response = await fetch('/api/calls/current');
     const payload = await response.json();
-    return payload?.call || null;
+    return {
+        call: payload?.call || null,
+        incomingCall: payload?.incoming_call || null
+    };
 }
 
 async function refreshGlobalCallState(options = {}) {
@@ -767,12 +932,14 @@ async function refreshGlobalCallState(options = {}) {
 
     chatCallStatusInFlight = true;
     try {
-        const activeCall = await fetchCurrentActiveCall();
+        const snapshot = await fetchCurrentActiveCall();
+        const activeCall = snapshot?.call || null;
+        const incomingCall = snapshot?.incomingCall || null;
         if (activeCall) {
             ensureCurrentChatContext(activeCall);
         }
 
-        await applyActiveCallSnapshot(activeCall, { allowRestore: true });
+        await applyActiveCallSnapshot(activeCall, { allowRestore: true, incomingCallCandidate: incomingCall });
 
         if (!activeCall && !currentCallId) {
             setChatCallStatusBar(null);
@@ -869,7 +1036,8 @@ async function refreshChatCallStatusBar(options = {}) {
 
         const hasLocalOrPersistedCall = Number(currentCallId || globalCallContext?.id || 0) > 0;
         if (!activeCall && hasLocalOrPersistedCall) {
-            const globalActiveCall = await fetchCurrentActiveCall().catch(() => null);
+            const globalSnapshot = await fetchCurrentActiveCall().catch(() => null);
+            const globalActiveCall = globalSnapshot?.call || null;
             if (globalActiveCall) {
                 activeCall = globalActiveCall;
             }
@@ -889,6 +1057,10 @@ async function refreshChatCallStatusBar(options = {}) {
 
 async function startVoiceCall(options = {}) {
     if (!currentChat) return;
+    if (currentChat.user_in_active_call === true || currentUserInActiveCall) {
+        showToast('You are already in an active call', 'error');
+        return;
+    }
     if (normalizeChatType(currentChat.type) === 'personal' && currentChat.can_start_calls === false) {
         showToast("You can't call a banned user", 'error');
         return;
@@ -905,6 +1077,7 @@ async function startVoiceCall(options = {}) {
     }
 
     currentCallId = start.call_id;
+    setChatUserInActiveCall(true);
     startCallDurationCounter(Date.now());
     if (typeof stopAllNotificationSounds === 'function') {
         stopAllNotificationSounds();
@@ -2720,23 +2893,12 @@ async function joinCall() {
 
 async function declineCall() {
     const declinedId = Number(lastIncomingCallAlertId || currentCallId || 0);
-    declinedCallId = declinedId;
-    stopCallRingingAudio();
-    clearAcceptedCallNotifications();
-    let declinedCallEnded = false;
-
-    if (declinedId > 0) {
-        const result = await postForm('/api/calls/decline', {
-            csrf_token: getCsrfToken(),
-            call_id: String(declinedId)
-        });
-
-        if (!result.success) {
-            showToast(result.error || 'Unable to decline call', 'error');
-        } else {
-            declinedCallEnded = Number(result.ended || 0) > 0;
-        }
+    if (declinedId <= 0) {
+        return;
     }
+
+    const declineResult = await declineIncomingCallById(declinedId);
+    const declinedCallEnded = Boolean(declineResult.ended);
 
     document.getElementById('accept-call-btn')?.classList.add('hidden');
     document.getElementById('decline-call-btn')?.classList.add('hidden');

@@ -150,6 +150,24 @@ class ChatController extends Controller {
         return $this->getPersonalChatMessageRestrictionReason($chatId, $userId) === null;
     }
 
+    private function isUserInJoinedActiveCall(int $userId): bool {
+        if ($userId <= 0) {
+            return false;
+        }
+
+        $count = (int)Database::query(
+            "SELECT COUNT(*)
+             FROM calls c
+             JOIN call_participants cp ON cp.call_id = c.id
+             WHERE c.status = 'active'
+               AND cp.user_id = ?
+               AND cp.left_at IS NULL",
+            [$userId]
+        )->fetchColumn();
+
+        return $count > 0;
+    }
+
     private function supportsLastSeenMessageId(): bool {
         static $supports = null;
         if ($supports !== null) {
@@ -382,6 +400,7 @@ class ChatController extends Controller {
         $messageRestrictionReason = $this->getPersonalChatMessageRestrictionReason((int)$chat->id, (int)$currentUserId);
         $canSendMessages = $messageRestrictionReason === null;
         $canStartCalls = $messageRestrictionReason !== 'banned_user';
+        $isUserInActiveCall = $this->isUserInJoinedActiveCall((int)$currentUserId);
 
         if ($supportsLastSeen) {
             $latestMessageId = $this->getLatestMessageId((int)$chat->id);
@@ -422,6 +441,7 @@ class ChatController extends Controller {
             'canSendMessages' => $canSendMessages,
             'messageRestrictionReason' => $messageRestrictionReason,
             'canStartCalls' => $canStartCalls,
+            'isUserInActiveCall' => $isUserInActiveCall,
             'pinnedMessage' => $pinnedMessage,
             'groupEditWindow' => $groupEditWindow,
             'groupDeleteWindow' => $groupDeleteWindow,
@@ -664,6 +684,7 @@ class ChatController extends Controller {
         $messageRestrictionReason = $this->getPersonalChatMessageRestrictionReason($chatId, (int)$userId);
         $canSendMessage = $messageRestrictionReason === null;
         $canStartCall = $messageRestrictionReason !== 'banned_user';
+        $isUserInActiveCall = $this->isUserInJoinedActiveCall((int)$userId);
 
         if ($this->supportsSystemEvents()) {
             $chatRow = Database::query("SELECT type FROM chats WHERE id = ?", [$chatId])->fetch();
@@ -685,7 +706,8 @@ class ChatController extends Controller {
             'first_unseen_message_id' => $firstUnseenMessageId,
             'can_send_message' => $canSendMessage,
             'can_send_message_reason' => $messageRestrictionReason,
-            'can_start_call' => $canStartCall
+            'can_start_call' => $canStartCall,
+            'user_in_active_call' => $isUserInActiveCall
         ]);
     }
 
