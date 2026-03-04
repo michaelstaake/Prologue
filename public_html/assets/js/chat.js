@@ -3886,7 +3886,7 @@ function renderMessages(messages, options = {}) {
             chunks.push(`
                 <div class="flex gap-3 ${isNewPrologueCluster ? 'mt-4' : 'mt-1'}${isHiddenByDefault ? ' hidden' : ''}"${middleAttrs}>
                     <div class="w-10 shrink-0">
-                        ${isNewPrologueCluster ? `<div class="w-10 h-10 rounded-full border border-zinc-700 bg-zinc-900 text-zinc-400 flex items-center justify-center font-semibold mt-0.5">${isCallSystemEvent ? '<i class="fa-solid fa-phone text-xs" aria-hidden="true"></i>' : 'P'}</div>` : '<div class="w-10 h-10"></div>'}
+                        ${isNewPrologueCluster ? '<div class="w-10 h-10 rounded-full border border-zinc-700 bg-zinc-900 text-zinc-400 flex items-center justify-center font-semibold mt-0.5"><i class="fa-solid fa-comments text-xs" aria-hidden="true"></i></div>' : '<div class="w-10 h-10"></div>'}
                     </div>
                     <div class="min-w-0 flex-1">
                         ${isNewPrologueCluster ? `<div class="flex items-center gap-2 mb-0.5"><span class="text-sm font-semibold leading-5 text-zinc-400">Prologue</span></div>` : ''}

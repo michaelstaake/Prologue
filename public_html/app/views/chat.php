@@ -583,7 +583,7 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                 <div class="flex gap-3 <?= $isNewPrologueCluster ? 'mt-4' : 'mt-1' ?><?= $isSystemEntryHiddenByDefault ? ' hidden' : '' ?>"<?= $systemEntryExtraAttributes ?>>
                     <div class="w-10 shrink-0">
                         <?php if ($isNewPrologueCluster): ?>
-                            <div class="w-10 h-10 rounded-full border border-zinc-700 bg-zinc-900 text-zinc-400 flex items-center justify-center font-semibold mt-0.5"><?= $isCallSystemEvent ? '<i class="fa-solid fa-phone text-xs" aria-hidden="true"></i>' : 'P' ?></div>
+                            <div class="w-10 h-10 rounded-full border border-zinc-700 bg-zinc-900 text-zinc-400 flex items-center justify-center font-semibold mt-0.5"><i class="fa-solid fa-comments text-xs" aria-hidden="true"></i></div>
                         <?php else: ?>
                             <div class="w-10 h-10"></div>
                         <?php endif; ?>
