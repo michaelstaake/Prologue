@@ -142,6 +142,7 @@ class SettingsController extends Controller {
             $viewData = array_merge($viewData, [
                 'pendingReportCount' => $pendingReportCount,
                 'announcement_message' => (string)(Setting::get('announcement_message') ?? ''),
+                'announcement_style' => (string)(Setting::get('announcement_style') ?? 'orange'),
                 'mail_host' => Setting::get('mail_host') ?? '',
                 'mail_port' => Setting::get('mail_port') ?? '587',
                 'mail_user' => Setting::get('mail_user') ?? '',

@@ -713,6 +713,15 @@
             <p class="text-sm text-zinc-400 mb-5">Show a plain text alert on the dashboard for all users. Leave blank to hide it.</p>
             <form method="POST" action="<?= htmlspecialchars(base_url('/admin/announcement'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-4">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
+                <?php $currentAnnouncementStyle = (string)($announcement_style ?? 'orange'); ?>
+                <div>
+                    <label for="cp_announcement_style" class="block text-sm text-zinc-400 mb-1">Style</label>
+                    <select id="cp_announcement_style" name="announcement_style" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-zinc-100">
+                        <option value="orange" <?= $currentAnnouncementStyle === 'orange' ? 'selected' : '' ?>>Orange</option>
+                        <option value="green" <?= $currentAnnouncementStyle === 'green' ? 'selected' : '' ?>>Green</option>
+                        <option value="blue" <?= $currentAnnouncementStyle === 'blue' ? 'selected' : '' ?>>Blue</option>
+                    </select>
+                </div>
                 <div>
                     <div class="mb-1 flex items-center justify-between gap-3">
                         <label for="cp_announcement_message" class="block text-sm text-zinc-400">Message (max 1000 characters)</label>

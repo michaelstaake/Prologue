@@ -54,7 +54,14 @@ class AdminController extends Controller {
             $announcement = substr($announcement, 0, 1000);
         }
 
+        $announcementStyle = trim((string)($_POST['announcement_style'] ?? 'orange'));
+        $validAnnouncementStyles = ['orange', 'green', 'blue'];
+        if (!in_array($announcementStyle, $validAnnouncementStyles, true)) {
+            $announcementStyle = 'orange';
+        }
+
         Setting::set('announcement_message', $announcement);
+        Setting::set('announcement_style', $announcementStyle);
 
         $this->flash('success', 'announcement_saved');
         $this->redirect('/settings');

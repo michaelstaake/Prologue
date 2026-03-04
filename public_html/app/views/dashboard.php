@@ -38,13 +38,40 @@
         </div>
     </div>
 
-    <?php $dashboardAnnouncement = trim((string)($announcementMessage ?? '')); ?>
+    <?php
+        $dashboardAnnouncement = trim((string)($announcementMessage ?? ''));
+        $dashboardAnnouncementStyle = trim((string)($announcementStyle ?? 'orange'));
+        $announcementClassMap = [
+            'orange' => [
+                'container' => 'border-amber-700 bg-amber-950/60',
+                'heading' => 'text-amber-300',
+                'body' => 'text-amber-200',
+                'link' => 'text-amber-300 hover:text-amber-200',
+            ],
+            'green' => [
+                'container' => 'border-green-700 bg-green-950/50',
+                'heading' => 'text-green-300',
+                'body' => 'text-green-200',
+                'link' => 'text-green-300 hover:text-green-200',
+            ],
+            'blue' => [
+                'container' => 'border-blue-700 bg-blue-950/50',
+                'heading' => 'text-blue-300',
+                'body' => 'text-blue-200',
+                'link' => 'text-blue-300 hover:text-blue-200',
+            ],
+        ];
+        if (!isset($announcementClassMap[$dashboardAnnouncementStyle])) {
+            $dashboardAnnouncementStyle = 'orange';
+        }
+        $announcementClasses = $announcementClassMap[$dashboardAnnouncementStyle];
+    ?>
     <?php if ($dashboardAnnouncement !== ''): ?>
-        <div class="mb-6 rounded-xl border border-amber-700 bg-amber-950/60 px-5 py-4">
-            <p class="text-sm font-semibold text-amber-300 mb-1">Announcement</p>
-            <p class="text-sm text-amber-200 whitespace-pre-wrap break-words"><?= htmlspecialchars($dashboardAnnouncement, ENT_QUOTES, 'UTF-8') ?></p>
+        <div class="mb-6 rounded-xl border px-5 py-4 <?= htmlspecialchars($announcementClasses['container'], ENT_QUOTES, 'UTF-8') ?>">
+            <p class="text-sm font-semibold mb-1 <?= htmlspecialchars($announcementClasses['heading'], ENT_QUOTES, 'UTF-8') ?>">Announcement</p>
+            <p class="text-sm whitespace-pre-wrap break-words <?= htmlspecialchars($announcementClasses['body'], ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($dashboardAnnouncement, ENT_QUOTES, 'UTF-8') ?></p>
             <?php if (strtolower((string)(Auth::user()->role ?? '')) === 'admin'): ?>
-                <a href="<?= htmlspecialchars(base_url('/settings'), ENT_QUOTES, 'UTF-8') ?>" class="mt-3 inline-flex items-center gap-2 text-xs text-amber-300 hover:text-amber-200 transition">
+                <a href="<?= htmlspecialchars(base_url('/settings'), ENT_QUOTES, 'UTF-8') ?>" class="mt-3 inline-flex items-center gap-2 text-xs transition <?= htmlspecialchars($announcementClasses['link'], ENT_QUOTES, 'UTF-8') ?>">
                     Manage Announcement <i class="fa fa-arrow-right text-[10px]"></i>
                 </a>
             <?php endif; ?>
