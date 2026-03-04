@@ -1171,6 +1171,7 @@ class ChatController extends Controller {
         $targetUsername = User::normalizeUsername($_POST['username'] ?? '');
         $authUser = Auth::user();
         $currentUserId = (int)$authUser->id;
+        $isCurrentUserAdmin = strtolower((string)($authUser->role ?? '')) === 'admin';
         $actorUsername = User::normalizeUsername($authUser->username ?? '');
 
         if ($chatId <= 0 || $targetUsername === '') {
@@ -1199,7 +1200,7 @@ class ChatController extends Controller {
         }
 
         if (!$this->canAddGroupMembers($chat, $currentUserId, $isCurrentUserAdmin)) {
-            $this->json(['error' => 'Only group owner can add users'], 403);
+            $this->json(['error' => 'Only group owner or admin can add users'], 403);
         }
 
         $target = User::findByUsername($targetUsername);
