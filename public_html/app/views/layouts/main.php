@@ -217,6 +217,7 @@
             <button id="join-call-btn" onclick="joinCall()" class="hidden bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1 rounded-full text-xs font-medium">Join Call</button>
             <button id="accept-call-btn" onclick="acceptCall()" class="hidden bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1 rounded-full text-xs font-medium">Accept</button>
             <button id="decline-call-btn" onclick="declineCall()" class="hidden bg-red-600 hover:bg-red-500 text-white px-3 py-1 rounded-full text-xs font-medium">Decline</button>
+            <button id="end-ringing-call-btn" onclick="endCall()" class="hidden bg-red-600 hover:bg-red-500 text-white px-3 py-1 rounded-full text-xs font-medium">End</button>
         </div>
 
         <div id="incoming-call-waiting-overlay" class="hidden fixed inset-0 z-[90] bg-black/70 backdrop-blur-sm p-4">

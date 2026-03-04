@@ -22,6 +22,7 @@ let callConnectingOverlayTimeout = null;
 let callLeaveBeaconBound = false;
 let currentUserInActiveCall = false;
 let incomingCallWaitingCandidate = null;
+let compactOutgoingRingingCallId = 0;
 
 function applyVoiceCallButtonState() {
     const voiceCallButton = document.getElementById('start-voice-call-button');
@@ -425,12 +426,15 @@ function setChatCallStatusBar(state, incomingAlert = false) {
     const acceptBtn = document.getElementById('accept-call-btn');
     const declineBtn = document.getElementById('decline-call-btn');
     const joinBtn = document.getElementById('join-call-btn');
+    const endRingingBtn = document.getElementById('end-ringing-call-btn');
     const showHint = document.getElementById('chat-call-show-overlay-hint');
     if (!bar || !label) return;
     callDurationBarState = state || null;
+    const isOutgoingRinging = state === 'ringing' && !incomingAlert;
 
     bar.classList.remove(
         'hidden',
+        'animate-pulse',
         'bg-emerald-500/20',
         'border-emerald-500/50',
         'text-emerald-200',
@@ -449,6 +453,7 @@ function setChatCallStatusBar(state, incomingAlert = false) {
         acceptBtn?.classList.add('hidden');
         declineBtn?.classList.add('hidden');
         joinBtn?.classList.add('hidden');
+        endRingingBtn?.classList.add('hidden');
         showHint?.classList.add('hidden');
         bar.style.cursor = '';
         bar.title = '';
@@ -458,9 +463,12 @@ function setChatCallStatusBar(state, incomingAlert = false) {
 
     const showJoinAction = state === 'joinable';
     const showCallActions = state === 'ringing' && incomingAlert;
+    const showOutgoingEndAction = state === 'ringing' && !incomingAlert;
     acceptBtn?.classList.toggle('hidden', !showCallActions);
     declineBtn?.classList.toggle('hidden', !showCallActions);
     joinBtn?.classList.toggle('hidden', !showJoinAction);
+    endRingingBtn?.classList.toggle('hidden', !showOutgoingEndAction);
+    bar.classList.toggle('animate-pulse', isOutgoingRinging);
 
     // Show "open overlay" hint when overlay is hidden and call is active/muted
     const overlayIsHidden = callOverlayMode === 'hidden';
@@ -470,7 +478,14 @@ function setChatCallStatusBar(state, incomingAlert = false) {
     bar.title = (overlayIsHidden && isActiveCall) ? 'Click to show call screen' : '';
 
     if (state === 'ringing') {
-        label.textContent = 'Ringing..';
+        const isPersonal = normalizeChatType(currentChat?.type || globalCallContext?.chat_type || 'personal') === 'personal';
+        if (incomingAlert) {
+            label.textContent = 'Incoming call...';
+        } else if (isPersonal && peerUsername) {
+            label.textContent = `Ringing ${peerUsername}...`;
+        } else {
+            label.textContent = 'Ringing...';
+        }
         bar.classList.add('bg-zinc-700/50', 'border-zinc-600', 'text-zinc-200');
         updateCallDurationUI();
         return;
@@ -776,6 +791,7 @@ async function cleanupLocalCallSession(options = {}) {
     localCameraStartedAtMs = 0;
     localScreenShareStartedAtMs = 0;
     hadCallPeerConnected = false;
+    compactOutgoingRingingCallId = 0;
     remoteHasVideo = false;
     remoteIsScreenSharing = false;
     remoteSpotlighted = false;
@@ -987,6 +1003,17 @@ async function applyActiveCallSnapshot(activeCall, options = {}) {
 
     setChatCallStatusBar(callState.state, callState.incomingAlert);
     syncCallRingingState(callState);
+
+    const shouldPromoteFromCompactOutgoing = compactOutgoingRingingCallId > 0
+        && Number(callState.callId || 0) === compactOutgoingRingingCallId
+        && (callState.state === 'active' || callState.state === 'muted');
+    if (shouldPromoteFromCompactOutgoing) {
+        compactOutgoingRingingCallId = 0;
+        setCallOverlayMode('full');
+    } else if (Number(callState.callId || 0) !== compactOutgoingRingingCallId && callState.state !== 'ringing') {
+        compactOutgoingRingingCallId = 0;
+    }
+
     if ((callState.state === 'active' || callState.state === 'muted') && typeof stopAllNotificationSounds === 'function') {
         stopAllNotificationSounds();
     }
@@ -1190,13 +1217,16 @@ async function startVoiceCall(options = {}) {
     persistActiveCallSession(persistedCall);
 
     if (start.joined_existing) {
+        compactOutgoingRingingCallId = 0;
         stopCallRingingAudio();
         setChatCallStatusBar(isMuted ? 'muted' : 'active');
     } else {
         if (normalizeChatType(currentChat?.type || 'personal') === 'group') {
+            compactOutgoingRingingCallId = 0;
             stopCallRingingAudio();
             setChatCallStatusBar(isMuted ? 'muted' : 'active');
         } else {
+            compactOutgoingRingingCallId = Number(currentCallId || 0);
             setChatCallStatusBar('ringing');
             syncCallRingingState({ state: 'ringing', callId: Number(currentCallId || 0), ringingDirection: 'outgoing', incomingAlert: false });
         }
@@ -1221,7 +1251,9 @@ async function startVoiceCall(options = {}) {
     callParticipantsPanelOpen = true;
     updateCallParticipantsPanelVisibility();
 
-    setCallOverlayMode(normalizeCallOverlayMode(options.initialOverlayMode || 'full'));
+    const isCompactOutgoingRinging = !start.joined_existing
+        && normalizeChatType(currentChat?.type || 'personal') === 'personal';
+    setCallOverlayMode(normalizeCallOverlayMode(options.initialOverlayMode || (isCompactOutgoingRinging ? 'hidden' : 'full')));
     if (start.joined_existing && (!options.silentStart || options.showJoinConnectingOverlay)) {
         showCallConnectingOverlay({
             durationMs: 3000,
