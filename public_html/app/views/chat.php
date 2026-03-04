@@ -434,9 +434,132 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                     $latestClusterIndexByUser[$clusterUserId] = $index;
                 }
             }
+
+            $buildSystemEventGroupKey = static function (int $chatId, array $runMessages): string {
+                $firstMessage = $runMessages[0] ?? null;
+                $lastMessage = $runMessages[count($runMessages) - 1] ?? null;
+                $firstId = (int)($firstMessage->id ?? 0);
+                $lastId = (int)($lastMessage->id ?? 0);
+                $firstTimestamp = (string)($firstMessage->created_at ?? '');
+                $lastTimestamp = (string)($lastMessage->created_at ?? '');
+                $rawFingerprint = $chatId . '|' . $firstId . '|' . $lastId . '|' . count($runMessages) . '|' . $firstTimestamp . '|' . $lastTimestamp;
+                $hash = 7;
+                $length = strlen($rawFingerprint);
+                for ($charIndex = 0; $charIndex < $length; $charIndex++) {
+                    $hash = (($hash * 31) + ord($rawFingerprint[$charIndex])) & 0xFFFFFFFF;
+                }
+
+                return $chatId . '-' . $firstId . '-' . $lastId . '-' . count($runMessages) . '-' . dechex($hash);
+            };
+
+            $displayEntries = [];
+            $messageCount = count($messages);
+            $messageIndex = 0;
+            while ($messageIndex < $messageCount) {
+                $candidate = $messages[$messageIndex];
+                if (!($candidate->is_system_event ?? false)) {
+                    $displayEntries[] = [
+                        'type' => 'message',
+                        'message' => $candidate,
+                        'message_index' => $messageIndex,
+                    ];
+                    $messageIndex++;
+                    continue;
+                }
+
+                $runStart = $messageIndex;
+                while ($messageIndex < $messageCount && ($messages[$messageIndex]->is_system_event ?? false)) {
+                    $messageIndex++;
+                }
+
+                $runMessages = array_slice($messages, $runStart, $messageIndex - $runStart);
+                if (count($runMessages) <= 2) {
+                    foreach ($runMessages as $runOffset => $runMessage) {
+                        $displayEntries[] = [
+                            'type' => 'system_message',
+                            'message' => $runMessage,
+                            'message_index' => $runStart + $runOffset,
+                            'group_key' => '',
+                            'is_collapsible_middle' => false,
+                            'hidden_by_default' => false,
+                        ];
+                    }
+                    continue;
+                }
+
+                $groupKey = $buildSystemEventGroupKey((int)($chat->id ?? 0), $runMessages);
+                $hiddenCount = max(0, count($runMessages) - 2);
+
+                $displayEntries[] = [
+                    'type' => 'system_message',
+                    'message' => $runMessages[0],
+                    'message_index' => $runStart,
+                    'group_key' => $groupKey,
+                    'is_collapsible_middle' => false,
+                    'hidden_by_default' => false,
+                ];
+
+                $displayEntries[] = [
+                    'type' => 'system_toggle',
+                    'group_key' => $groupKey,
+                    'hidden_count' => $hiddenCount,
+                ];
+
+                for ($middleIndex = 1; $middleIndex < count($runMessages) - 1; $middleIndex++) {
+                    $displayEntries[] = [
+                        'type' => 'system_message',
+                        'message' => $runMessages[$middleIndex],
+                        'message_index' => $runStart + $middleIndex,
+                        'group_key' => $groupKey,
+                        'is_collapsible_middle' => true,
+                        'hidden_by_default' => true,
+                    ];
+                }
+
+                $displayEntries[] = [
+                    'type' => 'system_message',
+                    'message' => $runMessages[count($runMessages) - 1],
+                    'message_index' => $messageIndex - 1,
+                    'group_key' => $groupKey,
+                    'is_collapsible_middle' => false,
+                    'hidden_by_default' => false,
+                ];
+            }
         ?>
-        <?php foreach ($messages as $index => $message): ?>
-            <?php if ($message->is_system_event ?? false): ?>
+        <?php foreach ($displayEntries as $entry): ?>
+            <?php if (($entry['type'] ?? '') === 'system_toggle'): ?>
+                <?php
+                    $systemToggleGroupKey = (string)($entry['group_key'] ?? '');
+                    $systemToggleHiddenCount = max(0, (int)($entry['hidden_count'] ?? 0));
+                    $systemToggleLabel = 'Show ' . $systemToggleHiddenCount . ' more ' . ($systemToggleHiddenCount === 1 ? 'event' : 'events');
+                ?>
+                <div class="flex gap-3 mt-1">
+                    <div class="w-10 shrink-0"><div class="w-10 h-1"></div></div>
+                    <div class="min-w-0 flex-1">
+                        <button
+                            type="button"
+                            class="js-system-events-toggle text-xs text-zinc-500 hover:text-zinc-300"
+                            data-system-event-group-key="<?= htmlspecialchars($systemToggleGroupKey, ENT_QUOTES, 'UTF-8') ?>"
+                            data-system-event-hidden-count="<?= $systemToggleHiddenCount ?>"
+                            aria-expanded="false"
+                        >
+                            <span class="js-system-events-toggle-label"><?= htmlspecialchars($systemToggleLabel, ENT_QUOTES, 'UTF-8') ?></span>
+                        </button>
+                    </div>
+                </div>
+                <?php $previousWasSystemEvent = true; $previousUserId = null; continue; ?>
+            <?php endif; ?>
+
+            <?php if (($entry['type'] ?? '') === 'system_message'): ?>
+                <?php
+                    $message = $entry['message'];
+                    $systemEntryGroupKey = (string)($entry['group_key'] ?? '');
+                    $isSystemEntryCollapsibleMiddle = !empty($entry['is_collapsible_middle']);
+                    $isSystemEntryHiddenByDefault = !empty($entry['hidden_by_default']);
+                    $systemEntryExtraAttributes = $isSystemEntryCollapsibleMiddle
+                        ? ' data-system-event-group-key="' . htmlspecialchars($systemEntryGroupKey, ENT_QUOTES, 'UTF-8') . '" data-system-event-hidden="1"'
+                        : '';
+                ?>
                 <?php
                     $isNewPrologueCluster = !$previousWasSystemEvent;
                     $systemEventType = (string)($message->event_type ?? '');
@@ -457,10 +580,10 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                         $systemContentHtml = $systemContentEscaped;
                     }
                 ?>
-                <div class="flex gap-3 <?= $isNewPrologueCluster ? 'mt-4' : 'mt-1' ?>">
+                <div class="flex gap-3 <?= $isNewPrologueCluster ? 'mt-4' : 'mt-1' ?><?= $isSystemEntryHiddenByDefault ? ' hidden' : '' ?>"<?= $systemEntryExtraAttributes ?>>
                     <div class="w-10 shrink-0">
                         <?php if ($isNewPrologueCluster): ?>
-                            <div class="w-10 h-10 rounded-full border <?= $isCallSystemEvent ? 'border-zinc-700 bg-zinc-900 text-zinc-400' : 'border-zinc-700 bg-emerald-700 text-emerald-100' ?> flex items-center justify-center font-semibold mt-0.5"><?= $isCallSystemEvent ? '<i class="fa-solid fa-phone text-xs" aria-hidden="true"></i>' : 'P' ?></div>
+                            <div class="w-10 h-10 rounded-full border border-zinc-700 bg-zinc-900 text-zinc-400 flex items-center justify-center font-semibold mt-0.5"><?= $isCallSystemEvent ? '<i class="fa-solid fa-phone text-xs" aria-hidden="true"></i>' : 'P' ?></div>
                         <?php else: ?>
                             <div class="w-10 h-10"></div>
                         <?php endif; ?>
@@ -468,10 +591,10 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                     <div class="min-w-0 flex-1">
                         <?php if ($isNewPrologueCluster): ?>
                             <div class="flex items-center gap-2 mb-0.5">
-                                <span class="text-sm font-semibold leading-5 <?= $isCallSystemEvent ? 'text-zinc-400' : 'prologue-accent' ?>">Prologue</span>
+                                <span class="text-sm font-semibold leading-5 text-zinc-400">Prologue</span>
                             </div>
                         <?php endif; ?>
-                        <div class="<?= $isCallSystemEvent ? 'text-zinc-400 text-[15px]' : 'text-zinc-200 text-[17px]' ?> leading-6"><?= $systemContentHtml ?></div>
+                        <div class="text-zinc-400 text-[15px] leading-6"><?= $systemContentHtml ?></div>
                         <div class="relative mt-0.5">
                             <div class="text-xs flex items-center gap-3">
                                 <span class="text-zinc-500" data-utc="<?= htmlspecialchars($sysFullTimestamp, ENT_QUOTES, 'UTF-8') ?>" title="<?= htmlspecialchars($sysFullTimestamp, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($sysCompactTimestamp, ENT_QUOTES, 'UTF-8') ?></span>
@@ -481,6 +604,7 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                 </div>
                 <?php $previousWasSystemEvent = true; $previousUserId = null; continue; ?>
             <?php endif; ?>
+            <?php $message = $entry['message']; $index = (int)($entry['message_index'] ?? -1); ?>
             <?php
                 $avatarUrl = $message->avatar_url ?? User::avatarUrl($message);
                 $isNewGroup = ($previousUserId === null) || ((int)$previousUserId !== (int)$message->user_id);

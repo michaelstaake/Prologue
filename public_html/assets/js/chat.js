@@ -4,6 +4,7 @@ let messageInteractionHandlersBound = false;
 let openReactionPickerMessageId = 0;
 let lastRenderedChatId = 0;
 let lastRenderedMessagesSignature = '';
+const expandedSystemEventGroupsByChat = new Map();
 let pendingPinReplaceMessageId = 0;
 let pinnedBannerLastScrollTop = 0;
 let pinnedBannerHiddenByScroll = false;
@@ -937,6 +938,38 @@ function bindMessageQuotesAndReactions() {
     bindMessageFormScrollBehavior(messagesBox);
 
     messagesBox.addEventListener('click', (event) => {
+        const systemEventsToggleButton = event.target.closest('.js-system-events-toggle');
+        if (systemEventsToggleButton) {
+            event.preventDefault();
+
+            const groupKey = String(systemEventsToggleButton.getAttribute('data-system-event-group-key') || '');
+            if (!groupKey) {
+                return;
+            }
+
+            const hiddenCount = Math.max(0, Number(systemEventsToggleButton.getAttribute('data-system-event-hidden-count') || 0));
+            const currentlyExpanded = systemEventsToggleButton.getAttribute('aria-expanded') === 'true';
+            const nextExpanded = !currentlyExpanded;
+
+            setSystemEventGroupExpanded(Number(currentChat?.id || 0), groupKey, nextExpanded);
+
+            const groupedRows = messagesBox.querySelectorAll(`[data-system-event-group-key="${groupKey}"][data-system-event-hidden="1"]`);
+            groupedRows.forEach((row) => {
+                if (!(row instanceof HTMLElement)) return;
+                row.classList.toggle('hidden', !nextExpanded);
+            });
+
+            systemEventsToggleButton.setAttribute('aria-expanded', nextExpanded ? 'true' : 'false');
+            const toggleLabel = systemEventsToggleButton.querySelector('.js-system-events-toggle-label');
+            if (toggleLabel) {
+                toggleLabel.textContent = nextExpanded
+                    ? `Hide ${hiddenCount} ${hiddenCount === 1 ? 'event' : 'events'}`
+                    : `Show ${hiddenCount} more ${hiddenCount === 1 ? 'event' : 'events'}`;
+            }
+
+            return;
+        }
+
         const quotedMessageLink = event.target.closest('.js-quoted-message-link');
         if (quotedMessageLink) {
             if (event.target.closest('a')) {
@@ -3312,6 +3345,146 @@ function buildMessagesSignature(messages) {
     }).join('\n');
 }
 
+function getSystemEventExpandedGroupSet(chatId) {
+    const safeChatId = Number(chatId || 0);
+    if (!Number.isFinite(safeChatId) || safeChatId <= 0) {
+        return new Set();
+    }
+
+    if (!expandedSystemEventGroupsByChat.has(safeChatId)) {
+        expandedSystemEventGroupsByChat.set(safeChatId, new Set());
+    }
+
+    return expandedSystemEventGroupsByChat.get(safeChatId);
+}
+
+function isSystemEventGroupExpanded(chatId, groupKey) {
+    if (!groupKey) return false;
+    return getSystemEventExpandedGroupSet(chatId).has(String(groupKey));
+}
+
+function setSystemEventGroupExpanded(chatId, groupKey, expanded) {
+    const safeGroupKey = String(groupKey || '');
+    if (!safeGroupKey) return;
+
+    const expandedSet = getSystemEventExpandedGroupSet(chatId);
+    if (expanded) {
+        expandedSet.add(safeGroupKey);
+    } else {
+        expandedSet.delete(safeGroupKey);
+    }
+}
+
+function pruneSystemEventExpandedGroups(chatId, visibleGroupKeys) {
+    const expandedSet = getSystemEventExpandedGroupSet(chatId);
+    if (expandedSet.size === 0) return;
+
+    const visibleKeys = visibleGroupKeys instanceof Set ? visibleGroupKeys : new Set();
+    Array.from(expandedSet).forEach((key) => {
+        if (!visibleKeys.has(key)) {
+            expandedSet.delete(key);
+        }
+    });
+}
+
+function buildSystemEventGroupKey(chatId, runMessages) {
+    const safeChatId = Number(chatId || 0);
+    const firstMessage = runMessages[0] || {};
+    const lastMessage = runMessages[runMessages.length - 1] || {};
+    const firstId = Number(firstMessage?.id || 0);
+    const lastId = Number(lastMessage?.id || 0);
+    const firstTimestamp = String(firstMessage?.created_at || '');
+    const lastTimestamp = String(lastMessage?.created_at || '');
+    const rawFingerprint = `${safeChatId}|${firstId}|${lastId}|${runMessages.length}|${firstTimestamp}|${lastTimestamp}`;
+    const fingerprintHash = Array.from(rawFingerprint).reduce((value, char) => ((value * 31) + char.charCodeAt(0)) >>> 0, 7);
+    return `${safeChatId}-${firstId}-${lastId}-${runMessages.length}-${fingerprintHash.toString(16)}`;
+}
+
+function buildRenderableMessageEntries(messages, chatId) {
+    const entries = [];
+    const visibleSystemGroupKeys = new Set();
+
+    if (!Array.isArray(messages) || messages.length === 0) {
+        pruneSystemEventExpandedGroups(chatId, visibleSystemGroupKeys);
+        return entries;
+    }
+
+    let index = 0;
+    while (index < messages.length) {
+        const message = messages[index];
+        if (!(message?.is_system_event)) {
+            entries.push({
+                type: 'user',
+                message,
+                originalIndex: index
+            });
+            index += 1;
+            continue;
+        }
+
+        const runStart = index;
+        while (index < messages.length && (messages[index]?.is_system_event)) {
+            index += 1;
+        }
+
+        const runMessages = messages.slice(runStart, index);
+        if (runMessages.length <= 2) {
+            runMessages.forEach((runMessage, offset) => {
+                entries.push({
+                    type: 'system',
+                    message: runMessage,
+                    originalIndex: runStart + offset,
+                    groupKey: '',
+                    isCollapsibleMiddle: false
+                });
+            });
+            continue;
+        }
+
+        const groupKey = buildSystemEventGroupKey(chatId, runMessages);
+        const hiddenCount = Math.max(0, runMessages.length - 2);
+        const isExpanded = isSystemEventGroupExpanded(chatId, groupKey);
+        visibleSystemGroupKeys.add(groupKey);
+
+        entries.push({
+            type: 'system',
+            message: runMessages[0],
+            originalIndex: runStart,
+            groupKey,
+            isCollapsibleMiddle: false
+        });
+
+        entries.push({
+            type: 'system-toggle',
+            groupKey,
+            hiddenCount,
+            expanded: isExpanded
+        });
+
+        for (let middleIndex = 1; middleIndex < runMessages.length - 1; middleIndex += 1) {
+            entries.push({
+                type: 'system',
+                message: runMessages[middleIndex],
+                originalIndex: runStart + middleIndex,
+                groupKey,
+                isCollapsibleMiddle: true,
+                hiddenByDefault: !isExpanded
+            });
+        }
+
+        entries.push({
+            type: 'system',
+            message: runMessages[runMessages.length - 1],
+            originalIndex: index - 1,
+            groupKey,
+            isCollapsibleMiddle: false
+        });
+    }
+
+    pruneSystemEventExpandedGroups(chatId, visibleSystemGroupKeys);
+    return entries;
+}
+
 function getPersonalChatMessageRestrictionText(reason) {
     if (String(reason || '') === 'group_muted') {
         return 'You are muted in this group.';
@@ -3623,6 +3796,8 @@ function renderMessages(messages, options = {}) {
     const previousViewportHeight = box.clientHeight;
     const distanceFromBottom = Math.max(0, previousScrollHeight - (previousScrollTop + previousViewportHeight));
     const wasNearBottom = distanceFromBottom <= MESSAGE_SCROLL_BOTTOM_THRESHOLD_PX;
+    const activeChatId = Number(currentChat?.id || 0);
+    const renderEntries = buildRenderableMessageEntries(messages, activeChatId);
 
     const clusterStarts = [];
     let prevClusterUserId = null;
@@ -3663,21 +3838,59 @@ function renderMessages(messages, options = {}) {
     let previousWasSystemEvent = false;
     const chunks = [];
 
-    messages.forEach((msg, index) => {
-        if (msg.is_system_event) {
+    renderEntries.forEach((entry) => {
+        if (entry?.type === 'system-toggle') {
+            const groupKey = String(entry.groupKey || '');
+            const hiddenCount = Math.max(0, Number(entry.hiddenCount || 0));
+            const isExpanded = Boolean(entry.expanded);
+            const toggleLabel = isExpanded
+                ? `Hide ${hiddenCount} ${hiddenCount === 1 ? 'event' : 'events'}`
+                : `Show ${hiddenCount} more ${hiddenCount === 1 ? 'event' : 'events'}`;
+
+            chunks.push(`
+                <div class="flex gap-3 mt-1">
+                    <div class="w-10 shrink-0"><div class="w-10 h-1"></div></div>
+                    <div class="min-w-0 flex-1">
+                        <button
+                            type="button"
+                            class="js-system-events-toggle text-xs text-zinc-500 hover:text-zinc-300"
+                            data-system-event-group-key="${escapeHtml(groupKey)}"
+                            data-system-event-hidden-count="${hiddenCount}"
+                            aria-expanded="${isExpanded ? 'true' : 'false'}"
+                        >
+                            <span class="js-system-events-toggle-label">${escapeHtml(toggleLabel)}</span>
+                        </button>
+                    </div>
+                </div>
+            `);
+
+            previousWasSystemEvent = true;
+            previousUserId = null;
+            return;
+        }
+
+        const msg = entry?.message;
+        if (entry?.type === 'system' && msg?.is_system_event) {
             const isNewPrologueCluster = !previousWasSystemEvent;
             const systemEventType = String(msg?.event_type || '');
             const isCallSystemEvent = systemEventType.startsWith('call_');
             const sysFullTimestamp = String(msg.created_at || '');
             const sysCompactTimestamp = formatCompactMessageTimestamp(sysFullTimestamp);
+            const groupKey = String(entry?.groupKey || '');
+            const isCollapsibleMiddle = Boolean(entry?.isCollapsibleMiddle);
+            const isHiddenByDefault = Boolean(entry?.hiddenByDefault);
+            const middleAttrs = isCollapsibleMiddle
+                ? ` data-system-event-group-key="${escapeHtml(groupKey)}" data-system-event-hidden="1"`
+                : '';
+
             chunks.push(`
-                <div class="flex gap-3 ${isNewPrologueCluster ? 'mt-4' : 'mt-1'}">
+                <div class="flex gap-3 ${isNewPrologueCluster ? 'mt-4' : 'mt-1'}${isHiddenByDefault ? ' hidden' : ''}"${middleAttrs}>
                     <div class="w-10 shrink-0">
-                        ${isNewPrologueCluster ? `<div class="w-10 h-10 rounded-full border ${isCallSystemEvent ? 'border-zinc-700 bg-zinc-900 text-zinc-400' : 'border-zinc-700 bg-emerald-700 text-emerald-100'} flex items-center justify-center font-semibold mt-0.5">${isCallSystemEvent ? '<i class="fa-solid fa-phone text-xs" aria-hidden="true"></i>' : 'P'}</div>` : '<div class="w-10 h-10"></div>'}
+                        ${isNewPrologueCluster ? `<div class="w-10 h-10 rounded-full border border-zinc-700 bg-zinc-900 text-zinc-400 flex items-center justify-center font-semibold mt-0.5">${isCallSystemEvent ? '<i class="fa-solid fa-phone text-xs" aria-hidden="true"></i>' : 'P'}</div>` : '<div class="w-10 h-10"></div>'}
                     </div>
                     <div class="min-w-0 flex-1">
-                        ${isNewPrologueCluster ? `<div class="flex items-center gap-2 mb-0.5"><span class="text-sm font-semibold leading-5 ${isCallSystemEvent ? 'text-zinc-400' : 'prologue-accent'}">Prologue</span></div>` : ''}
-                        <div class="${isCallSystemEvent ? 'text-zinc-400 text-[15px]' : 'text-zinc-200 text-[17px]'} leading-6">${renderPlainTextWithEmoji(String(msg.content || ''))}</div>
+                        ${isNewPrologueCluster ? `<div class="flex items-center gap-2 mb-0.5"><span class="text-sm font-semibold leading-5 text-zinc-400">Prologue</span></div>` : ''}
+                        <div class="text-zinc-400 text-[15px] leading-6">${renderPlainTextWithEmoji(String(msg.content || ''))}</div>
                         <div class="relative mt-0.5">
                             <div class="text-xs flex items-center gap-3">
                                 <span class="text-zinc-500" data-utc="${escapeHtml(sysFullTimestamp)}" title="${escapeHtml(sysFullTimestamp)}">${escapeHtml(sysCompactTimestamp)}</span>
@@ -3690,6 +3903,8 @@ function renderMessages(messages, options = {}) {
             previousUserId = null;
             return;
         }
+
+        const index = Number(entry?.originalIndex || 0);
 
         const messageUserId = Number(msg.user_id);
         const isNewGroup = previousUserId === null || messageUserId !== previousUserId;
