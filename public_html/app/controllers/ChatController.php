@@ -1,6 +1,6 @@
 <?php
 class ChatController extends Controller {
-    private const GROUP_CHAT_USER_LIMIT = 200;
+    private const GROUP_CHAT_USER_LIMIT = 999;
     private const USER_LIMIT_REACHED_MESSAGE = 'User limit reached. Please try again later.';
     private const GROUP_VISIBILITY_NONE = 'none';
     private const GROUP_VISIBILITY_REQUESTABLE = 'requestable';

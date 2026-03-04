@@ -1,6 +1,6 @@
 <?php
 class CallController extends Controller {
-    private const CALL_USER_LIMIT = 20;
+    private const CALL_USER_LIMIT = 99;
     private const USER_LIMIT_REACHED_MESSAGE = 'User limit reached. Please try again later.';
 
     private function supportsSystemEvents(): bool {
