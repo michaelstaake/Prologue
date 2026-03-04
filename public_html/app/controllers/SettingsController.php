@@ -82,6 +82,8 @@ class SettingsController extends Controller {
             'user' => $user,
             'isAdmin' => $isAdmin,
             'csrf' => $this->csrfToken(),
+            'app_version' => APP_VERSION,
+            'database_version' => (string)(Setting::get('database_version') ?? 'unknown'),
             'browserNotif' => (int)$browserNotif,
             'friendRequestSoundNotif' => (int)$friendRequestSoundNotif,
             'newMessageSoundNotif' => (int)$newMessageSoundNotif,
@@ -176,8 +178,6 @@ class SettingsController extends Controller {
                 'php_upload_max_filesize' => ini_get('upload_max_filesize'),
                 'php_post_max_size' => ini_get('post_max_size'),
                 'php_memory_limit' => ini_get('memory_limit'),
-                'app_version' => APP_VERSION,
-                'database_version' => (string)(Setting::get('database_version') ?? 'unknown'),
             ]);
         }
 

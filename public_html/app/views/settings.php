@@ -336,9 +336,9 @@
                 <i class="fa-solid fa-globe text-2xl text-emerald-400"></i>
                 <span class="text-sm text-zinc-200 font-medium">Test Browser Features</span>
             </button>
-            <button type="button" data-modal-open="cp-licensing-modal" class="bg-zinc-900 border border-zinc-700 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 hover:bg-zinc-800 transition cursor-pointer aspect-[2/1]">
-                <i class="fa-solid fa-scale-balanced text-2xl text-emerald-400"></i>
-                <span class="text-sm text-zinc-200 font-medium text-center">Licensing & Attribution</span>
+            <button type="button" data-modal-open="cp-about-modal" class="bg-zinc-900 border border-zinc-700 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 hover:bg-zinc-800 transition cursor-pointer aspect-[2/1]">
+                <i class="fa-solid fa-circle-info text-2xl text-emerald-400"></i>
+                <span class="text-sm text-zinc-200 font-medium text-center">About</span>
             </button>
         </div>
     </div>
@@ -1225,16 +1225,24 @@
     </div>
 </div>
 
-<!-- Licensing & Attribution Modal -->
-<div id="cp-licensing-modal" class="<?= $modalOverlayClass ?>" role="dialog" aria-modal="true">
-    <div class="<?= $modalBackdropClass ?>" data-modal-close="cp-licensing-modal"></div>
+<!-- About Modal -->
+<div id="cp-about-modal" class="<?= $modalOverlayClass ?>" role="dialog" aria-modal="true">
+    <div class="<?= $modalBackdropClass ?>" data-modal-close="cp-about-modal"></div>
     <div class="<?= $modalCenterClass ?>">
         <div class="<?= $modalBoxClass ?>" data-modal-box>
             <div class="mb-4 flex items-center justify-between">
-                <h3 class="text-xl font-semibold">Licensing & Attribution</h3>
-                <button type="button" data-modal-close="cp-licensing-modal" class="rounded-lg px-2 py-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200">&times;</button>
+                <h3 class="text-xl font-semibold">About</h3>
+                <button type="button" data-modal-close="cp-about-modal" class="rounded-lg px-2 py-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200">&times;</button>
             </div>
             <div class="space-y-3 text-zinc-200">
+                <div class="border border-zinc-700 bg-zinc-800/40 rounded-xl px-4 py-3">
+                    <span class="text-zinc-400">Current app version</span>
+                    <div class="font-semibold mt-1"><?= htmlspecialchars((string)($app_version ?? 'unknown'), ENT_QUOTES, 'UTF-8') ?></div>
+                </div>
+                <div class="border border-zinc-700 bg-zinc-800/40 rounded-xl px-4 py-3">
+                    <span class="text-zinc-400">Current database version</span>
+                    <div class="font-semibold mt-1"><?= htmlspecialchars((string)($database_version ?? 'unknown'), ENT_QUOTES, 'UTF-8') ?></div>
+                </div>
                 <div class="border border-zinc-700 bg-zinc-800/40 rounded-xl px-4 py-3">
                     <span class="text-zinc-400">Open source license</span>
                     <div class="font-semibold mt-1">GPL-3.0</div>

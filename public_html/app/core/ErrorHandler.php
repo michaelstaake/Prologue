@@ -2,6 +2,38 @@
 class ErrorHandler {
     private static $debugMode = false;
 
+    private static function appVersion() {
+        if (defined('APP_VERSION') && APP_VERSION !== '') {
+            return (string) APP_VERSION;
+        }
+
+        return 'unknown';
+    }
+
+    private static function databaseVersion() {
+        try {
+            if (!class_exists('Setting')) {
+                return 'unavailable';
+            }
+
+            $version = Setting::get('database_version');
+            if ($version === null || $version === '') {
+                return 'unknown';
+            }
+
+            return (string) $version;
+        } catch (Throwable $e) {
+            return 'unavailable';
+        }
+    }
+
+    private static function versionMetadata() {
+        return [
+            'appVersion' => self::appVersion(),
+            'databaseVersion' => self::databaseVersion()
+        ];
+    }
+
     public static function setDebugMode($enabled) {
         self::$debugMode = (bool)$enabled;
     }
@@ -121,7 +153,8 @@ class ErrorHandler {
             if (self::$debugMode) {
                 $payload['debug'] = [
                     'message' => $message,
-                    'details' => $debug
+                    'details' => $debug,
+                    'versions' => self::versionMetadata()
                 ];
             }
 
@@ -134,8 +167,11 @@ class ErrorHandler {
 
         $debugBlock = '';
         if (self::$debugMode) {
+            $versions = self::versionMetadata();
             $details = [
-                'Message: ' . $message
+                'Message: ' . $message,
+                'App Version: ' . $versions['appVersion'],
+                'Database Version: ' . $versions['databaseVersion']
             ];
 
             if (!empty($debug['file'])) {
@@ -168,6 +204,7 @@ class ErrorHandler {
     }
 
     private static function logError($type, $context = []) {
+        $context = array_merge($context, self::versionMetadata());
         $contextJson = json_encode($context, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         error_log('[Prologue][' . $type . '] ' . $contextJson);
     }
