@@ -24,9 +24,9 @@
         </div>
     <?php endif; ?>
 
-    <div class="mb-6 flex items-center justify-between gap-3">
+    <div class="mb-6 flex flex-col items-start gap-3 md:flex-row md:items-center md:justify-between">
         <h1 class="text-3xl font-bold">Dashboard</h1>
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center gap-2 w-full md:w-auto">
             <a href="<?= htmlspecialchars(base_url('/search'), ENT_QUOTES, 'UTF-8') ?>" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-zinc-700 text-zinc-300 hover:bg-zinc-800 transition">
                 <i class="fa fa-magnifying-glass text-xs"></i>
                 Search
