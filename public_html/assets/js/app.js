@@ -123,6 +123,15 @@ let typingBeforeUnloadBound = false;
 let clientNavigationBound = false;
 let clientNavigationInFlight = false;
 let currentClientRenderedUrl = '';
+let serverConnectionFailureCount = 0;
+let serverConnectionOverlayVisible = false;
+let serverConnectionRetryTimeoutId = null;
+let serverConnectionRetryInFlight = false;
+let serverConnectionOverlayControlsBound = false;
+let serverConnectionEventsBound = false;
+let shellPollingPausedForConnectionLoss = false;
+const SERVER_CONNECTION_FAILURE_THRESHOLD = 3;
+const SERVER_CONNECTION_RETRY_MS = 15000;
 const beforeRouteChangeHooks = new Set();
 const afterRouteChangeHooks = new Set();
 
@@ -135,17 +144,199 @@ function showVersionUpdateOverlay() {
     }
 }
 
+function isServerConnectionOverlayEnabled() {
+    return Boolean(window.CURRENT_USER_ID) && Boolean(document.getElementById('server-connection-overlay'));
+}
+
+function isLikelyServerConnectionError(error) {
+    if (!error) return false;
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
+
+    const message = String(error?.message || '');
+    if (!message) return false;
+
+    return /failed to fetch|networkerror|load failed|internet disconnected|fetch/i.test(message);
+}
+
+function clearServerConnectionRetryTimer() {
+    if (!serverConnectionRetryTimeoutId) return;
+    clearTimeout(serverConnectionRetryTimeoutId);
+    serverConnectionRetryTimeoutId = null;
+}
+
+function pauseShellPollingForConnectionLoss() {
+    clearRouteScopedIntervals();
+    shellPollingPausedForConnectionLoss = true;
+}
+
+function resumeShellPollingAfterConnectionLoss() {
+    if (!shellPollingPausedForConnectionLoss || !isServerConnectionOverlayEnabled()) {
+        return;
+    }
+
+    const hasChatMessages = Boolean(document.getElementById('messages'));
+    if (hasChatMessages && !chatPollIntervalId) {
+        chatPollIntervalId = setInterval(() => {
+            if (serverConnectionOverlayVisible) return;
+            pollMessages().catch(() => {});
+        }, 3000);
+    }
+
+    const hasNotificationHistory = Boolean(document.getElementById('notification-history-button'));
+    if (hasNotificationHistory && !notificationPollIntervalId) {
+        notificationPollIntervalId = setInterval(() => {
+            if (serverConnectionOverlayVisible) return;
+            fetchNotifications().catch(() => {});
+        }, 5000);
+    }
+
+    if (!sidebarPollIntervalId) {
+        sidebarPollIntervalId = setInterval(() => {
+            if (serverConnectionOverlayVisible) return;
+            loadSidebarChats().catch(() => {});
+        }, 5000);
+    }
+
+    shellPollingPausedForConnectionLoss = false;
+}
+
+function showServerConnectionOverlay() {
+    if (!isServerConnectionOverlayEnabled()) return;
+
+    const overlay = document.getElementById('server-connection-overlay');
+    if (!overlay) return;
+
+    serverConnectionOverlayVisible = true;
+    overlay.classList.remove('hidden');
+    overlay.setAttribute('aria-hidden', 'false');
+    pauseShellPollingForConnectionLoss();
+}
+
+function hideServerConnectionOverlay() {
+    const overlay = document.getElementById('server-connection-overlay');
+    if (!overlay) return;
+
+    serverConnectionOverlayVisible = false;
+    overlay.classList.add('hidden');
+    overlay.setAttribute('aria-hidden', 'true');
+    resumeShellPollingAfterConnectionLoss();
+}
+
+function scheduleServerConnectionRetry() {
+    if (!serverConnectionOverlayVisible || serverConnectionRetryTimeoutId) return;
+
+    serverConnectionRetryTimeoutId = setTimeout(() => {
+        serverConnectionRetryTimeoutId = null;
+        attemptServerConnectionRecovery().catch(() => {});
+    }, SERVER_CONNECTION_RETRY_MS);
+}
+
+function handleServerConnectionSuccess() {
+    serverConnectionFailureCount = 0;
+    clearServerConnectionRetryTimer();
+
+    if (!serverConnectionOverlayVisible) return;
+
+    hideServerConnectionOverlay();
+
+    if (document.getElementById('messages')) {
+        pollMessages({ scrollMode: 'preserve' }).catch(() => {});
+    }
+
+    if (document.getElementById('notification-history-button')) {
+        fetchNotifications().catch(() => {});
+    }
+
+    loadSidebarChats().catch(() => {});
+}
+
+function registerServerConnectionFailure(error) {
+    if (!isServerConnectionOverlayEnabled()) return;
+    if (!isLikelyServerConnectionError(error)) return;
+
+    serverConnectionFailureCount += 1;
+    if (!serverConnectionOverlayVisible && serverConnectionFailureCount >= SERVER_CONNECTION_FAILURE_THRESHOLD) {
+        showServerConnectionOverlay();
+    }
+
+    if (serverConnectionOverlayVisible) {
+        scheduleServerConnectionRetry();
+    }
+}
+
+async function attemptServerConnectionRecovery() {
+    if (!isServerConnectionOverlayEnabled()) return false;
+    if (!serverConnectionOverlayVisible) return true;
+    if (serverConnectionRetryInFlight) return false;
+
+    serverConnectionRetryInFlight = true;
+    try {
+        await fetch('/api/notifications/recent', {
+            method: 'GET',
+            headers: {
+                Accept: 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            cache: 'no-store'
+        });
+        return true;
+    } catch {
+        return false;
+    } finally {
+        serverConnectionRetryInFlight = false;
+        if (serverConnectionOverlayVisible) {
+            scheduleServerConnectionRetry();
+        }
+    }
+}
+
+function bindServerConnectionOverlayControls() {
+    if (serverConnectionOverlayControlsBound) return;
+    serverConnectionOverlayControlsBound = true;
+
+    const retryButton = document.getElementById('server-connection-retry');
+    if (!retryButton) return;
+
+    retryButton.addEventListener('click', () => {
+        serverConnectionFailureCount = Math.max(serverConnectionFailureCount, SERVER_CONNECTION_FAILURE_THRESHOLD);
+        clearServerConnectionRetryTimer();
+        attemptServerConnectionRecovery().catch(() => {});
+    });
+}
+
+function bindServerConnectionEvents() {
+    if (serverConnectionEventsBound) return;
+    if (!isServerConnectionOverlayEnabled()) return;
+    serverConnectionEventsBound = true;
+
+    window.addEventListener('offline', () => {
+        serverConnectionFailureCount = Math.max(serverConnectionFailureCount, SERVER_CONNECTION_FAILURE_THRESHOLD);
+        showServerConnectionOverlay();
+        scheduleServerConnectionRetry();
+    });
+
+    window.addEventListener('online', () => {
+        attemptServerConnectionRecovery().catch(() => {});
+    });
+}
+
 (function() {
     const _fetch = window.fetch;
     window.fetch = async function(...args) {
-        const response = await _fetch.apply(this, args);
-        if (!versionUpdateDetected) {
-            const serverVersion = response.headers.get('X-App-Version');
-            if (serverVersion && window.APP_VERSION && serverVersion !== window.APP_VERSION) {
-                showVersionUpdateOverlay();
+        try {
+            const response = await _fetch.apply(this, args);
+            handleServerConnectionSuccess();
+            if (!versionUpdateDetected) {
+                const serverVersion = response.headers.get('X-App-Version');
+                if (serverVersion && window.APP_VERSION && serverVersion !== window.APP_VERSION) {
+                    showVersionUpdateOverlay();
+                }
             }
+            return response;
+        } catch (error) {
+            registerServerConnectionFailure(error);
+            throw error;
         }
-        return response;
     };
 })();
 
@@ -298,7 +489,11 @@ async function navigateApp(url, options = {}) {
         currentClientRenderedUrl = targetUrl.pathname + targetUrl.search + targetUrl.hash;
         runRouteLifecycleHooks('after', { from: fromUrl, to: toUrl, source: options.source || 'navigate' });
         return true;
-    } catch {
+    } catch (error) {
+        if (isLikelyServerConnectionError(error)) {
+            return false;
+        }
+
         window.location.href = toUrl;
         return false;
     } finally {
@@ -840,7 +1035,10 @@ async function init() {
             clearInterval(chatPollIntervalId);
         }
         if (document.getElementById('messages')) {
-            chatPollIntervalId = setInterval(pollMessages, 3000);
+            chatPollIntervalId = setInterval(() => {
+                if (serverConnectionOverlayVisible) return;
+                pollMessages().catch(() => {});
+            }, 3000);
         }
     }
 
@@ -982,14 +1180,22 @@ async function init() {
         if (notificationPollIntervalId) {
             clearInterval(notificationPollIntervalId);
         }
-        notificationPollIntervalId = setInterval(fetchNotifications, 5000);
+        notificationPollIntervalId = setInterval(() => {
+            if (serverConnectionOverlayVisible) return;
+            fetchNotifications().catch(() => {});
+        }, 5000);
     }
 
-    loadSidebarChats();
+    if (!serverConnectionOverlayVisible) {
+        loadSidebarChats().catch(() => {});
+    }
     if (sidebarPollIntervalId) {
         clearInterval(sidebarPollIntervalId);
     }
-    sidebarPollIntervalId = setInterval(loadSidebarChats, 5000);
+    sidebarPollIntervalId = setInterval(() => {
+        if (serverConnectionOverlayVisible) return;
+        loadSidebarChats().catch(() => {});
+    }, 5000);
 
     bindSidebarToggle();
 }
@@ -1326,6 +1532,13 @@ function startAppInitOnce() {
     if (appInitStarted) return;
     appInitStarted = true;
     bindDynamicViewportHeight();
+    bindServerConnectionOverlayControls();
+    bindServerConnectionEvents();
+    if (isServerConnectionOverlayEnabled() && typeof navigator !== 'undefined' && navigator.onLine === false) {
+        serverConnectionFailureCount = SERVER_CONNECTION_FAILURE_THRESHOLD;
+        showServerConnectionOverlay();
+        scheduleServerConnectionRetry();
+    }
     currentClientRenderedUrl = window.location.pathname + window.location.search + window.location.hash;
     bindClientNavigation();
     init().catch(() => {});

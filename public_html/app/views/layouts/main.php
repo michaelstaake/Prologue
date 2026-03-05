@@ -568,6 +568,21 @@
             </div>
         </div>
     </div>
+    <?php if ($currentUser): ?>
+    <div id="server-connection-overlay" class="hidden fixed inset-0 bg-black/90 z-[9998] flex items-center justify-center p-4 md:p-6" aria-hidden="true">
+        <div class="w-full max-w-md bg-zinc-900 p-8 rounded-3xl border border-zinc-700 text-center shadow-2xl">
+            <div class="mb-4 text-4xl text-amber-400"><i class="fa-solid fa-triangle-exclamation"></i></div>
+            <h2 class="text-2xl font-bold mb-2 text-zinc-100">Unable to connect to server</h2>
+            <p class="text-zinc-400 mb-5">We lost connection and are trying to reconnect in the background.</p>
+            <ul class="text-left text-sm text-zinc-300 space-y-2 mb-6">
+                <li class="flex items-start gap-2"><i class="fa-solid fa-circle-check mt-1 text-zinc-500 text-[10px]"></i><span>Check your internet connection.</span></li>
+                <li class="flex items-start gap-2"><i class="fa-solid fa-circle-check mt-1 text-zinc-500 text-[10px]"></i><span>Check your server status.</span></li>
+                <li class="flex items-start gap-2"><i class="fa-solid fa-circle-check mt-1 text-zinc-500 text-[10px]"></i><span>Try again in a few minutes.</span></li>
+            </ul>
+            <button id="server-connection-retry" type="button" class="w-full py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold transition">Retry now</button>
+        </div>
+    </div>
+    <?php endif; ?>
     <div id="version-update-overlay" class="hidden fixed inset-0 bg-black/90 z-[9999] flex items-center justify-center p-6">
         <div class="text-center">
             <div class="mb-5 text-5xl text-emerald-400"><i class="fa-solid fa-rotate"></i></div>
