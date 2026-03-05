@@ -1354,6 +1354,69 @@ function shouldSuppressNotificationToast(notification) {
     return notificationChatNumber !== '' && notificationChatNumber === currentChatNumber;
 }
 
+function getNormalizedChatNumberFromNotificationLink(linkValue) {
+    const link = String(linkValue || '').trim();
+    if (!link) return '';
+
+    const match = link.match(/\/c\/([^/?#]+)/i);
+    if (!match) return '';
+
+    return String(match[1] || '').replace(/\D/g, '');
+}
+
+function isToastForCurrentChatMessage(toast) {
+    if (!toast || !toast.metadata) return false;
+
+    const metadata = toast.metadata;
+    const type = String(metadata.type || '').toLowerCase();
+    if (type !== 'message') return false;
+
+    const currentChatNumber = String(currentChat?.chat_number || '').replace(/\D/g, '');
+    if (!currentChatNumber) return false;
+
+    const notificationChatNumber = getNormalizedChatNumberFromNotificationLink(metadata.link);
+    return notificationChatNumber !== '' && notificationChatNumber === currentChatNumber;
+}
+
+async function clearCurrentChatMessageNotifications() {
+    if (!currentChat) return;
+
+    const matchingToasts = toastHistory.filter((toast) => isToastForCurrentChatMessage(toast));
+    if (matchingToasts.length === 0) return;
+
+    let clearedCount = 0;
+
+    for (const toast of matchingToasts) {
+        const notificationId = Number(toast?.metadata?.notificationId || 0);
+        if (!Number.isFinite(notificationId) || notificationId <= 0) {
+            continue;
+        }
+
+        try {
+            const result = await postForm('/api/notifications/read', {
+                csrf_token: getCsrfToken(),
+                id: String(notificationId)
+            });
+
+            if (!result?.success) {
+                continue;
+            }
+        } catch {
+            continue;
+        }
+
+        toastHistory = toastHistory.filter((item) => item.id !== toast.id);
+        clearActiveToastPopup(toast.id);
+        clearedCount += 1;
+    }
+
+    if (clearedCount > 0) {
+        unreadNotificationCount = Math.max(0, unreadNotificationCount - clearedCount);
+        updateNotificationCountInTitle(unreadNotificationCount);
+        renderToastHistory();
+    }
+}
+
 
 function setTwofaSettingsStatus(text, kind) {
     var statusEl = document.getElementById('twofa-settings-status');

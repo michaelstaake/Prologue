@@ -1175,6 +1175,9 @@ async function init() {
         }
 
         await fetchNotifications().catch(() => {});
+        if (typeof clearCurrentChatMessageNotifications === 'function') {
+            await clearCurrentChatMessageNotifications().catch(() => {});
+        }
         bindNotificationHistory();
         renderToastHistory();
         if (notificationPollIntervalId) {
