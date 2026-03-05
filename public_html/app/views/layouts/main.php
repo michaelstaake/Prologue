@@ -39,6 +39,20 @@
             align-items: center;
             justify-content: center;
         }
+        #notification-history-panel.panel-hidden {
+            width: 0 !important;
+            min-width: 0;
+            border-left-width: 0;
+            opacity: 0;
+            transform: translateX(100%);
+            pointer-events: none;
+            overflow: hidden;
+        }
+        #notification-history-panel.panel-visible {
+            opacity: 1;
+            transform: translateX(0);
+            pointer-events: auto;
+        }
         @media (max-width: 1023px) {
             #app-sidebar { display: none; }
             #app-sidebar.mobile-open {
@@ -340,7 +354,7 @@
             </div>
         </div>
 
-        <aside id="notification-history-panel" class="w-20 border-l border-zinc-800 bg-zinc-900/90 flex flex-col transition-all duration-200 ease-out">
+        <aside id="notification-history-panel" class="w-20 border-l border-zinc-800 bg-zinc-900/90 flex flex-col transition-all duration-200 ease-out panel-hidden">
             <div class="p-4 border-b border-zinc-700 flex items-center justify-center" id="notification-history-header">
                 <div id="notification-history-title" class="hidden font-semibold text-zinc-100 mr-3">Notifications</div>
                 <button id="notification-clear-all-btn" class="hidden text-xs text-zinc-400 hover:text-zinc-200 mr-auto" onclick="clearAllNotifications()">Clear all</button>

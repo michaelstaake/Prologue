@@ -375,6 +375,37 @@ function updateMobileNotificationState() {
     }
 }
 
+function syncNotificationPanelVisibility(hasNotifications) {
+    const panel = document.getElementById('notification-history-panel');
+    const mobileButton = document.getElementById('notification-history-button-mobile');
+    const hasAny = Boolean(hasNotifications);
+
+    if (panel) {
+        if (!hasAny) {
+            panel.classList.remove('mobile-open', 'w-96', 'max-w-[95vw]');
+            panel.classList.add('w-20');
+            panel.classList.remove('panel-visible');
+            panel.classList.add('panel-hidden');
+            panel.setAttribute('aria-hidden', 'true');
+        } else {
+            panel.classList.remove('panel-hidden');
+            panel.classList.add('panel-visible');
+            panel.setAttribute('aria-hidden', 'false');
+        }
+    }
+
+    if (mobileButton) {
+        mobileButton.classList.toggle('hidden', !hasAny);
+    }
+
+    if (!hasAny) {
+        const backdrop = document.getElementById('mobile-overlay-backdrop');
+        if (backdrop) {
+            backdrop.classList.remove('visible');
+        }
+    }
+}
+
 
 function applyNotificationSettingState(setting, enabled) {
     const isEnabled = Boolean(enabled);
@@ -1025,6 +1056,8 @@ function renderToastHistory() {
         }
     }
 
+    syncNotificationPanelVisibility(visibleToasts.length > 0);
+
     updateMobileNotificationState();
 
     const clearBtn = document.getElementById('notification-clear-all-btn');
@@ -1177,6 +1210,15 @@ function bindNotificationHistory() {
     const isMobileLayout = () => window.innerWidth < 1024;
 
     const setExpanded = (expanded) => {
+        const hasNotifications = toastHistory.length > 0;
+
+        if (!hasNotifications) {
+            syncNotificationPanelVisibility(false);
+            expanded = false;
+        } else {
+            syncNotificationPanelVisibility(true);
+        }
+
         if (isMobileLayout()) {
             panel.classList.toggle('mobile-open', expanded);
             // Close sidebar if open, then show/hide shared backdrop
@@ -1220,6 +1262,10 @@ function bindNotificationHistory() {
     setExpanded(expanded);
 
     const handleToggle = () => {
+        if (toastHistory.length === 0) {
+            return;
+        }
+
         expanded = !expanded;
         setExpanded(expanded);
         window.NOTIFICATION_SIDEBAR_EXPANDED = expanded;
@@ -1293,6 +1339,8 @@ function bindNotificationHistory() {
         window.NOTIFICATION_SIDEBAR_EXPANDED = false;
         setExpanded(false);
     });
+
+    syncNotificationPanelVisibility(toastHistory.length > 0);
 }
 
 function shouldSuppressNotificationToast(notification) {
