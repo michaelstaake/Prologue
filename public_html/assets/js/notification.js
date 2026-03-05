@@ -1240,6 +1240,21 @@ function bindNotificationHistory() {
         mobileButton.addEventListener('click', handleToggle);
     }
 
+    document.addEventListener('click', (event) => {
+        if (!expanded || toastHistory.length > 0) return;
+
+        const target = event.target;
+        if (!(target instanceof Element)) return;
+
+        if (panel.contains(target)) return;
+        if (button.contains(target)) return;
+        if (mobileButton && mobileButton.contains(target)) return;
+
+        if (typeof window.collapseNotificationPanel === 'function') {
+            window.collapseNotificationPanel();
+        }
+    });
+
     if (list) {
         list.addEventListener('click', (event) => {
             handleToastHistoryClick(event);
