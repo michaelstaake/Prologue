@@ -5,7 +5,11 @@ Chat, voice call, video call, screenshare, and more. Always free and privacy fir
 - **Chat** - Real time messaging with group chats, direct messages, mentions, quotes, reactions, and attachments.
 - **Voice and Video Calls** - Whether it's one friend or your whole group, Prologue offers high quality, low latency calling using WebRTC.
 - **Screen Share** - Choose from multiple streaming qualities, up to your native resolution at 60FPS. Uses your browsers native interface to allow selection of what to stream.
+
+## Extra Features
+- **Polls** - Create a poll in your group chat. Choose when it expires or close it at any time.
 - **Posts** - Share your thoughts and comments with the rest of your community using a simple X-ish posts system.
+- **Many More** - Prologue has oodles of other neat features that you'll fall in love with. Just download it, host it, and explore it.
 
 ## Why Prologue?
 - **Free and Open Source** - No subscriptions, no paywalls, no ads.
