@@ -24,5 +24,6 @@
             <p class="mt-3 text-sm text-zinc-500">You can also use a recovery code</p>
         <?php endif; ?>
         <button type="submit" class="mt-8 w-full bg-emerald-600 hover:bg-emerald-500 py-4 rounded-2xl font-semibold">Verify</button>
+        <a href="<?= htmlspecialchars(base_url('/logout'), ENT_QUOTES, 'UTF-8') ?>" class="mt-4 inline-block text-sm text-zinc-400 hover:text-zinc-200">Cancel</a>
     </form>
 </div>
