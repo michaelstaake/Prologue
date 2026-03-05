@@ -139,7 +139,7 @@
     <?php
         $browserNotificationsEnabled = false;
         $webPushNotificationsEnabled = false;
-        $friendRequestSoundEnabled = true;
+        $pokeSoundEnabled = true;
         $newMessageSoundEnabled = true;
         $otherNotificationSoundEnabled = true;
         $outgoingCallRingSoundEnabled = true;
@@ -153,12 +153,15 @@
             $browserNotificationsEnabled = ((int)$notificationSetting) === 1;
             $webPushSetting = Database::query('SELECT `value` FROM settings WHERE `key` = ?', ['web_push_notifications_' . $currentUser->id])->fetchColumn();
             $webPushNotificationsEnabled = ((int)$webPushSetting) === 1;
-            $friendRequestSoundSetting = Database::query('SELECT `value` FROM settings WHERE `key` = ?', ['sound_friend_request_' . $currentUser->id])->fetchColumn();
+            $pokeSoundSetting = Database::query('SELECT `value` FROM settings WHERE `key` = ?', ['sound_poke_' . $currentUser->id])->fetchColumn();
+            if ($pokeSoundSetting === false) {
+                $pokeSoundSetting = Database::query('SELECT `value` FROM settings WHERE `key` = ?', ['sound_friend_request_' . $currentUser->id])->fetchColumn();
+            }
             $newMessageSoundSetting = Database::query('SELECT `value` FROM settings WHERE `key` = ?', ['sound_new_message_' . $currentUser->id])->fetchColumn();
             $otherNotificationSoundSetting = Database::query('SELECT `value` FROM settings WHERE `key` = ?', ['sound_other_notifications_' . $currentUser->id])->fetchColumn();
             $outgoingCallRingSoundSetting = Database::query('SELECT `value` FROM settings WHERE `key` = ?', ['sound_outgoing_call_ring_' . $currentUser->id])->fetchColumn();
 
-            $friendRequestSoundEnabled = $friendRequestSoundSetting === false ? true : ((int)$friendRequestSoundSetting) === 1;
+            $pokeSoundEnabled = $pokeSoundSetting === false ? true : ((int)$pokeSoundSetting) === 1;
             $newMessageSoundEnabled = $newMessageSoundSetting === false ? true : ((int)$newMessageSoundSetting) === 1;
             $otherNotificationSoundEnabled = $otherNotificationSoundSetting === false ? true : ((int)$otherNotificationSoundSetting) === 1;
             $outgoingCallRingSoundEnabled = $outgoingCallRingSoundSetting === false ? true : ((int)$outgoingCallRingSoundSetting) === 1;
@@ -660,7 +663,7 @@
     window.CSRF_TOKEN = <?= json_encode($csrf) ?>;
     window.BROWSER_NOTIFICATIONS_ENABLED = <?= $browserNotificationsEnabled ? 'true' : 'false' ?>;
     window.WEB_PUSH_NOTIFICATIONS_ENABLED = <?= $webPushNotificationsEnabled ? 'true' : 'false' ?>;
-    window.NOTIFICATION_SOUND_FRIEND_REQUEST_ENABLED = <?= $friendRequestSoundEnabled ? 'true' : 'false' ?>;
+    window.NOTIFICATION_SOUND_POKE_ENABLED = <?= $pokeSoundEnabled ? 'true' : 'false' ?>;
     window.NOTIFICATION_SOUND_NEW_MESSAGE_ENABLED = <?= $newMessageSoundEnabled ? 'true' : 'false' ?>;
     window.NOTIFICATION_SOUND_OTHER_ENABLED = <?= $otherNotificationSoundEnabled ? 'true' : 'false' ?>;
     window.NOTIFICATION_SOUND_OUTGOING_CALL_RING_ENABLED = <?= $outgoingCallRingSoundEnabled ? 'true' : 'false' ?>;

@@ -578,7 +578,8 @@ class HomeController extends Controller {
         $allowedSettings = [
             'browser_notifications' => 'browser_notifications_',
             'web_push_notifications' => 'web_push_notifications_',
-            'sound_friend_request' => 'sound_friend_request_',
+            'sound_poke' => 'sound_poke_',
+            'sound_friend_request' => 'sound_poke_',
             'sound_new_message' => 'sound_new_message_',
             'sound_other_notifications' => 'sound_other_notifications_',
             'sound_outgoing_call_ring' => 'sound_outgoing_call_ring_'

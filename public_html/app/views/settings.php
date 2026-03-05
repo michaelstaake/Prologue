@@ -1198,10 +1198,10 @@
                     <input type="checkbox" data-notification-setting="web_push_notifications" <?= !empty($webPushNotif) ? 'checked' : '' ?> class="w-6 h-6 accent-emerald-500">
                 </label>
                 <div class="flex items-center justify-between gap-4 rounded-xl border border-zinc-700 bg-zinc-800/30 px-4 py-3">
-                    <span class="text-zinc-100">Sound: New friend request</span>
+                    <span class="text-zinc-100">Sound: Poke</span>
                     <div class="flex items-center gap-3">
-                        <button type="button" data-notification-sound-preview="friend_request" class="px-3 py-1.5 text-xs rounded-lg bg-zinc-700 hover:bg-zinc-600 text-zinc-100">Preview</button>
-                        <input type="checkbox" data-notification-setting="sound_friend_request" <?= $friendRequestSoundNotif ? 'checked' : '' ?> class="w-6 h-6 accent-emerald-500">
+                        <button type="button" data-notification-sound-preview="poke" class="px-3 py-1.5 text-xs rounded-lg bg-zinc-700 hover:bg-zinc-600 text-zinc-100">Preview</button>
+                        <input type="checkbox" data-notification-setting="sound_poke" <?= $pokeSoundNotif ? 'checked' : '' ?> class="w-6 h-6 accent-emerald-500">
                     </div>
                 </div>
                 <div class="flex items-center justify-between gap-4 rounded-xl border border-zinc-700 bg-zinc-800/30 px-4 py-3">

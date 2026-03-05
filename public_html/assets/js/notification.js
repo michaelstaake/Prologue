@@ -599,8 +599,8 @@ function applyNotificationSettingState(setting, enabled) {
         window.WEB_PUSH_NOTIFICATIONS_ENABLED = isEnabled;
         return;
     }
-    if (setting === 'sound_friend_request') {
-        window.NOTIFICATION_SOUND_FRIEND_REQUEST_ENABLED = isEnabled;
+    if (setting === 'sound_poke' || setting === 'sound_friend_request') {
+        window.NOTIFICATION_SOUND_POKE_ENABLED = isEnabled;
         return;
     }
     if (setting === 'sound_new_message') {
@@ -701,7 +701,7 @@ function getNotificationSoundBucket(notificationOrType) {
         return 'other';
     }
 
-    if (normalizedType === 'friend_request') return 'friend_request';
+    if (normalizedType === 'friend_request') return 'other';
     if (normalizedType === 'poke') return 'poke';
     if (normalizedType === 'message') return 'new_message';
     if (normalizedType === 'call') return 'call';
@@ -709,14 +709,11 @@ function getNotificationSoundBucket(notificationOrType) {
 }
 
 function isNotificationSoundEnabled(bucket) {
-    if (bucket === 'friend_request') {
-        return Boolean(window.NOTIFICATION_SOUND_FRIEND_REQUEST_ENABLED);
-    }
     if (bucket === 'new_message') {
         return Boolean(window.NOTIFICATION_SOUND_NEW_MESSAGE_ENABLED);
     }
     if (bucket === 'poke') {
-        return Boolean(window.NOTIFICATION_SOUND_OTHER_ENABLED);
+        return Boolean(window.NOTIFICATION_SOUND_POKE_ENABLED);
     }
     if (bucket === 'call') {
         return Boolean(window.NOTIFICATION_SOUND_OTHER_ENABLED);

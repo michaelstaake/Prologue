@@ -66,7 +66,6 @@ let callDurationBarState = null;
 let openAdminUserMenuId = 0;
 const REPORT_REASON_MAX_LENGTH = 200;
 const NOTIFICATION_SOUND_FILE_BY_BUCKET = {
-    friend_request: '/assets/sounds/notification.wav',
     poke: '/assets/sounds/poke.wav',
     new_message: '/assets/sounds/newmessage.wav',
     call: '/assets/sounds/callringing.wav',
