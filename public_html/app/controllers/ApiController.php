@@ -806,7 +806,7 @@ class ApiController extends Controller {
                  JOIN users u ON u.id = m.user_id
                  LEFT JOIN users qu ON qu.id = m.quoted_user_id
                  WHERE m.chat_id = ?
-                 ORDER BY m.created_at ASC
+                 ORDER BY m.created_at DESC, m.id DESC
                  LIMIT 200",
                 [$chatId]
             )->fetchAll();
@@ -824,11 +824,17 @@ class ApiController extends Controller {
                  JOIN users u ON u.id = m.user_id
                  LEFT JOIN users qu ON qu.id = m.quoted_user_id
                  WHERE m.chat_id = ?
-                 ORDER BY m.created_at ASC
+                 ORDER BY m.created_at DESC, m.id DESC
                  LIMIT 200",
                 [$chatId]
             )->fetchAll();
         }
+
+        // Query newest-first for windowing, then restore chronological order for rendering.
+        $messages = array_reverse($messages);
+
+        $latestMessageId = !empty($messages) ? (int)($messages[count($messages) - 1]->id ?? 0) : 0;
+
         foreach ($messages as $message) {
             if (!empty($message->bot_name)) {
                 $message->username = $message->bot_name;
@@ -871,7 +877,18 @@ class ApiController extends Controller {
 
             $combined = array_merge($messages, $systemEvents);
             usort($combined, function ($a, $b) {
-                return strcmp($a->created_at, $b->created_at);
+                $timeCmp = strcmp((string)($a->created_at ?? ''), (string)($b->created_at ?? ''));
+                if ($timeCmp !== 0) {
+                    return $timeCmp;
+                }
+
+                $aIsSystem = !empty($a->is_system_event) ? 1 : 0;
+                $bIsSystem = !empty($b->is_system_event) ? 1 : 0;
+                if ($aIsSystem !== $bIsSystem) {
+                    return $aIsSystem <=> $bIsSystem;
+                }
+
+                return ((int)($a->id ?? 0)) <=> ((int)($b->id ?? 0));
             });
             $messages = array_values(array_slice($combined, -200));
         }
@@ -903,7 +920,6 @@ class ApiController extends Controller {
         }
 
         if ($supportsLastSeen && $allowed) {
-            $latestMessageId = !empty($messages) ? (int)($messages[count($messages) - 1]->id ?? 0) : 0;
             if ($latestMessageId > 0) {
                 Database::query(
                     "UPDATE chat_members

@@ -675,7 +675,7 @@ class ChatController extends Controller {
                      JOIN users u ON m.user_id = u.id
                      LEFT JOIN users qu ON qu.id = m.quoted_user_id
                      WHERE m.chat_id = ?
-                     ORDER BY m.created_at DESC
+                     ORDER BY m.created_at DESC, m.id DESC
                      LIMIT 100",
                     [$chat->id]
                 )->fetchAll();
@@ -691,7 +691,7 @@ class ChatController extends Controller {
                      JOIN users u ON m.user_id = u.id
                      LEFT JOIN users qu ON qu.id = m.quoted_user_id
                      WHERE m.chat_id = ?
-                     ORDER BY m.created_at DESC
+                     ORDER BY m.created_at DESC, m.id DESC
                      LIMIT 100",
                     [$chat->id]
                 )->fetchAll();
@@ -719,7 +719,18 @@ class ChatController extends Controller {
 
             $combined = array_merge($messages, $systemEvents);
             usort($combined, function ($a, $b) {
-                return strcmp($b->created_at, $a->created_at);
+                $timeCmp = strcmp((string)($b->created_at ?? ''), (string)($a->created_at ?? ''));
+                if ($timeCmp !== 0) {
+                    return $timeCmp;
+                }
+
+                $aIsSystem = !empty($a->is_system_event) ? 1 : 0;
+                $bIsSystem = !empty($b->is_system_event) ? 1 : 0;
+                if ($aIsSystem !== $bIsSystem) {
+                    return $bIsSystem <=> $aIsSystem;
+                }
+
+                return ((int)($b->id ?? 0)) <=> ((int)($a->id ?? 0));
             });
             $messages = array_slice($combined, 0, 100);
         }
@@ -1389,7 +1400,7 @@ class ChatController extends Controller {
                  JOIN users u ON m.user_id = u.id
                  LEFT JOIN users qu ON qu.id = m.quoted_user_id
                  WHERE m.chat_id = ?
-                 ORDER BY m.created_at ASC
+                 ORDER BY m.created_at DESC, m.id DESC
                  LIMIT 200",
                 [$chatId]
             )->fetchAll();
@@ -1407,11 +1418,15 @@ class ChatController extends Controller {
                  JOIN users u ON m.user_id = u.id
                  LEFT JOIN users qu ON qu.id = m.quoted_user_id
                  WHERE m.chat_id = ?
-                 ORDER BY m.created_at ASC
+                 ORDER BY m.created_at DESC, m.id DESC
                  LIMIT 200",
                 [$chatId]
             )->fetchAll();
         }
+
+        // Keep API responses chronological while querying the most recent window.
+        $messages = array_reverse($messages);
+
         foreach ($messages as $message) {
             if (!empty($message->bot_name)) {
                 $message->username = $message->bot_name;
@@ -1447,7 +1462,18 @@ class ChatController extends Controller {
                 )->fetchAll();
                 $combined = array_merge($messages, $systemEvents);
                 usort($combined, function ($a, $b) {
-                    return strcmp($a->created_at, $b->created_at);
+                    $timeCmp = strcmp((string)($a->created_at ?? ''), (string)($b->created_at ?? ''));
+                    if ($timeCmp !== 0) {
+                        return $timeCmp;
+                    }
+
+                    $aIsSystem = !empty($a->is_system_event) ? 1 : 0;
+                    $bIsSystem = !empty($b->is_system_event) ? 1 : 0;
+                    if ($aIsSystem !== $bIsSystem) {
+                        return $aIsSystem <=> $bIsSystem;
+                    }
+
+                    return ((int)($a->id ?? 0)) <=> ((int)($b->id ?? 0));
                 });
                 $messages = array_values(array_slice($combined, -200));
             }
