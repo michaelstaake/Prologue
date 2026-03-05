@@ -27,6 +27,12 @@ let compactOutgoingRingingCallId = 0;
 let outgoingPrivateRingingLabelInterval = null;
 let outgoingPrivateRingingLabelElement = null;
 let outgoingPrivateRingingLabelQueue = [];
+const GROUP_MEMBER_CALL_INDICATOR_STICKY_MS = 6000;
+let groupMemberCallIndicatorSnapshot = {
+    chatId: 0,
+    participantIds: new Set(),
+    updatedAt: 0
+};
 const OUTGOING_PRIVATE_RINGING_LABEL_INTERVAL_MS = 3000;
 const OUTGOING_PRIVATE_RINGING_FUN_LABELS = [
     'Wagging...',
@@ -454,13 +460,31 @@ function updateGroupMemberCallIndicators(activeCall) {
     }
 
     const activeChatId = Number(activeCall?.chat_id || 0);
-    const participantIds = (activeChatId > 0 && activeChatId === renderedChatId)
-        ? parseActiveCallParticipantIds(activeCall)
-        : new Set();
+    const now = Date.now();
+    let participantIds = new Set();
+
+    if (activeChatId > 0 && activeChatId === renderedChatId) {
+        participantIds = parseActiveCallParticipantIds(activeCall);
+        groupMemberCallIndicatorSnapshot = {
+            chatId: renderedChatId,
+            participantIds: new Set(participantIds),
+            updatedAt: now
+        };
+    } else {
+        const canUseSnapshot = groupMemberCallIndicatorSnapshot.chatId === renderedChatId
+            && (now - Number(groupMemberCallIndicatorSnapshot.updatedAt || 0)) <= GROUP_MEMBER_CALL_INDICATOR_STICKY_MS;
+        if (canUseSnapshot) {
+            participantIds = new Set(groupMemberCallIndicatorSnapshot.participantIds || []);
+        }
+    }
 
     memberNodes.forEach((node) => {
         const userId = Number(node.getAttribute('data-group-member-user-id') || 0);
         const isInCall = userId > 0 && participantIds.has(userId);
+        const wasInCall = node.getAttribute('data-group-member-in-call') === '1';
+        if (wasInCall === isInCall) {
+            return;
+        }
         node.classList.toggle('border-b-2', isInCall);
         node.classList.toggle('border-b-emerald-400', isInCall);
         node.setAttribute('data-group-member-in-call', isInCall ? '1' : '0');
@@ -1249,11 +1273,12 @@ async function refreshChatCallStatusBar(options = {}) {
 
 async function startVoiceCall(options = {}) {
     if (!currentChat) return;
+    const chatType = normalizeChatType(currentChat?.type || 'personal');
     if (currentChat.user_in_active_call === true || currentUserInActiveCall) {
         showToast('You are already in an active call', 'error');
         return;
     }
-    if (normalizeChatType(currentChat.type) === 'personal' && currentChat.can_start_calls === false) {
+    if (chatType === 'personal' && currentChat.can_start_calls === false) {
         showToast("You can't call a banned user", 'error');
         return;
     }
@@ -1270,7 +1295,7 @@ async function startVoiceCall(options = {}) {
 
     currentCallId = start.call_id;
     setChatUserInActiveCall(true);
-    if (normalizeChatType(currentChat?.type || 'personal') === 'group') {
+    if (chatType === 'group') {
         stopCallDurationCounter();
     } else if (start.joined_existing) {
         startCallDurationCounter(Date.now());
@@ -1285,7 +1310,7 @@ async function startVoiceCall(options = {}) {
     const persistedCall = {
         call_id: Number(start.call_id || 0),
         chat_id: Number(currentChat?.id || 0),
-        chat_type: normalizeChatType(currentChat?.type || 'personal'),
+        chat_type: chatType,
         started_at: new Date().toISOString(),
         started_by: Number(currentUserId || 0),
         current_user_joined: 1,
@@ -1306,7 +1331,7 @@ async function startVoiceCall(options = {}) {
         stopCallRingingAudio();
         setChatCallStatusBar(isMuted ? 'muted' : 'active');
     } else {
-        if (normalizeChatType(currentChat?.type || 'personal') === 'group') {
+        if (chatType === 'group') {
             compactOutgoingRingingCallId = 0;
             stopCallRingingAudio();
             setChatCallStatusBar(isMuted ? 'muted' : 'active');
@@ -1344,8 +1369,7 @@ async function startVoiceCall(options = {}) {
     callParticipantsPanelOpen = true;
     updateCallParticipantsPanelVisibility();
 
-    const isCompactOutgoingRinging = !start.joined_existing
-        && normalizeChatType(currentChat?.type || 'personal') === 'personal';
+    const isCompactOutgoingRinging = !start.joined_existing && chatType === 'personal';
     setCallOverlayMode(normalizeCallOverlayMode(options.initialOverlayMode || (isCompactOutgoingRinging ? 'hidden' : 'full')));
     if (start.joined_existing && (!options.silentStart || options.showJoinConnectingOverlay)) {
         showCallConnectingOverlay({
@@ -1361,7 +1385,8 @@ async function startVoiceCall(options = {}) {
     });
     await startCallSignaling({ fast: Boolean(options.reconnecting) });
     refreshChatCallStatusBar({ force: true });
-    if (!options.silentStart) {
+    const isNewPrivateCallStart = chatType === 'personal' && !start.joined_existing;
+    if (!options.silentStart && !isNewPrivateCallStart) {
         showToast('Call started', 'success');
     }
 }

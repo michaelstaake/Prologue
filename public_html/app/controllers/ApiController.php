@@ -641,7 +641,13 @@ class ApiController extends Controller {
                           JOIN users u ON u.id = cm2.user_id
                           WHERE cm2.chat_id = c.id AND cm2.user_id != ?
                           ORDER BY cm2.joined_at ASC
-                          LIMIT 1) AS other_last_active_at
+                                  LIMIT 1) AS other_last_active_at,
+                                 (SELECT COUNT(DISTINCT cp.user_id)
+                                  FROM calls c_active
+                                  JOIN call_participants cp ON cp.call_id = c_active.id
+                                  WHERE c_active.chat_id = c.id
+                                     AND c_active.status = 'active'
+                                     AND cp.left_at IS NULL) AS active_call_participant_count
                   FROM chats c
                   JOIN chat_members cm ON cm.chat_id = c.id
                   WHERE cm.user_id = ?";
@@ -667,6 +673,7 @@ class ApiController extends Controller {
             );
             $chat->is_favorite = false;
             $chat->unread_count = max(0, (int)($chat->unread_count ?? 0));
+            $chat->active_call_participant_count = max(0, (int)($chat->active_call_participant_count ?? 0));
             $chat->chat_number_formatted = User::formatUserNumber($chat->chat_number);
             $chat->has_custom_title = false;
             if ($chat->type === 'group') {

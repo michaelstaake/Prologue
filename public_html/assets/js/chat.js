@@ -2259,6 +2259,8 @@ function buildSidebarChatNode(chat, options = {}) {
     const { customMode = false } = options;
     const type = normalizeChatType(chat.type);
     const unreadCount = Math.max(0, Number(chat.unread_count || 0));
+    const activeCallParticipantCount = Math.max(0, Number(chat.active_call_participant_count || 0));
+    const hasGroupCallParticipants = type === 'group' && activeCallParticipantCount > 0;
     const hasPersonalStatus = type === 'personal' && Boolean(chat.effective_status_label);
     const showFavoriteStar = type === 'personal' && (Number(chat.is_favorite) === 1 || chat.is_favorite === true);
     const sidebarTitle = getChatSidebarTitle(chat);
@@ -2277,6 +2279,10 @@ function buildSidebarChatNode(chat, options = {}) {
     item.className = 'block py-2 px-3 rounded-xl hover:bg-zinc-800 mb-1';
     item.dataset.sidebarChatNumber = String(chat.chat_number || '');
     item.dataset.sidebarChatType = type;
+
+    if (hasGroupCallParticipants) {
+        item.classList.add('border-b-2', 'border-b-emerald-400');
+    }
 
     if (window.location.pathname === item.getAttribute('href')) {
         item.classList.add('bg-zinc-800/80');
