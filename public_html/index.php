@@ -278,6 +278,9 @@ $router->post('/api/chats/group/promote-moderator', 'ChatController@promoteGroup
 $router->post('/api/chats/group/demote-moderator', 'ChatController@demoteGroupModerator');
 $router->post('/api/chats/group/mute-member', 'ChatController@muteGroupMember');
 $router->post('/api/chats/group/unmute-member', 'ChatController@unmuteGroupMember');
+$router->post('/api/chats/group/poll/create', 'ChatController@createGroupPoll');
+$router->post('/api/chats/group/poll/vote', 'ChatController@voteGroupPoll');
+$router->post('/api/chats/group/poll/expire', 'ChatController@expireGroupPoll');
 $router->post('/api/chats/group/request-join', 'ChatController@requestGroupJoin');
 $router->post('/api/chats/group/cancel-request', 'ChatController@cancelGroupJoinRequest');
 $router->post('/api/chats/group/approve-request', 'ChatController@approveGroupJoinRequest');

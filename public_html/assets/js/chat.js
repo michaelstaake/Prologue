@@ -736,6 +736,413 @@ function renderPinnedMessageBanner(pinnedMessage) {
     }
 }
 
+function normalizeActivePoll(activePoll) {
+    if (!activePoll || typeof activePoll !== 'object') {
+        return null;
+    }
+
+    const id = Number(activePoll.id || 0);
+    if (!Number.isFinite(id) || id <= 0) {
+        return null;
+    }
+
+    const options = Array.isArray(activePoll.options)
+        ? activePoll.options.map((option) => {
+            const optionId = Number(option?.id || 0);
+            if (!Number.isFinite(optionId) || optionId <= 0) return null;
+
+            const voteCount = Number(option?.vote_count || 0);
+            const voters = Array.isArray(option?.voters)
+                ? option.voters.map((value) => String(value || '').trim()).filter(Boolean)
+                : [];
+
+            return {
+                id: optionId,
+                option_text: String(option?.option_text || ''),
+                sort_order: Number(option?.sort_order || 0),
+                vote_count: Number.isFinite(voteCount) ? Math.max(0, voteCount) : 0,
+                selected_by_current_user: Boolean(option?.selected_by_current_user),
+                voters
+            };
+        }).filter(Boolean)
+        : [];
+
+    return {
+        id,
+        chat_id: Number(activePoll.chat_id || 0),
+        creator_user_id: Number(activePoll.creator_user_id || 0),
+        creator_username: String(activePoll.creator_username || 'Unknown user').trim() || 'Unknown user',
+        question: String(activePoll.question || ''),
+        status: String(activePoll.status || 'active').toLowerCase(),
+        expires_at: String(activePoll.expires_at || ''),
+        expired_at: String(activePoll.expired_at || ''),
+        created_at: String(activePoll.created_at || ''),
+        total_votes: Math.max(0, Number(activePoll.total_votes || 0)),
+        user_has_voted: Boolean(activePoll.user_has_voted),
+        user_voted_option_id: Number(activePoll.user_voted_option_id || 0),
+        can_expire: Boolean(activePoll.can_expire),
+        options
+    };
+}
+
+function canCurrentUserCreatePoll() {
+    if (!currentChat) return false;
+    return normalizeChatType(currentChat.type) === 'group' && currentChat.is_group_member === true;
+}
+
+function canCurrentUserExpirePoll(activePoll) {
+    const poll = normalizeActivePoll(activePoll);
+    if (!poll || !currentChat) return false;
+    if (poll.can_expire) return true;
+
+    const myUserId = Number(currentUserId || 0);
+    if (myUserId > 0 && Number(poll.creator_user_id || 0) === myUserId) {
+        return true;
+    }
+
+    if (currentChat.is_admin === true) {
+        return true;
+    }
+
+    const ownerUserId = Number(currentChat.owner_user_id || 0);
+    if (ownerUserId > 0 && ownerUserId === myUserId) {
+        return true;
+    }
+
+    return currentChat.is_group_moderator === true;
+}
+
+function renderActivePollBanner(activePoll) {
+    const banner = document.getElementById('active-poll-banner');
+    const questionNode = document.getElementById('active-poll-question');
+    const metaNode = document.getElementById('active-poll-meta');
+    const optionsNode = document.getElementById('active-poll-options');
+    const expireButton = document.getElementById('active-poll-expire');
+    if (!banner || !questionNode || !metaNode || !optionsNode) return;
+
+    const poll = normalizeActivePoll(activePoll);
+    if (!poll) {
+        banner.classList.add('hidden');
+        banner.dataset.activePollId = '0';
+        questionNode.textContent = '';
+        metaNode.textContent = '';
+        optionsNode.replaceChildren();
+        if (expireButton) {
+            expireButton.classList.add('hidden');
+            expireButton.disabled = true;
+            expireButton.classList.add('opacity-50', 'cursor-not-allowed');
+        }
+        return;
+    }
+
+    const isActive = poll.status === 'active';
+    const canVote = isActive && !poll.user_has_voted && canCurrentUserCreatePoll();
+    const canExpire = isActive && canCurrentUserExpirePoll(poll);
+
+    banner.classList.remove('hidden');
+    banner.dataset.activePollId = String(poll.id);
+
+    questionNode.textContent = poll.question;
+
+    const voteWord = poll.total_votes === 1 ? 'vote' : 'votes';
+    const expiryText = isActive
+        ? `Expires ${formatCompactMessageTimestamp(poll.expires_at)}`
+        : `Expired ${formatCompactMessageTimestamp(poll.expired_at || poll.expires_at)}`;
+    metaNode.textContent = `${expiryText} · ${poll.total_votes} ${voteWord} · by ${poll.creator_username}`;
+
+    const optionButtons = poll.options.map((option) => {
+        const button = document.createElement('button');
+        const isSelected = Number(option.id || 0) === Number(poll.user_voted_option_id || 0) || option.selected_by_current_user === true;
+        const votersTooltip = option.voters.length > 0 ? option.voters.join(', ') : 'No votes yet';
+        const totalVotes = Math.max(0, Number(poll.total_votes || 0));
+        const voteCount = Math.max(0, Number(option.vote_count || 0));
+        const votePercent = totalVotes > 0 ? Math.max(0, Math.min(100, (voteCount / totalVotes) * 100)) : 0;
+
+        button.type = 'button';
+        button.className = `w-full text-left border rounded-xl px-3 py-2 text-sm transition ${isSelected ? 'border-emerald-500/70 bg-emerald-500/10 text-zinc-100' : 'border-zinc-700 bg-zinc-800/80 text-zinc-200'} ${canVote ? 'hover:bg-zinc-700/80' : 'opacity-90'}`;
+        button.setAttribute('title', votersTooltip);
+        button.setAttribute('aria-label', `${option.option_text} (${option.vote_count} votes)`);
+        button.dataset.pollVoteOptionId = String(option.id);
+        button.dataset.pollId = String(poll.id);
+        button.disabled = !canVote;
+
+        const left = document.createElement('span');
+        left.textContent = option.option_text;
+        const right = document.createElement('span');
+        right.className = 'text-xs text-zinc-400';
+        right.textContent = `${option.vote_count}`;
+
+        const row = document.createElement('span');
+        row.className = 'flex items-center justify-between gap-3';
+        row.appendChild(left);
+        row.appendChild(right);
+        button.appendChild(row);
+
+        if (totalVotes > 0) {
+            const track = document.createElement('span');
+            track.className = 'mt-2 block w-full h-1.5 rounded-full bg-zinc-700/70 overflow-hidden';
+
+            const fill = document.createElement('span');
+            fill.className = isSelected
+                ? 'block h-full rounded-full bg-emerald-500/90'
+                : 'block h-full rounded-full bg-zinc-400/90';
+            fill.style.width = `${votePercent}%`;
+            fill.setAttribute('aria-hidden', 'true');
+
+            track.appendChild(fill);
+            button.appendChild(track);
+        }
+
+        return button;
+    });
+
+    optionsNode.replaceChildren(...optionButtons);
+
+    if (expireButton) {
+        expireButton.classList.toggle('hidden', !canExpire);
+        expireButton.disabled = !canExpire;
+        expireButton.classList.toggle('opacity-50', !canExpire);
+        expireButton.classList.toggle('cursor-not-allowed', !canExpire);
+        expireButton.dataset.pollId = String(poll.id);
+    }
+}
+
+async function createCurrentGroupPoll() {
+    if (!currentChat || !canCurrentUserCreatePoll()) {
+        return false;
+    }
+
+    const questionInput = document.getElementById('create-poll-question');
+    const option1Input = document.getElementById('create-poll-option-1');
+    const option2Input = document.getElementById('create-poll-option-2');
+    const option3Input = document.getElementById('create-poll-option-3');
+    const expiryInput = document.getElementById('create-poll-expiry');
+
+    const question = String(questionInput?.value || '').trim();
+    const option1 = String(option1Input?.value || '').trim();
+    const option2 = String(option2Input?.value || '').trim();
+    const option3 = String(option3Input?.value || '').trim();
+    const expiry = String(expiryInput?.value || '24h').trim();
+
+    const options = [option1, option2, option3].filter((value) => value !== '');
+
+    if (!question) {
+        showToast('Enter a poll question', 'error');
+        return false;
+    }
+    if (question.length > 40) {
+        showToast('Question must be 40 characters or fewer', 'error');
+        return false;
+    }
+    if (options.length < 2 || options.length > 3) {
+        showToast('Poll must include 2 or 3 options', 'error');
+        return false;
+    }
+    if (options.some((value) => value.length > 40)) {
+        showToast('Each option must be 40 characters or fewer', 'error');
+        return false;
+    }
+
+    const normalizedOptionSet = new Set(options.map((value) => value.toLowerCase()));
+    if (normalizedOptionSet.size !== options.length) {
+        showToast('Poll options must be unique', 'error');
+        return false;
+    }
+
+    const result = await postForm('/api/chats/group/poll/create', {
+        csrf_token: getCsrfToken(),
+        chat_id: String(currentChat.id),
+        question,
+        expiry,
+        options: JSON.stringify(options)
+    });
+
+    if (!result.success) {
+        showToast(result.error || 'Unable to create poll', 'error');
+        return false;
+    }
+
+    const poll = normalizeActivePoll(result.active_poll);
+    if (currentChat) {
+        currentChat.active_poll = poll;
+    }
+    renderActivePollBanner(poll);
+    showToast('Poll created', 'success');
+    return true;
+}
+
+async function voteInActivePoll(pollId, optionId) {
+    if (!currentChat) return;
+
+    const result = await postForm('/api/chats/group/poll/vote', {
+        csrf_token: getCsrfToken(),
+        chat_id: String(currentChat.id),
+        poll_id: String(pollId),
+        option_id: String(optionId)
+    });
+
+    if (!result.success) {
+        showToast(result.error || 'Unable to submit vote', 'error');
+        return;
+    }
+
+    const poll = normalizeActivePoll(result.active_poll);
+    if (currentChat) {
+        currentChat.active_poll = poll;
+    }
+    renderActivePollBanner(poll);
+}
+
+async function expireActivePoll(pollId) {
+    if (!currentChat) return;
+
+    const result = await postForm('/api/chats/group/poll/expire', {
+        csrf_token: getCsrfToken(),
+        chat_id: String(currentChat.id),
+        poll_id: String(pollId)
+    });
+
+    if (!result.success) {
+        showToast(result.error || 'Unable to expire poll', 'error');
+        return;
+    }
+
+    const poll = normalizeActivePoll(result.active_poll);
+    if (currentChat) {
+        currentChat.active_poll = poll;
+    }
+    renderActivePollBanner(poll);
+    showToast('Poll expired', 'success');
+}
+
+function bindActivePollBannerActions() {
+    const banner = document.getElementById('active-poll-banner');
+    const optionsNode = document.getElementById('active-poll-options');
+    const expireButton = document.getElementById('active-poll-expire');
+    if (!banner || !optionsNode) return;
+
+    if (optionsNode.dataset.bound !== '1') {
+        optionsNode.dataset.bound = '1';
+        optionsNode.addEventListener('click', (event) => {
+            const button = event.target.closest('[data-poll-vote-option-id]');
+            if (!(button instanceof HTMLElement)) return;
+            if (button.disabled) return;
+
+            const pollId = Number(button.dataset.pollId || banner.dataset.activePollId || 0);
+            const optionId = Number(button.dataset.pollVoteOptionId || 0);
+            if (!Number.isFinite(pollId) || pollId <= 0 || !Number.isFinite(optionId) || optionId <= 0) {
+                return;
+            }
+
+            voteInActivePoll(pollId, optionId).catch(() => {
+                showToast('Unable to submit vote', 'error');
+            });
+        });
+    }
+
+    if (expireButton && expireButton.dataset.bound !== '1') {
+        expireButton.dataset.bound = '1';
+        expireButton.addEventListener('click', (event) => {
+            event.preventDefault();
+            if (expireButton.disabled) return;
+
+            const pollId = Number(expireButton.dataset.pollId || banner.dataset.activePollId || 0);
+            if (!Number.isFinite(pollId) || pollId <= 0) {
+                return;
+            }
+
+            expireButton.disabled = true;
+            expireActivePoll(pollId)
+                .catch(() => {
+                    showToast('Unable to expire poll', 'error');
+                })
+                .finally(() => {
+                    const poll = normalizeActivePoll(currentChat?.active_poll || null);
+                    const canExpire = poll ? canCurrentUserExpirePoll(poll) : false;
+                    expireButton.disabled = !canExpire;
+                    expireButton.classList.toggle('opacity-50', !canExpire);
+                    expireButton.classList.toggle('cursor-not-allowed', !canExpire);
+                });
+        });
+    }
+}
+
+function bindCreatePollModal() {
+    const modal = document.getElementById('create-poll-modal');
+    const form = document.getElementById('create-poll-form');
+    const cancel = document.getElementById('create-poll-cancel');
+    const submit = document.getElementById('create-poll-submit');
+    if (!modal || !form || !cancel || !submit) return;
+    if (modal.dataset.bound === '1') return;
+    modal.dataset.bound = '1';
+
+    const questionInput = document.getElementById('create-poll-question');
+    const option1Input = document.getElementById('create-poll-option-1');
+    const option2Input = document.getElementById('create-poll-option-2');
+    const option3Input = document.getElementById('create-poll-option-3');
+    const expiryInput = document.getElementById('create-poll-expiry');
+
+    const setOpenState = (isOpen) => {
+        modal.classList.toggle('hidden', !isOpen);
+        if (isOpen) {
+            if (questionInput) questionInput.value = '';
+            if (option1Input) option1Input.value = '';
+            if (option2Input) option2Input.value = '';
+            if (option3Input) option3Input.value = '';
+            if (expiryInput) expiryInput.value = '24h';
+            setTimeout(() => questionInput?.focus(), 0);
+            return;
+        }
+
+        submit.disabled = false;
+        submit.textContent = 'Create';
+    };
+
+    const closeModal = () => setOpenState(false);
+
+    cancel.addEventListener('click', (event) => {
+        event.preventDefault();
+        closeModal();
+    });
+
+    modal.addEventListener('click', (event) => {
+        if (event.target !== modal) return;
+        closeModal();
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return;
+        if (modal.classList.contains('hidden')) return;
+        closeModal();
+    });
+
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (submit.disabled) return;
+
+        submit.disabled = true;
+        submit.textContent = 'Creating...';
+
+        try {
+            const created = await createCurrentGroupPoll();
+            if (created && !modal.classList.contains('hidden')) {
+                closeModal();
+            }
+        } finally {
+            submit.disabled = false;
+            submit.textContent = 'Create';
+        }
+    });
+
+    window.openCreatePollModal = () => {
+        if (!canCurrentUserCreatePoll()) {
+            showToast('Only group members can create polls', 'error');
+            return;
+        }
+        setOpenState(true);
+    };
+}
+
 async function unpinCurrentChatMessage() {
     if (!currentChat) {
         return;
@@ -928,12 +1335,17 @@ function bindMessageQuotesAndReactions() {
     messageInteractionHandlersBound = true;
     bindPinReplaceModal();
     bindPinnedMessageBannerActions();
+    bindActivePollBannerActions();
+    bindCreatePollModal();
 
     const initialPinnedMessage = normalizePinnedMessage(window.INITIAL_PINNED_MESSAGE || null);
+    const initialActivePoll = normalizeActivePoll(window.INITIAL_ACTIVE_POLL || null);
     if (currentChat) {
         currentChat.pinned_message = initialPinnedMessage;
+        currentChat.active_poll = initialActivePoll;
     }
     renderPinnedMessageBanner(initialPinnedMessage);
+    renderActivePollBanner(initialActivePoll);
     bindPinnedBannerScrollBehavior(messagesBox);
     bindMessageFormScrollBehavior(messagesBox);
 
@@ -3383,6 +3795,7 @@ async function pollMessages(options = {}) {
     const messages = data.messages || [];
     const typingUsers = data.typing_users || [];
     const pinnedMessage = normalizePinnedMessage(data.pinned_message);
+    const activePoll = normalizeActivePoll(data.active_poll);
     if (currentChat && data.group_edit_window !== undefined) {
         currentChat.group_edit_window = String(data.group_edit_window || 'never');
     }
@@ -3416,8 +3829,10 @@ async function pollMessages(options = {}) {
     renderTypingIndicator(typingUsers);
     if (currentChat) {
         currentChat.pinned_message = pinnedMessage;
+        currentChat.active_poll = activePoll;
     }
     renderPinnedMessageBanner(pinnedMessage);
+    renderActivePollBanner(activePoll);
     refreshChatCallStatusBar();
 
     if (hasCanSendMessage) {
@@ -3570,7 +3985,12 @@ function buildRenderableMessageEntries(messages, chatId) {
         }
 
         const runMessages = messages.slice(runStart, index);
-        if (runMessages.length <= 2) {
+        const runContainsPollEvent = runMessages.some((runMessage) => {
+            const eventType = String(runMessage?.event_type || '').toLowerCase().trim();
+            return eventType === 'poll_created' || eventType === 'poll_expired';
+        });
+
+        if (runMessages.length <= 2 || runContainsPollEvent) {
             runMessages.forEach((runMessage, offset) => {
                 entries.push({
                     type: 'system',
@@ -4013,8 +4433,11 @@ function renderMessages(messages, options = {}) {
 
         const msg = entry?.message;
         if (entry?.type === 'system' && msg?.is_system_event) {
-            const isNewPrologueCluster = !previousWasSystemEvent;
             const systemEventType = String(msg?.event_type || '');
+            const isPollCreatedEvent = systemEventType === 'poll_created';
+            const isPollExpiredEvent = systemEventType === 'poll_expired';
+            const isStandalonePollEvent = isPollCreatedEvent || isPollExpiredEvent;
+            const isNewPrologueCluster = isStandalonePollEvent ? true : !previousWasSystemEvent;
             const isCallSystemEvent = systemEventType.startsWith('call_');
             const sysFullTimestamp = String(msg.created_at || '');
             const sysCompactTimestamp = formatCompactMessageTimestamp(sysFullTimestamp);
@@ -4025,14 +4448,36 @@ function renderMessages(messages, options = {}) {
                 ? ` data-system-event-group-key="${escapeHtml(groupKey)}" data-system-event-hidden="1"`
                 : '';
 
+            let systemAvatarIcon = 'fa-comments';
+            let systemHeaderLabel = 'Prologue';
+            let systemContent = String(msg.content || '');
+
+            if (isPollCreatedEvent) {
+                systemAvatarIcon = 'fa-square-poll-horizontal';
+
+                const lines = systemContent.split(/\r?\n/);
+                const firstLine = String(lines[0] || '');
+                const match = firstLine.match(/^Poll created by\s+(.+?):\s*(.*)$/i);
+                if (match) {
+                    const creatorName = String(match[1] || '').trim();
+                    const question = String(match[2] || '').trim();
+                    systemHeaderLabel = `Poll created by ${creatorName || 'Unknown user'}`;
+                    lines[0] = question;
+                    systemContent = lines.join('\n').trim();
+                }
+            } else if (isPollExpiredEvent) {
+                systemAvatarIcon = 'fa-square-poll-horizontal';
+                systemHeaderLabel = 'Poll expired';
+            }
+
             chunks.push(`
                 <div class="flex gap-3 ${isNewPrologueCluster ? 'mt-4' : 'mt-1'}${isHiddenByDefault ? ' hidden' : ''}"${middleAttrs}>
                     <div class="w-10 shrink-0">
-                        ${isNewPrologueCluster ? '<div class="w-10 h-10 rounded-full border border-zinc-700 bg-zinc-900 text-zinc-400 flex items-center justify-center font-semibold mt-0.5"><i class="fa-solid fa-comments text-xs" aria-hidden="true"></i></div>' : '<div class="w-10 h-10"></div>'}
+                        ${isNewPrologueCluster ? `<div class="w-10 h-10 rounded-full border border-zinc-700 bg-zinc-900 text-zinc-400 flex items-center justify-center font-semibold mt-0.5"><i class="fa-solid ${escapeHtml(systemAvatarIcon)} text-xs" aria-hidden="true"></i></div>` : '<div class="w-10 h-10"></div>'}
                     </div>
                     <div class="min-w-0 flex-1">
-                        ${isNewPrologueCluster ? `<div class="flex items-center gap-2 mb-0.5"><span class="text-sm font-semibold leading-5 text-zinc-400">Prologue</span></div>` : ''}
-                        <div class="text-zinc-400 text-[15px] leading-6">${renderPlainTextWithEmoji(String(msg.content || ''))}</div>
+                        ${isNewPrologueCluster ? `<div class="flex items-center gap-2 mb-0.5"><span class="text-sm font-semibold leading-5 text-zinc-400">${escapeHtml(systemHeaderLabel)}</span></div>` : ''}
+                        <div class="text-zinc-400 text-[15px] leading-6">${renderPlainTextWithEmoji(systemContent)}</div>
                         <div class="relative mt-0.5">
                             <div class="text-xs flex items-center gap-3">
                                 <span class="text-zinc-500" data-utc="${escapeHtml(sysFullTimestamp)}" title="${escapeHtml(sysFullTimestamp)}">${escapeHtml(sysCompactTimestamp)}</span>
@@ -4041,7 +4486,7 @@ function renderMessages(messages, options = {}) {
                     </div>
                 </div>
             `);
-            previousWasSystemEvent = true;
+            previousWasSystemEvent = !isStandalonePollEvent;
             previousUserId = null;
             return;
         }

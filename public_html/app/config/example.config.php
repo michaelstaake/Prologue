@@ -265,6 +265,44 @@ CREATE TABLE group_join_requests (
 	KEY idx_group_join_requests_status (chat_id, status)
 );
 
+-- Group polls
+CREATE TABLE polls (
+	id BIGINT AUTO_INCREMENT PRIMARY KEY,
+	chat_id INT NOT NULL,
+	creator_user_id INT NOT NULL,
+	question VARCHAR(40) NOT NULL,
+	status ENUM('active','expired') NOT NULL DEFAULT 'active',
+	expires_at TIMESTAMP NOT NULL,
+	expired_at TIMESTAMP NULL,
+	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	FOREIGN KEY (chat_id) REFERENCES chats(id) ON DELETE CASCADE,
+	FOREIGN KEY (creator_user_id) REFERENCES users(id) ON DELETE CASCADE,
+	KEY idx_polls_chat_status (chat_id, status, expires_at, created_at)
+);
+
+CREATE TABLE poll_options (
+	id BIGINT AUTO_INCREMENT PRIMARY KEY,
+	poll_id BIGINT NOT NULL,
+	option_text VARCHAR(40) NOT NULL,
+	sort_order TINYINT NOT NULL,
+	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	FOREIGN KEY (poll_id) REFERENCES polls(id) ON DELETE CASCADE,
+	UNIQUE KEY uniq_poll_options_order (poll_id, sort_order)
+);
+
+CREATE TABLE poll_votes (
+	id BIGINT AUTO_INCREMENT PRIMARY KEY,
+	poll_id BIGINT NOT NULL,
+	poll_option_id BIGINT NOT NULL,
+	user_id INT NOT NULL,
+	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	FOREIGN KEY (poll_id) REFERENCES polls(id) ON DELETE CASCADE,
+	FOREIGN KEY (poll_option_id) REFERENCES poll_options(id) ON DELETE CASCADE,
+	FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+	UNIQUE KEY uniq_poll_votes_poll_user (poll_id, user_id),
+	KEY idx_poll_votes_option (poll_option_id, poll_id)
+);
+
 -- Messages
 CREATE TABLE messages (
 	id INT AUTO_INCREMENT PRIMARY KEY,

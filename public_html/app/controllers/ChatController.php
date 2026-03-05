@@ -5,6 +5,10 @@ class ChatController extends Controller {
     private const GROUP_VISIBILITY_NONE = 'none';
     private const GROUP_VISIBILITY_REQUESTABLE = 'requestable';
     private const GROUP_VISIBILITY_PUBLIC = 'public';
+    private const POLL_QUESTION_MAX_LENGTH = 40;
+    private const POLL_OPTION_MAX_LENGTH = 40;
+    private const POLL_OPTION_MIN_COUNT = 2;
+    private const POLL_OPTION_MAX_COUNT = 3;
 
     private function supportsChatMemberRole(): bool {
         static $supports = null;
@@ -60,6 +64,102 @@ class ChatController extends Controller {
 
         $supports = ((int)$result) > 0;
         return $supports;
+    }
+
+    private function supportsPolls(): bool {
+        return Chat::supportsPolls();
+    }
+
+    private function pollTextLength(string $value): int {
+        return function_exists('mb_strlen')
+            ? (int)mb_strlen($value, 'UTF-8')
+            : (int)strlen($value);
+    }
+
+    private function normalizePollText($value): string {
+        $normalized = preg_replace('/\s+/u', ' ', trim((string)$value));
+        if (!is_string($normalized)) {
+            return '';
+        }
+
+        return $normalized;
+    }
+
+    private function normalizePollOptions($rawOptions): array {
+        $options = [];
+
+        if (is_array($rawOptions)) {
+            $options = $rawOptions;
+        } elseif (is_string($rawOptions)) {
+            $decoded = json_decode($rawOptions, true);
+            if (is_array($decoded)) {
+                $options = $decoded;
+            }
+        }
+
+        $normalized = [];
+        foreach ($options as $option) {
+            $value = $this->normalizePollText($option);
+            if ($value === '') {
+                continue;
+            }
+            $normalized[] = $value;
+        }
+
+        return $normalized;
+    }
+
+    private function getPollExpirySeconds(string $expiry): int {
+        $normalized = strtolower(trim($expiry));
+        if ($normalized === '24h') {
+            return 24 * 60 * 60;
+        }
+        if ($normalized === '7d') {
+            return 7 * 24 * 60 * 60;
+        }
+
+        return 0;
+    }
+
+    private function enrichActivePollPermissions($poll, $chat, int $userId, bool $isCurrentUserAdmin) {
+        if (!$poll) {
+            return null;
+        }
+
+        $canExpire = (int)($poll->creator_user_id ?? 0) === $userId
+            || $this->canModerateGroupMembers($chat, $userId, $isCurrentUserAdmin);
+
+        $poll->can_expire = $canExpire;
+        return $poll;
+    }
+
+    private function appendSystemEvent(int $chatId, string $eventType, string $content): void {
+        if (!$this->supportsSystemEvents() || $chatId <= 0 || trim($content) === '') {
+            return;
+        }
+
+        Database::query(
+            "INSERT INTO chat_system_events (chat_id, event_type, content) VALUES (?, ?, ?)",
+            [$chatId, $eventType, $content]
+        );
+    }
+
+    private function buildPollResultsSummary(int $pollId): array {
+        if ($pollId <= 0) {
+            return [];
+        }
+
+        $rows = Database::query(
+            "SELECT po.option_text, COUNT(pv.id) AS vote_count
+             FROM poll_options po
+             LEFT JOIN poll_votes pv ON pv.poll_option_id = po.id AND pv.poll_id = po.poll_id
+             WHERE po.poll_id = ?
+             GROUP BY po.id, po.option_text, po.sort_order
+             ORDER BY po.sort_order ASC",
+            [$pollId]
+        )->fetchAll();
+
+        return is_array($rows) ? $rows : [];
     }
 
     private function getGroupVisibility($chat): string {
@@ -657,6 +757,11 @@ class ChatController extends Controller {
         $pinnedMessage = ($isMember || $isReadOnlyPublicViewer)
             ? $this->getPinnedMessageForChat((int)$chat->id)
             : null;
+        $activePoll = null;
+        if ($isGroupChat && ($isMember || $isReadOnlyPublicViewer) && $this->supportsPolls()) {
+            $activePoll = Chat::getActivePollForChat((int)$chat->id, (int)$currentUserId);
+            $activePoll = $this->enrichActivePollPermissions($activePoll, $chat, (int)$currentUserId, $isCurrentUserAdmin);
+        }
 
         $groupEditWindow = 'never';
         $groupDeleteWindow = 'never';
@@ -713,9 +818,302 @@ class ChatController extends Controller {
             'canStartCalls' => $canStartCalls,
             'isUserInActiveCall' => $isUserInActiveCall,
             'pinnedMessage' => $pinnedMessage,
+            'activePoll' => $activePoll,
+            'canCreatePoll' => $isGroupChat && $isMember && $this->supportsPolls(),
             'groupEditWindow' => $groupEditWindow,
             'groupDeleteWindow' => $groupDeleteWindow,
             'csrf' => $this->csrfToken()
+        ]);
+    }
+
+    public function createGroupPoll() {
+        Auth::requireAuth();
+        Auth::csrfValidate();
+
+        if (!$this->supportsPolls()) {
+            $this->json(['error' => 'Polls are not available until the database is updated'], 503);
+        }
+
+        $chatId = (int)($_POST['chat_id'] ?? 0);
+        $question = $this->normalizePollText($_POST['question'] ?? '');
+        $expiry = strtolower(trim((string)($_POST['expiry'] ?? '')));
+        $options = $this->normalizePollOptions($_POST['options'] ?? ($_POST['options_json'] ?? []));
+        $user = Auth::user();
+        $userId = (int)$user->id;
+        $isCurrentUserAdmin = strtolower(trim((string)($user->role ?? 'user'))) === 'admin';
+
+        if ($chatId <= 0 || $question === '') {
+            $this->json(['error' => 'Invalid payload'], 400);
+        }
+
+        if ($this->pollTextLength($question) > self::POLL_QUESTION_MAX_LENGTH) {
+            $this->json(['error' => 'Poll question must be 40 characters or fewer'], 400);
+        }
+
+        if (count($options) < self::POLL_OPTION_MIN_COUNT || count($options) > self::POLL_OPTION_MAX_COUNT) {
+            $this->json(['error' => 'Poll must have 2 or 3 options'], 400);
+        }
+
+        $seenOptions = [];
+        foreach ($options as $option) {
+            if ($this->pollTextLength($option) > self::POLL_OPTION_MAX_LENGTH) {
+                $this->json(['error' => 'Each poll option must be 40 characters or fewer'], 400);
+            }
+
+            $dedupeKey = strtolower($option);
+            if (isset($seenOptions[$dedupeKey])) {
+                $this->json(['error' => 'Poll options must be unique'], 400);
+            }
+            $seenOptions[$dedupeKey] = true;
+        }
+
+        $expirySeconds = $this->getPollExpirySeconds($expiry);
+        if ($expirySeconds <= 0) {
+            $this->json(['error' => 'Expiry must be either 24h or 7d'], 400);
+        }
+
+        $chat = $this->supportsChatSoftDelete()
+            ? Database::query("SELECT id, type, created_by, deleted_at FROM chats WHERE id = ?", [$chatId])->fetch()
+            : Database::query("SELECT id, type, created_by FROM chats WHERE id = ?", [$chatId])->fetch();
+        if (!$chat || $this->chatIsSoftDeleted($chat) || !Chat::isGroupType($chat->type ?? null)) {
+            $this->json(['error' => 'Group chat not found'], 404);
+        }
+
+        $member = $this->getGroupMember($chatId, $userId);
+        if (!$member) {
+            $this->json(['error' => 'Only group members can create polls'], 403);
+        }
+
+        $pdo = Database::getInstance();
+        try {
+            $pdo->beginTransaction();
+
+            Chat::cleanupExpiredPollsForChat($chatId);
+
+            $activePollId = (int)Database::query(
+                "SELECT id FROM polls WHERE chat_id = ? AND status = 'active' AND expires_at > NOW() LIMIT 1 FOR UPDATE",
+                [$chatId]
+            )->fetchColumn();
+            if ($activePollId > 0) {
+                $pdo->rollBack();
+                $this->json(['error' => 'Only one active poll is allowed per group'], 409);
+            }
+
+            $expiresAt = date('Y-m-d H:i:s', time() + $expirySeconds);
+            Database::query(
+                "INSERT INTO polls (chat_id, creator_user_id, question, status, expires_at) VALUES (?, ?, ?, 'active', ?)",
+                [$chatId, $userId, $question, $expiresAt]
+            );
+
+            $pollId = (int)$pdo->lastInsertId();
+            foreach ($options as $index => $optionText) {
+                Database::query(
+                    "INSERT INTO poll_options (poll_id, option_text, sort_order) VALUES (?, ?, ?)",
+                    [$pollId, $optionText, $index + 1]
+                );
+            }
+
+            $pdo->commit();
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+
+            $this->json(['error' => 'Unable to create poll'], 500);
+        }
+
+        $activePoll = Chat::getActivePollForChat($chatId, $userId);
+        $activePoll = $this->enrichActivePollPermissions($activePoll, $chat, $userId, $isCurrentUserAdmin);
+
+        if ($activePoll) {
+            $optionLines = [];
+            foreach ((array)($activePoll->options ?? []) as $option) {
+                $optionText = trim((string)($option->option_text ?? ''));
+                if ($optionText === '') {
+                    continue;
+                }
+                $optionLines[] = '• ' . $optionText;
+            }
+
+            $creatorName = trim((string)($activePoll->creator_username ?? ($user->username ?? 'A member')));
+            $content = 'Poll created by ' . $creatorName . ': ' . (string)$activePoll->question;
+            if (!empty($optionLines)) {
+                $content .= "\n" . implode("\n", $optionLines);
+            }
+
+            $this->appendSystemEvent($chatId, 'poll_created', $content);
+        }
+
+        $this->json([
+            'success' => true,
+            'active_poll' => $activePoll,
+        ]);
+    }
+
+    public function voteGroupPoll() {
+        Auth::requireAuth();
+        Auth::csrfValidate();
+
+        if (!$this->supportsPolls()) {
+            $this->json(['error' => 'Polls are not available until the database is updated'], 503);
+        }
+
+        $chatId = (int)($_POST['chat_id'] ?? 0);
+        $pollId = (int)($_POST['poll_id'] ?? 0);
+        $optionId = (int)($_POST['option_id'] ?? 0);
+        $user = Auth::user();
+        $userId = (int)$user->id;
+        $isCurrentUserAdmin = strtolower(trim((string)($user->role ?? 'user'))) === 'admin';
+
+        if ($chatId <= 0 || $pollId <= 0 || $optionId <= 0) {
+            $this->json(['error' => 'Invalid payload'], 400);
+        }
+
+        $chat = $this->supportsChatSoftDelete()
+            ? Database::query("SELECT id, type, created_by, deleted_at FROM chats WHERE id = ?", [$chatId])->fetch()
+            : Database::query("SELECT id, type, created_by FROM chats WHERE id = ?", [$chatId])->fetch();
+        if (!$chat || $this->chatIsSoftDeleted($chat) || !Chat::isGroupType($chat->type ?? null)) {
+            $this->json(['error' => 'Group chat not found'], 404);
+        }
+
+        $member = $this->getGroupMember($chatId, $userId);
+        if (!$member) {
+            $this->json(['error' => 'Only group members can vote'], 403);
+        }
+
+        Chat::cleanupExpiredPollsForChat($chatId);
+
+        $poll = Database::query(
+            "SELECT id, status, expires_at FROM polls WHERE id = ? AND chat_id = ? LIMIT 1",
+            [$pollId, $chatId]
+        )->fetch();
+        if (!$poll) {
+            $this->json(['error' => 'Poll not found'], 404);
+        }
+
+        if (strtolower((string)$poll->status) !== 'active') {
+            $this->json(['error' => 'This poll is closed'], 409);
+        }
+
+        $pollOption = Database::query(
+            "SELECT id FROM poll_options WHERE id = ? AND poll_id = ? LIMIT 1",
+            [$optionId, $pollId]
+        )->fetch();
+        if (!$pollOption) {
+            $this->json(['error' => 'Poll option not found'], 404);
+        }
+
+        try {
+            Database::query(
+                "INSERT INTO poll_votes (poll_id, poll_option_id, user_id) VALUES (?, ?, ?)",
+                [$pollId, $optionId, $userId]
+            );
+        } catch (Throwable $e) {
+            if (stripos($e->getMessage(), 'uniq_poll_votes_poll_user') !== false) {
+                $this->json(['error' => 'You have already voted in this poll'], 409);
+            }
+
+            $this->json(['error' => 'Unable to submit vote'], 500);
+        }
+
+        $activePoll = Chat::getActivePollForChat($chatId, $userId);
+        $activePoll = $this->enrichActivePollPermissions($activePoll, $chat, $userId, $isCurrentUserAdmin);
+
+        $this->json([
+            'success' => true,
+            'active_poll' => $activePoll,
+        ]);
+    }
+
+    public function expireGroupPoll() {
+        Auth::requireAuth();
+        Auth::csrfValidate();
+
+        if (!$this->supportsPolls()) {
+            $this->json(['error' => 'Polls are not available until the database is updated'], 503);
+        }
+
+        $chatId = (int)($_POST['chat_id'] ?? 0);
+        $pollId = (int)($_POST['poll_id'] ?? 0);
+        $user = Auth::user();
+        $userId = (int)$user->id;
+        $isCurrentUserAdmin = strtolower(trim((string)($user->role ?? 'user'))) === 'admin';
+
+        if ($chatId <= 0 || $pollId <= 0) {
+            $this->json(['error' => 'Invalid payload'], 400);
+        }
+
+        $chat = $this->supportsChatSoftDelete()
+            ? Database::query("SELECT id, type, created_by, deleted_at FROM chats WHERE id = ?", [$chatId])->fetch()
+            : Database::query("SELECT id, type, created_by FROM chats WHERE id = ?", [$chatId])->fetch();
+        if (!$chat || $this->chatIsSoftDeleted($chat) || !Chat::isGroupType($chat->type ?? null)) {
+            $this->json(['error' => 'Group chat not found'], 404);
+        }
+
+        $member = $this->getGroupMember($chatId, $userId);
+        if (!$member && !$isCurrentUserAdmin) {
+            $this->json(['error' => 'Access denied'], 403);
+        }
+
+        $poll = Database::query(
+            "SELECT id, creator_user_id, status FROM polls WHERE id = ? AND chat_id = ? LIMIT 1",
+            [$pollId, $chatId]
+        )->fetch();
+        if (!$poll) {
+            $this->json(['error' => 'Poll not found'], 404);
+        }
+
+        $canExpire = (int)($poll->creator_user_id ?? 0) === $userId
+            || $this->canModerateGroupMembers($chat, $userId, $isCurrentUserAdmin);
+        if (!$canExpire) {
+            $this->json(['error' => 'Only the creator, owner, moderator, or admin can expire this poll'], 403);
+        }
+
+        if (strtolower((string)($poll->status ?? '')) === 'active') {
+            $pollResults = $this->buildPollResultsSummary((int)$poll->id);
+
+            Database::query(
+                "UPDATE polls
+                 SET status = 'expired',
+                     expired_at = COALESCE(expired_at, NOW()),
+                     expires_at = LEAST(expires_at, NOW())
+                 WHERE id = ?",
+                [$pollId]
+            );
+
+            $question = trim((string)Database::query(
+                "SELECT question FROM polls WHERE id = ? LIMIT 1",
+                [$pollId]
+            )->fetchColumn());
+
+            $summaryLines = [];
+            foreach ($pollResults as $row) {
+                $optionText = trim((string)($row->option_text ?? ''));
+                $voteCount = (int)($row->vote_count ?? 0);
+                if ($optionText === '') {
+                    continue;
+                }
+                $summaryLines[] = '• ' . $optionText . ' — ' . $voteCount . ' vote' . ($voteCount === 1 ? '' : 's');
+            }
+
+            $expiredBy = trim((string)($user->username ?? 'A moderator'));
+            $content = 'Poll expired by ' . $expiredBy;
+            if ($question !== '') {
+                $content .= ': ' . $question;
+            }
+            if (!empty($summaryLines)) {
+                $content .= "\n" . implode("\n", $summaryLines);
+            }
+
+            $this->appendSystemEvent($chatId, 'poll_expired', $content);
+        }
+
+        $activePoll = Chat::getActivePollForChat($chatId, $userId);
+        $activePoll = $this->enrichActivePollPermissions($activePoll, $chat, $userId, $isCurrentUserAdmin);
+
+        $this->json([
+            'success' => true,
+            'active_poll' => $activePoll,
         ]);
     }
 

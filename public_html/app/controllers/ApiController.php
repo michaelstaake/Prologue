@@ -344,6 +344,24 @@ class ApiController extends Controller {
         return $supports;
     }
 
+    private function supportsPolls(): bool {
+        return Chat::supportsPolls();
+    }
+
+    private function enrichActivePollPermissions($poll, $chatRow, int $chatId, int $userId, bool $isCurrentUserAdmin) {
+        if (!$poll) {
+            return null;
+        }
+
+        $canExpire = (int)($poll->creator_user_id ?? 0) === $userId
+            || $this->isGroupOwner($chatRow, $userId)
+            || $this->isGroupModerator($chatId, $userId)
+            || $isCurrentUserAdmin;
+
+        $poll->can_expire = $canExpire;
+        return $poll;
+    }
+
     public function searchPosts() {
         Auth::requireAuth();
         $userId = (int)Auth::user()->id;
@@ -756,6 +774,7 @@ class ApiController extends Controller {
         $chatId = (int)($params['chat_id'] ?? 0);
         $authUser = Auth::user();
         $userId = $authUser->id;
+        $isCurrentUserAdmin = strtolower(trim((string)($authUser->role ?? 'user'))) === 'admin';
         $supportsLastSeen = $this->supportsLastSeenMessageId();
 
         $chatRow = null;
@@ -900,7 +919,18 @@ class ApiController extends Controller {
 
         $pinnedMessage = $this->getPinnedMessageForChat($chatId);
 
-        $response = ['messages' => $messages, 'typing_users' => $typingUsers, 'pinned_message' => $pinnedMessage];
+        $activePoll = null;
+        if ($isGroupChat && $this->supportsPolls()) {
+            $activePoll = Chat::getActivePollForChat($chatId, (int)$userId);
+            $activePoll = $this->enrichActivePollPermissions($activePoll, $chatRow, $chatId, (int)$userId, $isCurrentUserAdmin);
+        }
+
+        $response = [
+            'messages' => $messages,
+            'typing_users' => $typingUsers,
+            'pinned_message' => $pinnedMessage,
+            'active_poll' => $activePoll,
+        ];
         if ($isGroupChat) {
             $response['group_edit_window'] = $groupEditWindow;
             $response['group_delete_window'] = $groupDeleteWindow;

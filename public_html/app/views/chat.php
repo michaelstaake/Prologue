@@ -84,6 +84,8 @@ $canModerateMembers = $isGroupChat && $isGroupMember && ($isGroupOwner || $isGro
 $canAddUsers = $isGroupChat && $canManageGroupSettings && $isGroupMember;
 $hasChatActions = ($isGroupChat && ($isGroupMember || $isCurrentUserAdmin)) || $canReportChat;
 $pinnedMessage = $pinnedMessage ?? null;
+$activePoll = $activePoll ?? null;
+$canCreatePoll = (bool)($canCreatePoll ?? false);
 $personalChatUserId = 0;
 $personalChatUserNumber = '';
 $personalChatStatusDotClass = null;
@@ -200,6 +202,9 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                 <?php if ($isGroupChat): ?>
                 <?php if ($canAddUsers): ?>
                 <button type="button" data-chat-action="add-user" class="w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-zinc-800">Add User</button>
+                <?php endif; ?>
+                <?php if ($canCreatePoll): ?>
+                <button type="button" data-chat-action="create-poll" class="w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-zinc-800">Create Poll</button>
                 <?php endif; ?>
                 <?php if ($canManageGroupSettings): ?>
                 <button type="button" data-chat-action="rename-chat" class="w-full text-left text-sm px-3 py-2 rounded-lg hover:bg-zinc-800">Rename Chat</button>
@@ -377,6 +382,7 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
         $initialPinnedMessageContent = (string)($pinnedMessage->content ?? '');
         $initialPinnedMessageCreatedAt = (string)($pinnedMessage->created_at ?? '');
         $initialPinnedMessageMentionMap = json_encode((object)($pinnedMessage->mention_map ?? []), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}';
+        $initialActivePollId = (int)($activePoll->id ?? 0);
     ?>
     <div id="pinned-message-banner" class="<?= $initialPinnedMessageId > 0 ? '' : 'hidden' ?> px-6 py-3 border-b border-zinc-800 bg-zinc-900/70 transition-all duration-200 ease-out" data-pinned-message-id="<?= $initialPinnedMessageId ?>">
         <div class="flex items-start justify-between gap-4 group">
@@ -399,6 +405,22 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                 <button type="button" id="pinned-message-unpin" class="inline-flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-200" title="Unpin" aria-label="Unpin">
                     <i class="fa-solid fa-thumbtack-slash" aria-hidden="true"></i>
                     <span class="hidden md:inline">Unpin</span>
+                </button>
+            </div>
+        </div>
+    </div>
+    <div id="active-poll-banner" class="<?= $initialActivePollId > 0 ? '' : 'hidden' ?> px-6 py-3 border-b border-zinc-800 bg-zinc-900/70" data-active-poll-id="<?= $initialActivePollId ?>">
+        <div class="flex items-start justify-between gap-4">
+            <div class="min-w-0 w-full">
+                <div class="text-xs uppercase tracking-wide text-zinc-400">Active poll</div>
+                <div id="active-poll-question" class="mt-1 text-sm font-semibold text-zinc-100"></div>
+                <div id="active-poll-meta" class="mt-1 text-xs text-zinc-500"></div>
+                <div id="active-poll-options" class="mt-3 space-y-2"></div>
+            </div>
+            <div class="flex items-center">
+                <button type="button" id="active-poll-expire" class="hidden inline-flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-200" title="Expire poll" aria-label="Expire poll">
+                    <i class="fa-solid fa-clock" aria-hidden="true"></i>
+                    <span class="hidden md:inline">Expire</span>
                 </button>
             </div>
         </div>
@@ -473,7 +495,16 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                 }
 
                 $runMessages = array_slice($messages, $runStart, $messageIndex - $runStart);
-                if (count($runMessages) <= 2) {
+                $runContainsPollEvent = false;
+                foreach ($runMessages as $runMessageCandidate) {
+                    $runEventType = strtolower(trim((string)($runMessageCandidate->event_type ?? '')));
+                    if ($runEventType === 'poll_created' || $runEventType === 'poll_expired') {
+                        $runContainsPollEvent = true;
+                        break;
+                    }
+                }
+
+                if (count($runMessages) <= 2 || $runContainsPollEvent) {
                     foreach ($runMessages as $runOffset => $runMessage) {
                         $displayEntries[] = [
                             'type' => 'system_message',
@@ -561,12 +592,36 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                         : '';
                 ?>
                 <?php
-                    $isNewPrologueCluster = !$previousWasSystemEvent;
                     $systemEventType = (string)($message->event_type ?? '');
+                    $isPollCreatedEvent = $systemEventType === 'poll_created';
+                    $isPollExpiredEvent = $systemEventType === 'poll_expired';
+                    $isStandalonePollEvent = $isPollCreatedEvent || $isPollExpiredEvent;
+                    $isNewPrologueCluster = $isStandalonePollEvent ? true : !$previousWasSystemEvent;
                     $isCallSystemEvent = strpos($systemEventType, 'call_') === 0;
                     $sysFullTimestamp = (string)($message->created_at ?? '');
                     $sysCompactTimestamp = preg_replace('/:(\d{2})(?!.*:\d{2})/', '', $sysFullTimestamp);
                     $systemContentRaw = (string)($message->content ?? '');
+
+                    $systemAvatarIcon = 'fa-comments';
+                    $systemHeaderLabel = 'Prologue';
+
+                    if ($isPollCreatedEvent) {
+                        $systemAvatarIcon = 'fa-square-poll-horizontal';
+
+                        $systemLines = preg_split('/\R/u', $systemContentRaw) ?: [$systemContentRaw];
+                        $firstLine = (string)($systemLines[0] ?? '');
+                        if (preg_match('/^Poll created by\s+(.+?):\s*(.*)$/u', $firstLine, $matches)) {
+                            $creatorName = trim((string)($matches[1] ?? ''));
+                            $question = trim((string)($matches[2] ?? ''));
+                            $systemHeaderLabel = 'Poll created by ' . ($creatorName !== '' ? $creatorName : 'Unknown user');
+                            $systemLines[0] = $question;
+                            $systemContentRaw = trim(implode("\n", $systemLines));
+                        }
+                    } elseif ($isPollExpiredEvent) {
+                        $systemAvatarIcon = 'fa-square-poll-horizontal';
+                        $systemHeaderLabel = 'Poll expired';
+                    }
+
                     $systemContentEscaped = htmlspecialchars($systemContentRaw, ENT_QUOTES, 'UTF-8');
                     $systemContentHtml = preg_replace_callback(
                         '#/c/\d{4}-\d{4}-\d{4}-\d{4}/delete#',
@@ -583,7 +638,7 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                 <div class="flex gap-3 <?= $isNewPrologueCluster ? 'mt-4' : 'mt-1' ?><?= $isSystemEntryHiddenByDefault ? ' hidden' : '' ?>"<?= $systemEntryExtraAttributes ?>>
                     <div class="w-10 shrink-0">
                         <?php if ($isNewPrologueCluster): ?>
-                            <div class="w-10 h-10 rounded-full border border-zinc-700 bg-zinc-900 text-zinc-400 flex items-center justify-center font-semibold mt-0.5"><i class="fa-solid fa-comments text-xs" aria-hidden="true"></i></div>
+                            <div class="w-10 h-10 rounded-full border border-zinc-700 bg-zinc-900 text-zinc-400 flex items-center justify-center font-semibold mt-0.5"><i class="fa-solid <?= htmlspecialchars($systemAvatarIcon, ENT_QUOTES, 'UTF-8') ?> text-xs" aria-hidden="true"></i></div>
                         <?php else: ?>
                             <div class="w-10 h-10"></div>
                         <?php endif; ?>
@@ -591,7 +646,7 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                     <div class="min-w-0 flex-1">
                         <?php if ($isNewPrologueCluster): ?>
                             <div class="flex items-center gap-2 mb-0.5">
-                                <span class="text-sm font-semibold leading-5 text-zinc-400">Prologue</span>
+                                <span class="text-sm font-semibold leading-5 text-zinc-400"><?= htmlspecialchars($systemHeaderLabel, ENT_QUOTES, 'UTF-8') ?></span>
                             </div>
                         <?php endif; ?>
                         <div class="text-zinc-400 text-[15px] leading-6"><?= $systemContentHtml ?></div>
@@ -602,7 +657,7 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                         </div>
                     </div>
                 </div>
-                <?php $previousWasSystemEvent = true; $previousUserId = null; continue; ?>
+                <?php $previousWasSystemEvent = !$isStandalonePollEvent; $previousUserId = null; continue; ?>
             <?php endif; ?>
             <?php $message = $entry['message']; $index = (int)($entry['message_index'] ?? -1); ?>
             <?php
@@ -914,6 +969,7 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
 <script>
     window.PENDING_ATTACHMENTS = <?= json_encode($pendingAttachments ?? [], JSON_UNESCAPED_SLASHES) ?>;
     window.INITIAL_PINNED_MESSAGE = <?= json_encode($pinnedMessage, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+    window.INITIAL_ACTIVE_POLL = <?= json_encode($activePoll, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
 </script>
 
 <div id="pin-replace-modal" class="hidden fixed inset-0 bg-black/70 z-50 p-4 md:p-6" aria-hidden="true">
@@ -962,6 +1018,43 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                 <div class="flex items-center justify-end gap-3">
                     <button type="button" id="rename-chat-cancel" class="px-4 py-2 rounded-xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-zinc-200">Cancel</button>
                     <button type="submit" id="rename-chat-submit" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div id="create-poll-modal" class="hidden fixed inset-0 bg-black/70 z-50 p-4 md:p-6" aria-hidden="true">
+    <div class="h-full w-full flex items-center justify-center">
+        <div class="w-full max-w-md bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl p-6" role="dialog" aria-modal="true" aria-labelledby="create-poll-modal-title">
+            <h2 id="create-poll-modal-title" class="text-lg font-semibold text-zinc-100">Create Poll</h2>
+            <form id="create-poll-form" class="mt-4 space-y-4">
+                <div>
+                    <label for="create-poll-question" class="block text-sm text-zinc-300 mb-1">Question (max 40)</label>
+                    <input type="text" id="create-poll-question" maxlength="40" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-zinc-100" required>
+                </div>
+                <div>
+                    <label for="create-poll-option-1" class="block text-sm text-zinc-300 mb-1">Option 1 (max 40)</label>
+                    <input type="text" id="create-poll-option-1" maxlength="40" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-zinc-100" required>
+                </div>
+                <div>
+                    <label for="create-poll-option-2" class="block text-sm text-zinc-300 mb-1">Option 2 (max 40)</label>
+                    <input type="text" id="create-poll-option-2" maxlength="40" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-zinc-100" required>
+                </div>
+                <div>
+                    <label for="create-poll-option-3" class="block text-sm text-zinc-300 mb-1">Option 3 (optional, max 40)</label>
+                    <input type="text" id="create-poll-option-3" maxlength="40" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-zinc-100">
+                </div>
+                <div>
+                    <label for="create-poll-expiry" class="block text-sm text-zinc-300 mb-1">Expiry</label>
+                    <select id="create-poll-expiry" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-zinc-100">
+                        <option value="24h">24 Hours</option>
+                        <option value="7d">7 Days</option>
+                    </select>
+                </div>
+                <div class="flex items-center justify-end gap-3">
+                    <button type="button" id="create-poll-cancel" class="px-4 py-2 rounded-xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-zinc-200">Cancel</button>
+                    <button type="submit" id="create-poll-submit" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white">Create</button>
                 </div>
             </form>
         </div>

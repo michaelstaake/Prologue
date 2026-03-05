@@ -1409,6 +1409,13 @@ function bindChatHeaderMenu() {
             return;
         }
 
+        if (action === 'create-poll') {
+            if (typeof window.openCreatePollModal === 'function') {
+                window.openCreatePollModal();
+            }
+            return;
+        }
+
         if (action === 'rename-chat') {
             if (typeof window.openRenameChatModal === 'function') {
                 window.openRenameChatModal();
