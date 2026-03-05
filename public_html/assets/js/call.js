@@ -624,7 +624,9 @@ function bindGlobalCallBarInteractions() {
             callOverlayMode === 'hidden' &&
             !e.target.closest('#accept-call-btn') &&
             !e.target.closest('#decline-call-btn') &&
-            !e.target.closest('#join-call-btn')
+            !e.target.closest('#join-call-btn') &&
+            !e.target.closest('#exit-call-btn') &&
+            !e.target.closest('#end-ringing-call-btn')
         ) {
             setCallOverlayMode('full');
         }
@@ -641,6 +643,11 @@ function setChatCallEnabled(enabled) {
     applyVoiceCallButtonState();
 }
 
+function getCallExitButtonLabel() {
+    const callChatType = normalizeChatType(currentChat?.type || globalCallContext?.chat_type || 'personal');
+    return callChatType === 'group' ? 'Leave Group Call' : 'End Call';
+}
+
 
 function setChatCallStatusBar(state, incomingAlert = false) {
     const bar = document.getElementById('chat-call-status-bar');
@@ -648,6 +655,7 @@ function setChatCallStatusBar(state, incomingAlert = false) {
     const acceptBtn = document.getElementById('accept-call-btn');
     const declineBtn = document.getElementById('decline-call-btn');
     const joinBtn = document.getElementById('join-call-btn');
+    const exitBtn = document.getElementById('exit-call-btn');
     const endRingingBtn = document.getElementById('end-ringing-call-btn');
     const showHint = document.getElementById('chat-call-show-overlay-hint');
     if (!bar || !label) return;
@@ -676,6 +684,7 @@ function setChatCallStatusBar(state, incomingAlert = false) {
         acceptBtn?.classList.add('hidden');
         declineBtn?.classList.add('hidden');
         joinBtn?.classList.add('hidden');
+        exitBtn?.classList.add('hidden');
         endRingingBtn?.classList.add('hidden');
         showHint?.classList.add('hidden');
         bar.style.cursor = '';
@@ -687,9 +696,16 @@ function setChatCallStatusBar(state, incomingAlert = false) {
     const showJoinAction = state === 'joinable';
     const showCallActions = state === 'ringing' && incomingAlert;
     const showOutgoingEndAction = state === 'ringing' && !incomingAlert;
+    const showExitAction = state === 'active' || state === 'muted';
     acceptBtn?.classList.toggle('hidden', !showCallActions);
     declineBtn?.classList.toggle('hidden', !showCallActions);
     joinBtn?.classList.toggle('hidden', !showJoinAction);
+    exitBtn?.classList.toggle('hidden', !showExitAction);
+    if (exitBtn) {
+        const exitLabel = getCallExitButtonLabel();
+        exitBtn.textContent = exitLabel;
+        exitBtn.title = exitLabel;
+    }
     endRingingBtn?.classList.toggle('hidden', !showOutgoingEndAction);
     bar.classList.toggle('animate-pulse', isOutgoingRinging);
 
