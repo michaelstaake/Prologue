@@ -1,6 +1,8 @@
 <?php
 class ApiController extends Controller {
     private const SIDEBAR_CUSTOM_MAX_CHATS = 8;
+    private const SIDEBAR_CUSTOM_DEFAULT_LABEL = 'Custom';
+    private const SIDEBAR_CUSTOM_MAX_LABEL_LENGTH = 10;
 
     private function getPinnedMessageSettingKey(int $chatId): string {
         return 'pinned_message_chat_' . $chatId;
@@ -8,6 +10,25 @@ class ApiController extends Controller {
 
     private function getSidebarCustomSettingKey(int $userId): string {
         return 'chat_sidebar_custom_' . $userId;
+    }
+
+    private function getSidebarCustomLabelSettingKey(int $userId): string {
+        return 'chat_sidebar_custom_label_' . $userId;
+    }
+
+    private function normalizeSidebarCustomLabel($incoming): string {
+        $value = preg_replace('/\s+/u', ' ', trim((string)$incoming));
+        if (!is_string($value) || $value === '') {
+            return self::SIDEBAR_CUSTOM_DEFAULT_LABEL;
+        }
+
+        if (function_exists('mb_substr')) {
+            $value = mb_substr($value, 0, self::SIDEBAR_CUSTOM_MAX_LABEL_LENGTH, 'UTF-8');
+        } else {
+            $value = substr($value, 0, self::SIDEBAR_CUSTOM_MAX_LABEL_LENGTH);
+        }
+
+        return $value === '' ? self::SIDEBAR_CUSTOM_DEFAULT_LABEL : $value;
     }
 
     private function normalizeSidebarCustomChatNumbers($incoming): array {
@@ -96,6 +117,17 @@ class ApiController extends Controller {
         $sanitized = $this->getAccessibleSidebarCustomChatNumbers($userId, $chatNumbers);
         Setting::set($this->getSidebarCustomSettingKey($userId), json_encode($sanitized));
         return $sanitized;
+    }
+
+    private function loadSidebarCustomLabel(int $userId): string {
+        $raw = Setting::get($this->getSidebarCustomLabelSettingKey($userId));
+        return $this->normalizeSidebarCustomLabel($raw);
+    }
+
+    private function saveSidebarCustomLabelValue(int $userId, $label): string {
+        $normalized = $this->normalizeSidebarCustomLabel($label);
+        Setting::set($this->getSidebarCustomLabelSettingKey($userId), $normalized);
+        return $normalized;
     }
 
     private function clearPinnedMessageForChat(int $chatId): void {
@@ -678,6 +710,15 @@ class ApiController extends Controller {
         $this->json(['chat_numbers' => $sanitized]);
     }
 
+    public function getSidebarCustomLabel() {
+        Auth::requireAuth();
+
+        $userId = (int)Auth::user()->id;
+        $label = $this->loadSidebarCustomLabel($userId);
+
+        $this->json(['custom_label' => $label]);
+    }
+
     public function saveSidebarCustomChats() {
         Auth::requireAuth();
         Auth::csrfValidate();
@@ -697,6 +738,17 @@ class ApiController extends Controller {
 
         $saved = $this->saveSidebarCustomChatNumbers($userId, $incoming);
         $this->json(['success' => true, 'chat_numbers' => $saved]);
+    }
+
+    public function saveSidebarCustomLabel() {
+        Auth::requireAuth();
+        Auth::csrfValidate();
+
+        $userId = (int)Auth::user()->id;
+        $label = $_POST['label'] ?? '';
+        $saved = $this->saveSidebarCustomLabelValue($userId, $label);
+
+        $this->json(['success' => true, 'custom_label' => $saved]);
     }
 
     public function getMessages($params) {

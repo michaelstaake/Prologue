@@ -1626,9 +1626,12 @@ function bindAttachmentLightbox() {
 
 const SIDEBAR_CUSTOM_MAX_ITEMS = 8;
 const SIDEBAR_MODE_LOCALSTORAGE_KEY = 'prologue.sidebar.chatMode';
+const SIDEBAR_CUSTOM_DEFAULT_LABEL = 'Custom';
+const SIDEBAR_CUSTOM_MAX_LABEL_LENGTH = 10;
 
 let sidebarChatsCache = [];
 let sidebarCustomChatNumbers = [];
+let sidebarCustomLabel = SIDEBAR_CUSTOM_DEFAULT_LABEL;
 let sidebarCustomConfigLoaded = false;
 let sidebarMode = 'all';
 let sidebarModeInitialized = false;
@@ -1687,16 +1690,41 @@ function getSidebarElements() {
         list: document.getElementById('chat-sidebar-list'),
         customControls: document.getElementById('chat-sidebar-custom-controls'),
         customCount: document.getElementById('chat-sidebar-custom-count'),
+        customHelp: document.getElementById('chat-sidebar-custom-help'),
         customSearch: document.getElementById('chat-sidebar-custom-search'),
         customTypeahead: document.getElementById('chat-sidebar-custom-typeahead'),
         customMenu: document.getElementById('chat-sidebar-custom-menu')
     };
 }
 
+function normalizeSidebarCustomLabel(value) {
+    const normalized = String(value ?? '').replace(/\s+/g, ' ').trim();
+    if (!normalized) return SIDEBAR_CUSTOM_DEFAULT_LABEL;
+    return normalized.slice(0, SIDEBAR_CUSTOM_MAX_LABEL_LENGTH);
+}
+
+function getSidebarCustomLabel() {
+    return normalizeSidebarCustomLabel(sidebarCustomLabel);
+}
+
+function applySidebarCustomLabel() {
+    const label = getSidebarCustomLabel();
+
+    const modeLabel = document.getElementById('chat-sidebar-custom-mode-label');
+    if (modeLabel) {
+        modeLabel.textContent = label;
+    }
+
+    const { customHelp } = getSidebarElements();
+    if (customHelp) {
+        customHelp.textContent = `Add a chat to ${label} by right clicking on it`;
+    }
+}
+
 function updateSidebarCustomCount() {
     const { customCount } = getSidebarElements();
     if (!customCount) return;
-    customCount.textContent = `Custom (${sidebarCustomChatNumbers.length}/${SIDEBAR_CUSTOM_MAX_ITEMS})`;
+    customCount.textContent = `${getSidebarCustomLabel()} (${sidebarCustomChatNumbers.length}/${SIDEBAR_CUSTOM_MAX_ITEMS})`;
 }
 
 function getSidebarUnreadFlags() {
@@ -1761,7 +1789,19 @@ async function fetchSidebarCustomConfig() {
         sidebarCustomChatNumbers = [];
     }
 
+    try {
+        const response = await fetch('/api/chats/sidebar-custom-label');
+        if (!response.ok) {
+            throw new Error('Unable to load custom sidebar label');
+        }
+        const payload = await response.json();
+        sidebarCustomLabel = normalizeSidebarCustomLabel(payload?.custom_label);
+    } catch {
+        sidebarCustomLabel = SIDEBAR_CUSTOM_DEFAULT_LABEL;
+    }
+
     sidebarCustomConfigLoaded = true;
+    applySidebarCustomLabel();
 }
 
 async function persistSidebarCustomConfig() {
@@ -1773,6 +1813,18 @@ async function persistSidebarCustomConfig() {
     if (!result || result.success !== true) {
         throw new Error(result?.error || 'Unable to save custom sidebar config');
     }
+}
+
+async function persistSidebarCustomLabel(nextLabel) {
+    const result = await postForm('/api/chats/sidebar-custom-label', {
+        csrf_token: getCsrfToken(),
+        label: String(nextLabel ?? '')
+    });
+    if (!result || result.success !== true) {
+        throw new Error(result?.error || 'Unable to save custom sidebar label');
+    }
+    sidebarCustomLabel = normalizeSidebarCustomLabel(result?.custom_label);
+    applySidebarCustomLabel();
 }
 
 async function syncSidebarCustomChatNumbers(chats) {
@@ -1954,9 +2006,86 @@ function renderSidebarList() {
     const empty = document.createElement('div');
     empty.className = 'text-zinc-500 text-sm px-3 py-1';
     empty.textContent = sidebarMode === 'custom'
-        ? 'Custom list is empty'
+        ? `${getSidebarCustomLabel()} list is empty`
         : 'No chats yet';
     list.replaceChildren(empty);
+}
+
+function bindSidebarCustomRenameModal() {
+    const modal = document.getElementById('sidebar-custom-rename-modal');
+    const form = document.getElementById('sidebar-custom-rename-form');
+    const input = document.getElementById('sidebar-custom-rename-input');
+    const cancel = document.getElementById('sidebar-custom-rename-cancel');
+    const submit = document.getElementById('sidebar-custom-rename-submit');
+    if (!modal || !form || !input || !cancel || !submit) return;
+    if (modal.dataset.bound === '1') return;
+    modal.dataset.bound = '1';
+
+    const setOpenState = (isOpen) => {
+        modal.classList.toggle('hidden', !isOpen);
+        modal.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+
+        if (isOpen) {
+            const current = getSidebarCustomLabel();
+            input.value = current === SIDEBAR_CUSTOM_DEFAULT_LABEL ? '' : current;
+            setTimeout(() => {
+                input.focus();
+                input.select();
+            }, 0);
+            return;
+        }
+
+        submit.disabled = false;
+        submit.textContent = 'Save';
+    };
+
+    const closeModal = () => {
+        setOpenState(false);
+    };
+
+    cancel.addEventListener('click', (event) => {
+        event.preventDefault();
+        closeModal();
+    });
+
+    modal.addEventListener('click', (event) => {
+        if (event.target !== modal) return;
+        closeModal();
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return;
+        if (modal.classList.contains('hidden')) return;
+        closeModal();
+    });
+
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (submit.disabled) return;
+
+        const submitted = String(input.value || '').trim();
+        const isReset = submitted === '';
+
+        submit.disabled = true;
+        submit.textContent = 'Saving...';
+
+        try {
+            await persistSidebarCustomLabel(submitted);
+            updateSidebarCustomCount();
+            if (sidebarMode === 'custom') {
+                renderSidebarList();
+            }
+            closeModal();
+            showToast(isReset ? 'Category reset to Custom' : 'Category renamed', 'success');
+        } catch {
+            showToast('Unable to rename category', 'error');
+        } finally {
+            submit.disabled = false;
+            submit.textContent = 'Save';
+        }
+    });
+
+    window.openSidebarCustomRenameModal = () => setOpenState(true);
 }
 
 function renderSidebarCustomTypeahead() {
@@ -2235,6 +2364,18 @@ function bindSidebarControls() {
         }
     });
 
+    modeToggle.addEventListener('contextmenu', (event) => {
+        const target = event.target.closest('[data-chat-sidebar-mode="custom"]');
+        if (!(target instanceof HTMLButtonElement)) return;
+
+        event.preventDefault();
+        hideSidebarCustomContextMenu();
+        hideSidebarCustomTypeahead();
+        if (typeof window.openSidebarCustomRenameModal === 'function') {
+            window.openSidebarCustomRenameModal();
+        }
+    });
+
     if (customSearch) {
         customSearch.addEventListener('input', () => {
             renderSidebarCustomTypeahead();
@@ -2347,6 +2488,7 @@ function bindSidebarControls() {
     });
 
     bindSidebarCustomMenu();
+    bindSidebarCustomRenameModal();
 }
 
 

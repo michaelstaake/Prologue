@@ -255,7 +255,7 @@
                     <button type="button" data-chat-sidebar-mode="all" class="px-2.5 py-1 rounded-md transition bg-zinc-700 text-zinc-100">All</button>
                     <button type="button" data-chat-sidebar-mode="pm" class="px-2.5 py-1 rounded-md transition text-zinc-400 hover:text-zinc-200">PM</button>
                     <button type="button" data-chat-sidebar-mode="group" class="px-2.5 py-1 rounded-md transition text-zinc-400 hover:text-zinc-200">Group</button>
-                    <button type="button" data-chat-sidebar-mode="custom" class="px-2.5 py-1 rounded-md transition text-zinc-400 hover:text-zinc-200">Custom</button>
+                    <button type="button" data-chat-sidebar-mode="custom" class="px-2.5 py-1 rounded-md transition text-zinc-400 hover:text-zinc-200" title="Right click to rename" aria-label="Custom category. Right click to rename"><span id="chat-sidebar-custom-mode-label">Custom</span></button>
                 </div>
 
                 <nav class="flex-1 min-h-0 flex flex-col">
@@ -264,7 +264,7 @@
                 </nav>
                 <div id="chat-sidebar-custom-controls" class="hidden space-y-2">
                     <div id="chat-sidebar-custom-count" class="px-1 text-xs uppercase tracking-wide text-zinc-500">Custom (0/8)</div>
-                    <div class="px-1 text-xs text-zinc-500">Add a chat to Custom by right clicking on it</div>
+                    <div id="chat-sidebar-custom-help" class="px-1 text-xs text-zinc-500">Add a chat to Custom by right clicking on it</div>
                 </div>
                 <div id="chat-sidebar-custom-menu" class="hidden fixed z-50 min-w-[14rem] bg-zinc-900 border border-zinc-700 rounded-xl p-1.5 shadow-lg">
                     <button type="button" data-custom-menu-action="open" class="w-full text-left px-3 py-2 rounded-lg hover:bg-zinc-800 text-sm whitespace-nowrap">Open in new tab</button>
@@ -322,6 +322,23 @@
         <main id="app-main-content" class="flex-1 flex flex-col min-w-0">
             <?= $content ?>
         </main>
+
+        <div id="sidebar-custom-rename-modal" class="hidden fixed inset-0 bg-black/70 z-50 p-4 md:p-6" aria-hidden="true">
+            <div class="h-full w-full flex items-center justify-center">
+                <div class="w-full max-w-md bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl p-6" role="dialog" aria-modal="true" aria-labelledby="sidebar-custom-rename-title">
+                    <h2 id="sidebar-custom-rename-title" class="text-lg font-semibold text-zinc-100">Rename Custom category</h2>
+                    <p class="mt-2 text-sm text-zinc-400">Choose a category name. Leave blank to reset it to Custom.</p>
+                    <form id="sidebar-custom-rename-form" class="mt-4 space-y-4">
+                        <label for="sidebar-custom-rename-input" class="block text-sm text-zinc-300">Category name</label>
+                        <input type="text" id="sidebar-custom-rename-input" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-zinc-100" placeholder="Custom" maxlength="10">
+                        <div class="flex items-center justify-end gap-3">
+                            <button type="button" id="sidebar-custom-rename-cancel" class="px-4 py-2 rounded-xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-zinc-200">Cancel</button>
+                            <button type="submit" id="sidebar-custom-rename-submit" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white">Save</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
 
         <aside id="notification-history-panel" class="w-20 border-l border-zinc-800 bg-zinc-900/90 flex flex-col transition-all duration-200 ease-out">
             <div class="p-4 border-b border-zinc-700 flex items-center justify-center" id="notification-history-header">
