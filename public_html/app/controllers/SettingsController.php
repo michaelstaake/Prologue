@@ -39,6 +39,12 @@ class SettingsController extends Controller {
         }
 
         $userTimezone = (string)(Setting::get('timezone_' . $settingPrefix) ?? 'UTC+0');
+        $topLoadingBarEnabled = (string)(Setting::get('top_loading_bar_enabled_' . $settingPrefix) ?? '1') === '1';
+        $systemMessagesAutoCombineEnabled = (string)(Setting::get('system_messages_auto_combine_' . $settingPrefix) ?? '1') === '1';
+        $fontSizePreference = (string)(Setting::get('font_size_' . $settingPrefix) ?? 'default');
+        if (!in_array($fontSizePreference, ['default', 'large'], true)) {
+            $fontSizePreference = 'default';
+        }
 
         // TOTP 2FA data
         $totpEnabled = (bool)Database::query(
@@ -90,6 +96,9 @@ class SettingsController extends Controller {
             'otherNotificationSoundNotif' => (int)$otherNotificationSoundNotif,
             'outgoingCallRingSoundNotif' => (int)$outgoingCallRingSoundNotif,
             'userTimezone' => $userTimezone,
+            'topLoadingBarEnabled' => $topLoadingBarEnabled,
+            'systemMessagesAutoCombineEnabled' => $systemMessagesAutoCombineEnabled,
+            'fontSizePreference' => $fontSizePreference,
             'usernameCanChangeNow' => $usernameChangeAvailableAt === null,
             'usernameChangeAvailableAt' => $usernameChangeAvailableAt,
             'invitesEnabled' => $invitesEnabled,

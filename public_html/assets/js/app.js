@@ -134,6 +134,115 @@ const SERVER_CONNECTION_FAILURE_THRESHOLD = 3;
 const SERVER_CONNECTION_RETRY_MS = 15000;
 const beforeRouteChangeHooks = new Set();
 const afterRouteChangeHooks = new Set();
+let topProgressActiveLoads = 0;
+let topProgressValue = 0;
+let topProgressTrickleIntervalId = null;
+let topProgressHideTimeoutId = null;
+
+function isTopProgressEnabled() {
+    return window.TOP_LOADING_BAR_ENABLED !== false;
+}
+
+function applyTopProgressPreference() {
+    const bar = document.getElementById('app-top-progress');
+    if (!bar) return;
+
+    if (!isTopProgressEnabled()) {
+        stopTopProgressTrickle();
+        topProgressActiveLoads = 0;
+        topProgressValue = 0;
+        if (topProgressHideTimeoutId) {
+            clearTimeout(topProgressHideTimeoutId);
+            topProgressHideTimeoutId = null;
+        }
+        bar.dataset.loading = '0';
+        bar.style.display = 'none';
+        return;
+    }
+
+    bar.style.display = '';
+}
+
+function getTopProgressElements() {
+    if (!isTopProgressEnabled()) return null;
+
+    const bar = document.getElementById('app-top-progress');
+    const fill = document.getElementById('app-top-progress-fill');
+    if (!bar || !fill) return null;
+    return { bar, fill };
+}
+
+function setTopProgressValue(nextValue) {
+    const elements = getTopProgressElements();
+    if (!elements) return;
+
+    topProgressValue = Math.max(0, Math.min(1, Number(nextValue) || 0));
+    elements.fill.style.width = `${Math.round(topProgressValue * 1000) / 10}%`;
+}
+
+function stopTopProgressTrickle() {
+    if (!topProgressTrickleIntervalId) return;
+    clearInterval(topProgressTrickleIntervalId);
+    topProgressTrickleIntervalId = null;
+}
+
+function startTopProgressTrickle() {
+    if (topProgressTrickleIntervalId) return;
+
+    topProgressTrickleIntervalId = setInterval(() => {
+        if (topProgressActiveLoads <= 0) return;
+        if (topProgressValue >= 0.92) return;
+
+        const remaining = 1 - topProgressValue;
+        const step = Math.max(0.005, remaining * 0.08);
+        setTopProgressValue(Math.min(0.92, topProgressValue + step));
+    }, 160);
+}
+
+function startTopProgressLoad() {
+    const elements = getTopProgressElements();
+    if (!elements) return;
+
+    if (topProgressHideTimeoutId) {
+        clearTimeout(topProgressHideTimeoutId);
+        topProgressHideTimeoutId = null;
+    }
+
+    topProgressActiveLoads += 1;
+    elements.bar.dataset.loading = '1';
+
+    if (topProgressValue < 0.08) {
+        setTopProgressValue(0.08);
+    }
+
+    startTopProgressTrickle();
+}
+
+function finishTopProgressLoad(force = false) {
+    const elements = getTopProgressElements();
+    if (!elements) return;
+
+    if (force) {
+        topProgressActiveLoads = 0;
+    } else {
+        topProgressActiveLoads = Math.max(0, topProgressActiveLoads - 1);
+    }
+
+    if (topProgressActiveLoads > 0) return;
+
+    stopTopProgressTrickle();
+    setTopProgressValue(1);
+
+    if (topProgressHideTimeoutId) {
+        clearTimeout(topProgressHideTimeoutId);
+    }
+
+    topProgressHideTimeoutId = setTimeout(() => {
+        elements.bar.dataset.loading = '0';
+        setTopProgressValue(0);
+        topProgressHideTimeoutId = null;
+    }, 180);
+}
 
 function showVersionUpdateOverlay() {
     if (versionUpdateDetected) return;
@@ -459,6 +568,7 @@ async function navigateApp(url, options = {}) {
     }
 
     clientNavigationInFlight = true;
+    startTopProgressLoad();
     const fromUrl = currentUrl.pathname + currentUrl.search + currentUrl.hash;
     const toUrl = targetUrl.pathname + targetUrl.search + targetUrl.hash;
 
@@ -497,6 +607,7 @@ async function navigateApp(url, options = {}) {
         window.location.href = toUrl;
         return false;
     } finally {
+        finishTopProgressLoad();
         clientNavigationInFlight = false;
     }
 }
@@ -1535,6 +1646,7 @@ function startAppInitOnce() {
     if (appInitStarted) return;
     appInitStarted = true;
     bindDynamicViewportHeight();
+    applyTopProgressPreference();
     bindServerConnectionOverlayControls();
     bindServerConnectionEvents();
     if (isServerConnectionOverlayEnabled() && typeof navigator !== 'undefined' && navigator.onLine === false) {

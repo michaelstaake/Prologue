@@ -345,6 +345,7 @@ $router->post('/settings/avatar', 'HomeController@saveAvatarSettings');
 $router->post('/settings/avatar/delete', 'HomeController@deleteAvatarSettings');
 $router->post('/settings/notifications', 'HomeController@saveNotificationSettings');
 $router->post('/settings/timezone', 'HomeController@saveTimezoneSettings');
+$router->post('/settings/preferences', 'HomeController@savePreferencesSettings');
 $router->post('/settings/invites/generate', 'HomeController@generateInvite');
 $router->post('/settings/invites/delete', 'HomeController@deleteInvite');
 $router->post('/settings/sessions/exit', 'HomeController@exitSession');

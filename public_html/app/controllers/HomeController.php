@@ -649,6 +649,27 @@ class HomeController extends Controller {
         $this->redirect('/settings');
     }
 
+    public function savePreferencesSettings() {
+        Auth::requireAuth();
+        Auth::csrfValidate();
+        $userId = (int)Auth::user()->id;
+
+        $topLoadingBarEnabled = isset($_POST['top_loading_bar_enabled']) ? '1' : '0';
+        Setting::set('top_loading_bar_enabled_' . $userId, $topLoadingBarEnabled);
+
+        $systemMessagesAutoCombineEnabled = isset($_POST['system_messages_auto_combine']) ? '1' : '0';
+        Setting::set('system_messages_auto_combine_' . $userId, $systemMessagesAutoCombineEnabled);
+
+        $fontSizePreference = strtolower(trim((string)($_POST['font_size'] ?? 'default')));
+        if (!in_array($fontSizePreference, ['default', 'large'], true)) {
+            $fontSizePreference = 'default';
+        }
+        Setting::set('font_size_' . $userId, $fontSizePreference);
+
+        $this->flash('success', 'preferences_saved');
+        $this->redirect('/settings');
+    }
+
     private function usernameChangeAvailableAt($user) {
         if (!$user || empty($user->username_changed_at)) {
             return null;

@@ -3963,6 +3963,10 @@ function buildSystemEventGroupKey(chatId, runMessages) {
     return `${safeChatId}-${firstId}-${lastId}-${runMessages.length}-${fingerprintHash.toString(16)}`;
 }
 
+function isSystemMessagesAutoCombineEnabled() {
+    return window.SYSTEM_MESSAGES_AUTO_COMBINE_ENABLED !== false;
+}
+
 function buildRenderableMessageEntries(messages, chatId) {
     const entries = [];
     const visibleSystemGroupKeys = new Set();
@@ -3996,7 +4000,7 @@ function buildRenderableMessageEntries(messages, chatId) {
             return eventType === 'poll_created' || eventType === 'poll_expired';
         });
 
-        if (runMessages.length <= 2 || runContainsPollEvent) {
+        if (!isSystemMessagesAutoCombineEnabled() || runMessages.length <= 2 || runContainsPollEvent) {
             runMessages.forEach((runMessage, offset) => {
                 entries.push({
                     type: 'system',

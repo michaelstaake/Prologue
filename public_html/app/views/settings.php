@@ -37,6 +37,9 @@
         } elseif ($flashSuccess === 'timezone_saved') {
             $toastMessage = 'Time zone saved successfully.';
             $toastKind = 'success';
+        } elseif ($flashSuccess === 'preferences_saved') {
+            $toastMessage = 'Preferences saved successfully.';
+            $toastKind = 'success';
         } elseif ($flashSuccess === 'invite_created') {
             $toastMessage = 'Invite code generated.';
             $toastKind = 'success';
@@ -323,6 +326,10 @@
                 <i class="fa-solid fa-key text-2xl text-emerald-400"></i>
                 <span class="text-sm text-zinc-200 font-medium">API Keys</span>
             </a>
+            <button type="button" data-modal-open="cp-preferences-modal" class="bg-zinc-900 border border-zinc-700 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 hover:bg-zinc-800 transition cursor-pointer aspect-[2/1]">
+                <i class="fa-solid fa-sliders text-2xl text-emerald-400"></i>
+                <span class="text-sm text-zinc-200 font-medium">Preferences</span>
+            </button>
         </div>
     </div>
 
@@ -1191,6 +1198,56 @@
                 </div>
             </div>
             <p id="notification-settings-status" class="mt-3 text-xs text-zinc-500" aria-live="polite"></p>
+        </div>
+    </div>
+</div>
+
+<!-- Preferences Modal -->
+<div id="cp-preferences-modal" class="<?= $modalOverlayClass ?>" role="dialog" aria-modal="true">
+    <div class="<?= $modalBackdropClass ?>" data-modal-close="cp-preferences-modal"></div>
+    <div class="<?= $modalCenterClass ?>">
+        <div class="<?= $modalBoxClass ?>" data-modal-box>
+            <div class="mb-4 flex items-center justify-between">
+                <h3 class="text-xl font-semibold">Preferences</h3>
+                <button type="button" data-modal-close="cp-preferences-modal" class="rounded-lg px-2 py-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200">&times;</button>
+            </div>
+            <form method="POST" action="<?= htmlspecialchars(base_url('/settings/preferences'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-4">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
+                <label class="flex items-center justify-between gap-4 rounded-xl border border-zinc-700 bg-zinc-800/30 px-4 py-3 cursor-pointer">
+                    <div>
+                        <span class="block text-zinc-100">Enable top loading bar</span>
+                        <span class="block text-xs text-zinc-500 mt-0.5">Shows the 3px top progress bar during in-app navigation and loading.</span>
+                    </div>
+                    <input type="checkbox" name="top_loading_bar_enabled" value="1" <?= !empty($topLoadingBarEnabled) ? 'checked' : '' ?> class="w-6 h-6 accent-emerald-500 shrink-0">
+                </label>
+                <label class="flex items-center justify-between gap-4 rounded-xl border border-zinc-700 bg-zinc-800/30 px-4 py-3 cursor-pointer">
+                    <div>
+                        <span class="block text-zinc-100">Auto-combine system messages in chats</span>
+                        <span class="block text-xs text-zinc-500 mt-0.5">Groups consecutive Prologue system events with a show/hide toggle.</span>
+                    </div>
+                    <input type="checkbox" name="system_messages_auto_combine" value="1" <?= !empty($systemMessagesAutoCombineEnabled) ? 'checked' : '' ?> class="w-6 h-6 accent-emerald-500 shrink-0">
+                </label>
+                <div class="rounded-xl border border-zinc-700 bg-zinc-800/30 px-4 py-3">
+                    <div class="mb-2">
+                        <span class="block text-zinc-100">Font size</span>
+                        <span class="block text-xs text-zinc-500 mt-0.5">Choose your preferred app text size.</span>
+                    </div>
+                    <div class="space-y-2">
+                        <label class="flex items-center gap-3 cursor-pointer">
+                            <input type="radio" name="font_size" value="default" <?= (($fontSizePreference ?? 'default') === 'default') ? 'checked' : '' ?> class="w-4 h-4 accent-emerald-500">
+                            <span class="text-zinc-100">Default</span>
+                        </label>
+                        <label class="flex items-center gap-3 cursor-pointer">
+                            <input type="radio" name="font_size" value="large" <?= (($fontSizePreference ?? 'default') === 'large') ? 'checked' : '' ?> class="w-4 h-4 accent-emerald-500">
+                            <span class="text-zinc-100">Large</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="mt-4 flex gap-2">
+                    <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 px-6 py-2 rounded-xl">Save preferences</button>
+                    <button type="button" data-modal-close="cp-preferences-modal" class="bg-zinc-700 hover:bg-zinc-600 px-6 py-2 rounded-xl">Cancel</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>

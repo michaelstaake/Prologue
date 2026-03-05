@@ -86,6 +86,7 @@ $hasChatActions = ($isGroupChat && ($isGroupMember || $isCurrentUserAdmin)) || $
 $pinnedMessage = $pinnedMessage ?? null;
 $activePoll = $activePoll ?? null;
 $canCreatePoll = (bool)($canCreatePoll ?? false);
+$autoCombineSystemMessages = (string)(Setting::get('system_messages_auto_combine_' . (int)$currentUserId) ?? '1') === '1';
 $personalChatUserId = 0;
 $personalChatUserNumber = '';
 $personalChatStatusDotClass = null;
@@ -504,7 +505,7 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                     }
                 }
 
-                if (count($runMessages) <= 2 || $runContainsPollEvent) {
+                if (!$autoCombineSystemMessages || count($runMessages) <= 2 || $runContainsPollEvent) {
                     foreach ($runMessages as $runOffset => $runMessage) {
                         $displayEntries[] = [
                             'type' => 'system_message',

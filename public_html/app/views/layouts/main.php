@@ -13,6 +13,28 @@
     </script>
     <style>
         body { background: #09090b; }
+        body.app-font-large { font-size: 1.125rem; }
+        #app-top-progress {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: #000;
+            z-index: 10000;
+            pointer-events: none;
+        }
+        #app-top-progress-fill {
+            width: 0;
+            height: 100%;
+            background: #22c55e;
+            opacity: 0;
+            transition: width .18s ease, opacity .22s ease;
+            will-change: width, opacity;
+        }
+        #app-top-progress[data-loading="1"] #app-top-progress-fill {
+            opacity: 1;
+        }
         .prologue-accent { color: #34d399; }
         .sidebar { background: #111827; }
         body.h-screen {
@@ -98,8 +120,21 @@
         }
     </style>
 </head>
-<?php $currentUser = Auth::user(); ?>
-<body class="text-gray-200 <?= $currentUser ? 'h-screen overflow-hidden' : 'min-h-screen overflow-y-auto' ?>">
+<?php
+    $currentUser = Auth::user();
+    $appFontSizePreference = 'default';
+    if ($currentUser) {
+        $fontSizeSetting = Database::query('SELECT `value` FROM settings WHERE `key` = ?', ['font_size_' . $currentUser->id])->fetchColumn();
+        if ($fontSizeSetting !== false) {
+            $normalizedFontSizeSetting = strtolower(trim((string)$fontSizeSetting));
+            if (in_array($normalizedFontSizeSetting, ['default', 'large'], true)) {
+                $appFontSizePreference = $normalizedFontSizeSetting;
+            }
+        }
+    }
+?>
+<body class="text-gray-200 <?= $currentUser ? 'h-screen overflow-hidden' : 'min-h-screen overflow-y-auto' ?> <?= $appFontSizePreference === 'large' ? 'app-font-large' : '' ?>">
+    <div id="app-top-progress" aria-hidden="true"><div id="app-top-progress-fill"></div></div>
     <a href="#app-main-content" class="sr-only focus:not-sr-only">Skip to main content</a>
     <?php
         $browserNotificationsEnabled = false;
@@ -108,6 +143,9 @@
         $otherNotificationSoundEnabled = true;
         $outgoingCallRingSoundEnabled = true;
         $notificationSidebarExpanded = false;
+        $topLoadingBarEnabled = true;
+        $systemMessagesAutoCombineEnabled = true;
+        $fontSizePreference = $appFontSizePreference;
         $userTimezone = 'UTC+0';
         if ($currentUser) {
             $notificationSetting = Database::query('SELECT `value` FROM settings WHERE `key` = ?', ['browser_notifications_' . $currentUser->id])->fetchColumn();
@@ -124,6 +162,14 @@
 
             $notificationSidebarSetting = Database::query('SELECT `value` FROM settings WHERE `key` = ?', ['notif_sidebar_expanded_' . $currentUser->id])->fetchColumn();
             $notificationSidebarExpanded = ((int)$notificationSidebarSetting) === 1;
+
+            $topLoadingBarSetting = Database::query('SELECT `value` FROM settings WHERE `key` = ?', ['top_loading_bar_enabled_' . $currentUser->id])->fetchColumn();
+            $topLoadingBarEnabled = $topLoadingBarSetting === false ? true : ((int)$topLoadingBarSetting) === 1;
+
+            $systemMessagesAutoCombineSetting = Database::query('SELECT `value` FROM settings WHERE `key` = ?', ['system_messages_auto_combine_' . $currentUser->id])->fetchColumn();
+            $systemMessagesAutoCombineEnabled = $systemMessagesAutoCombineSetting === false ? true : ((int)$systemMessagesAutoCombineSetting) === 1;
+
+            $fontSizePreference = $appFontSizePreference;
 
             $userTimezoneSetting = Database::query('SELECT `value` FROM settings WHERE `key` = ?', ['timezone_' . $currentUser->id])->fetchColumn();
             $userTimezone = $userTimezoneSetting !== false ? (string)$userTimezoneSetting : 'UTC+0';
@@ -618,6 +664,8 @@
     window.USER_TIMEZONE = <?= json_encode($userTimezone) ?>;
     window.CURRENT_USER_ID = <?= json_encode((int)($currentUser->id ?? 0)) ?>;
     window.CURRENT_USERNAME = <?= json_encode((string)($currentUser->username ?? '')) ?>;
+    window.TOP_LOADING_BAR_ENABLED = <?= $topLoadingBarEnabled ? 'true' : 'false' ?>;
+    window.SYSTEM_MESSAGES_AUTO_COMBINE_ENABLED = <?= $systemMessagesAutoCombineEnabled ? 'true' : 'false' ?>;
     window.CURRENT_USER_PRESENCE_STATUS = <?= json_encode(User::normalizePresenceStatus($currentUser->presence_status ?? null) ?? 'online') ?>;
     window.OPENMOJI_FILES = <?= json_encode($openMojiFileNames, JSON_UNESCAPED_SLASHES) ?>;
     window.OPENMOJI_METADATA = <?= json_encode($openMojiMetadata, JSON_UNESCAPED_SLASHES) ?>;
