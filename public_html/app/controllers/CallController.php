@@ -322,12 +322,23 @@ class CallController extends Controller {
             $this->json(['error' => 'You are already in an active call'], 409);
         }
 
-        $activeCall = Database::query("SELECT id FROM calls WHERE chat_id = ? AND status = 'active'", [$chatId])->fetch();
+        $activeCall = Database::query("SELECT id, started_by FROM calls WHERE chat_id = ? AND status = 'active'", [$chatId])->fetch();
         if ($activeCall) {
             $activeCallId = (int)$activeCall->id;
+            $activeCallStarterId = (int)($activeCall->started_by ?? 0);
             $wasAlreadyActive = $this->isUserActivelyInCall($activeCallId, (int)$userId);
             $this->enforceCallCapacityOrFail($activeCallId, (int)$userId);
             $this->upsertActiveParticipant($activeCallId, (int)$userId, 0);
+
+            if (!Chat::isGroupType($chat->type ?? null) && !$wasAlreadyActive && $activeCallStarterId > 0 && $activeCallStarterId !== (int)$userId) {
+                Database::query(
+                    "UPDATE calls
+                     SET started_at = NOW()
+                     WHERE id = ?
+                       AND status = 'active'",
+                    [$activeCallId]
+                );
+            }
 
             if (Chat::isGroupType($chat->type ?? null) && !$wasAlreadyActive) {
                 $this->appendGroupCallPresenceMessage((int)$chatId, (int)$userId, 'joined');

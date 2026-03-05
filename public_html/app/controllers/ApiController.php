@@ -1036,6 +1036,7 @@ class ApiController extends Controller {
                         "SELECT c.id,
                                         c.chat_id,
                                         c.started_by,
+                                        u.username AS started_by_username,
                                         c.status,
                                         c.started_at,
                                         (SELECT COUNT(DISTINCT cp.user_id)
@@ -1052,6 +1053,7 @@ class ApiController extends Controller {
                                              AND cp_self.user_id = ?
                                              AND cp_self.left_at IS NULL) AS current_user_joined
                          FROM calls c
+                         JOIN users u ON u.id = c.started_by
                          WHERE c.chat_id = ?
                              AND c.status = 'active'
                          ORDER BY c.started_at DESC
@@ -1069,6 +1071,7 @@ class ApiController extends Controller {
                         "SELECT c.id,
                                         c.chat_id,
                                         c.started_by,
+                            u.username AS started_by_username,
                                         c.status,
                                         c.started_at,
                                         ch.chat_number,
@@ -1088,6 +1091,7 @@ class ApiController extends Controller {
                                              AND cp_self.left_at IS NULL) AS current_user_joined
                          FROM calls c
                          JOIN chats ch ON ch.id = c.chat_id
+                         JOIN users u ON u.id = c.started_by
                          WHERE c.status = 'active'
                              AND (
                                  LOWER(TRIM(ch.type)) != 'group'
@@ -1115,6 +1119,7 @@ class ApiController extends Controller {
                         "SELECT c.id,
                                 c.chat_id,
                                 c.started_by,
+                                u.username AS started_by_username,
                                 c.status,
                                 c.started_at,
                                 ch.chat_number,
@@ -1134,6 +1139,7 @@ class ApiController extends Controller {
                                      AND cp_self.left_at IS NULL) AS current_user_joined
                          FROM calls c
                          JOIN chats ch ON ch.id = c.chat_id
+                         JOIN users u ON u.id = c.started_by
                          WHERE c.status = 'active'
                              AND LOWER(TRIM(ch.type)) != 'group'
                              AND c.started_by != ?

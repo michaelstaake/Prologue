@@ -15,6 +15,7 @@ const CALL_SELF_FOCUS_PEER_ID = -1;
 let micGainNode = null;
 let micGainSource = null;
 let micGainDestination = null;
+let micGainInputStream = null;
 let settingsLevelRaf = null;
 let settingsLevelAnalyser = null;
 let callParticipantsRenderSignature = '';
@@ -23,6 +24,66 @@ let callLeaveBeaconBound = false;
 let currentUserInActiveCall = false;
 let incomingCallWaitingCandidate = null;
 let compactOutgoingRingingCallId = 0;
+let outgoingPrivateRingingLabelInterval = null;
+let outgoingPrivateRingingLabelElement = null;
+let outgoingPrivateRingingLabelQueue = [];
+const OUTGOING_PRIVATE_RINGING_LABEL_INTERVAL_MS = 3000;
+const OUTGOING_PRIVATE_RINGING_FUN_LABELS = [
+    'Wagging...',
+    'Barking...',
+    'Booping...',
+    'Pouncing...'
+];
+
+function shuffleValues(values) {
+    const shuffled = [...values];
+    for (let index = shuffled.length - 1; index > 0; index -= 1) {
+        const randomIndex = Math.floor(Math.random() * (index + 1));
+        [shuffled[index], shuffled[randomIndex]] = [shuffled[randomIndex], shuffled[index]];
+    }
+
+    return shuffled;
+}
+
+function stopOutgoingPrivateRingingLabelCycle() {
+    if (outgoingPrivateRingingLabelInterval) {
+        clearInterval(outgoingPrivateRingingLabelInterval);
+        outgoingPrivateRingingLabelInterval = null;
+    }
+
+    outgoingPrivateRingingLabelElement = null;
+    outgoingPrivateRingingLabelQueue = [];
+}
+
+function getNextOutgoingPrivateRingingLabel() {
+    if (outgoingPrivateRingingLabelQueue.length === 0) {
+        outgoingPrivateRingingLabelQueue = shuffleValues(OUTGOING_PRIVATE_RINGING_FUN_LABELS);
+        return 'Ringing...';
+    }
+
+    return outgoingPrivateRingingLabelQueue.shift();
+}
+
+function startOutgoingPrivateRingingLabelCycle(labelElement) {
+    if (!labelElement) return;
+
+    if (outgoingPrivateRingingLabelInterval && outgoingPrivateRingingLabelElement === labelElement) {
+        return;
+    }
+
+    stopOutgoingPrivateRingingLabelCycle();
+    outgoingPrivateRingingLabelElement = labelElement;
+    labelElement.textContent = 'Ringing...';
+
+    outgoingPrivateRingingLabelInterval = setInterval(() => {
+        if (!outgoingPrivateRingingLabelElement) {
+            stopOutgoingPrivateRingingLabelCycle();
+            return;
+        }
+
+        outgoingPrivateRingingLabelElement.textContent = getNextOutgoingPrivateRingingLabel();
+    }, OUTGOING_PRIVATE_RINGING_LABEL_INTERVAL_MS);
+}
 
 function applyVoiceCallButtonState() {
     const voiceCallButton = document.getElementById('start-voice-call-button');
@@ -331,9 +392,24 @@ function setGlobalCallContext(call) {
         chat_type: normalizeChatType(call.chat_type || 'personal'),
         started_at: String(call.started_at || ''),
         started_by: Number(call.started_by || 0),
+        started_by_username: String(call.started_by_username || ''),
         participant_count: Math.max(0, Number(call.participant_count || 0)),
         current_user_joined: Number(call.current_user_joined || 0) > 0 ? 1 : 0
     };
+}
+
+function getIncomingCallerUsername() {
+    const fromCallContext = String(globalCallContext?.started_by_username || '').trim();
+    if (fromCallContext) {
+        return fromCallContext;
+    }
+
+    const fromPeer = String(peerUsername || '').trim();
+    if (fromPeer) {
+        return fromPeer;
+    }
+
+    return '';
 }
 
 function ensureCurrentChatContext(call) {
@@ -448,6 +524,7 @@ function setChatCallStatusBar(state, incomingAlert = false) {
     );
 
     if (state !== 'ringing' && state !== 'active' && state !== 'muted' && state !== 'joinable') {
+        stopOutgoingPrivateRingingLabelCycle();
         label.textContent = '';
         bar.classList.add('hidden', 'border-transparent');
         acceptBtn?.classList.add('hidden');
@@ -480,10 +557,13 @@ function setChatCallStatusBar(state, incomingAlert = false) {
     if (state === 'ringing') {
         const isPersonal = normalizeChatType(currentChat?.type || globalCallContext?.chat_type || 'personal') === 'personal';
         if (incomingAlert) {
-            label.textContent = 'Incoming call...';
-        } else if (isPersonal && peerUsername) {
-            label.textContent = `Ringing ${peerUsername}...`;
+            stopOutgoingPrivateRingingLabelCycle();
+            const callerUsername = getIncomingCallerUsername();
+            label.textContent = callerUsername ? `Incoming call from ${callerUsername}...` : 'Incoming call...';
+        } else if (isPersonal) {
+            startOutgoingPrivateRingingLabelCycle(label);
         } else {
+            stopOutgoingPrivateRingingLabelCycle();
             label.textContent = 'Ringing...';
         }
         bar.classList.add('bg-zinc-700/50', 'border-zinc-600', 'text-zinc-200');
@@ -492,6 +572,7 @@ function setChatCallStatusBar(state, incomingAlert = false) {
     }
 
     if (state === 'joinable') {
+        stopOutgoingPrivateRingingLabelCycle();
         label.textContent = 'Call in progress';
         bar.classList.add('bg-emerald-500/20', 'border-emerald-500/50', 'text-emerald-200');
         updateCallDurationUI();
@@ -499,12 +580,14 @@ function setChatCallStatusBar(state, incomingAlert = false) {
     }
 
     if (state === 'muted') {
+        stopOutgoingPrivateRingingLabelCycle();
         label.textContent = 'Call muted';
         bar.classList.add('bg-amber-500/20', 'border-amber-500/50', 'text-amber-200');
         updateCallDurationUI();
         return;
     }
 
+    stopOutgoingPrivateRingingLabelCycle();
     label.textContent = 'Call in progress';
     bar.classList.add('bg-emerald-500/20', 'border-emerald-500/50', 'text-emerald-200');
     updateCallDurationUI();
@@ -1187,7 +1270,9 @@ async function startVoiceCall(options = {}) {
 
     currentCallId = start.call_id;
     setChatUserInActiveCall(true);
-    if (normalizeChatType(currentChat?.type || 'personal') !== 'group') {
+    if (normalizeChatType(currentChat?.type || 'personal') === 'group') {
+        stopCallDurationCounter();
+    } else if (start.joined_existing) {
         startCallDurationCounter(Date.now());
     } else {
         stopCallDurationCounter();
@@ -1232,7 +1317,15 @@ async function startVoiceCall(options = {}) {
         }
     }
     const rawMicStream = await navigator.mediaDevices.getUserMedia(getSavedAudioConstraints());
-    const processedStream = setupMicGainPipeline(rawMicStream);
+    let processedStream = null;
+    try {
+        processedStream = setupMicGainPipeline(rawMicStream);
+    } catch (e) {
+        rawMicStream.getTracks().forEach((track) => {
+            try { track.stop(); } catch (stopError) {}
+        });
+        throw e;
+    }
     localStream = new MediaStream(processedStream.getAudioTracks());
     bindCallAudioUnlockHandlers();
     startLocalSpeakingDetection();
@@ -1782,10 +1875,17 @@ function setupMicGainPipeline(rawStream) {
     micGainNode = gain;
     micGainSource = source;
     micGainDestination = dest;
+    micGainInputStream = rawStream;
     return dest.stream;
 }
 
 function teardownMicGainPipeline() {
+    if (micGainInputStream) {
+        micGainInputStream.getTracks().forEach((track) => {
+            try { track.stop(); } catch (e) {}
+        });
+        micGainInputStream = null;
+    }
     if (micGainSource) { try { micGainSource.disconnect(); } catch(e) {} micGainSource = null; }
     if (micGainNode) { try { micGainNode.disconnect(); } catch(e) {} micGainNode = null; }
     micGainDestination = null;
@@ -1964,12 +2064,15 @@ async function handleMicChange() {
 
     if (!localStream) return;
 
+    let rawStream = null;
+    let pipelineConfigured = false;
     try {
-        const rawStream = await navigator.mediaDevices.getUserMedia({
+        rawStream = await navigator.mediaDevices.getUserMedia({
             audio: { deviceId: { exact: deviceId } },
             video: false
         });
         const processedStream = setupMicGainPipeline(rawStream);
+        pipelineConfigured = true;
         const newAudioTrack = processedStream.getAudioTracks()[0];
         if (!newAudioTrack) return;
 
@@ -1992,6 +2095,11 @@ async function handleMicChange() {
             startSettingsLevelMeter();
         }
     } catch (e) {
+        if (rawStream && !pipelineConfigured) {
+            rawStream.getTracks().forEach((track) => {
+                try { track.stop(); } catch (stopError) {}
+            });
+        }
         showToast('Could not switch microphone', 'error');
     }
 }
