@@ -489,6 +489,10 @@ function clearRouteScopedIntervals() {
         clearInterval(notificationPollIntervalId);
         notificationPollIntervalId = null;
     }
+
+    if (typeof messageInteractionHandlersBound !== 'undefined') {
+        messageInteractionHandlersBound = false;
+    }
 }
 
 function shouldHandleClientNavigationForUrl(targetUrl) {
