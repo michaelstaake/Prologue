@@ -16,6 +16,7 @@ class SettingsController extends Controller {
         $pendingEmailChange = $this->getPendingEmailChangeRequest($userId);
 
         $browserNotif = (string)(Setting::get('browser_notifications_' . $settingPrefix) ?? '0');
+        $webPushNotif = (string)(Setting::get('web_push_notifications_' . $settingPrefix) ?? '0');
         $friendRequestSoundNotif = (string)(Setting::get('sound_friend_request_' . $settingPrefix) ?? '1');
         $newMessageSoundNotif = (string)(Setting::get('sound_new_message_' . $settingPrefix) ?? '1');
         $otherNotificationSoundNotif = (string)(Setting::get('sound_other_notifications_' . $settingPrefix) ?? '1');
@@ -93,6 +94,7 @@ class SettingsController extends Controller {
             'app_version' => APP_VERSION,
             'database_version' => (string)(Setting::get('database_version') ?? 'unknown'),
             'browserNotif' => (int)$browserNotif,
+            'webPushNotif' => (int)$webPushNotif,
             'friendRequestSoundNotif' => (int)$friendRequestSoundNotif,
             'newMessageSoundNotif' => (int)$newMessageSoundNotif,
             'otherNotificationSoundNotif' => (int)$otherNotificationSoundNotif,

@@ -298,9 +298,13 @@ $router->post('/api/calls/decline', 'CallController@declineCall');
 $router->post('/api/calls/signal', 'CallController@signal');
 $router->post('/api/calls/end', 'CallController@endCall');
 $router->post('/api/calls/leave', 'CallController@leaveCall');
+$router->post('/api/calls/poke', 'CallController@pokeMember');
 
 // Notifications
 $router->get('/notifications', 'NotificationController@getAll');
+$router->get('/api/push/status', 'PushController@status');
+$router->post('/api/push/subscribe', 'PushController@subscribe');
+$router->post('/api/push/unsubscribe', 'PushController@unsubscribe');
 $router->post('/api/notifications/seen', 'NotificationController@markSeen');
 $router->post('/api/notifications/sidebar-state', 'NotificationController@updateSidebarState');
 $router->post('/api/notifications/read', 'NotificationController@markRead');

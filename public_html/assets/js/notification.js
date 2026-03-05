@@ -406,11 +406,197 @@ function syncNotificationPanelVisibility(hasNotifications) {
     }
 }
 
+let webPushStatusCache = null;
+
+function base64UrlToUint8Array(base64UrlValue) {
+    const value = String(base64UrlValue || '').trim();
+    if (!value) return null;
+
+    const padded = value + '='.repeat((4 - (value.length % 4)) % 4);
+    const normalized = padded.replaceAll('-', '+').replaceAll('_', '/');
+    const decoded = atob(normalized);
+    const bytes = new Uint8Array(decoded.length);
+    for (let i = 0; i < decoded.length; i += 1) {
+        bytes[i] = decoded.charCodeAt(i);
+    }
+    return bytes;
+}
+
+async function fetchWebPushStatus(forceRefresh = false) {
+    if (!forceRefresh && webPushStatusCache) {
+        return webPushStatusCache;
+    }
+
+    const response = await fetch('/api/push/status', {
+        method: 'GET',
+        headers: {
+            Accept: 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        cache: 'no-store'
+    });
+
+    const data = await response.json();
+    if (!response.ok || !data?.success) {
+        throw new Error(data?.error || 'Unable to fetch push status');
+    }
+
+    if (data.csrf_token) {
+        window.CSRF_TOKEN = data.csrf_token;
+    }
+
+    webPushStatusCache = data;
+    return data;
+}
+
+async function getServiceWorkerRegistration() {
+    if (!('serviceWorker' in navigator)) {
+        throw new Error('Service workers are not supported in this browser');
+    }
+
+    const registration = await navigator.serviceWorker.register('/service-worker.js');
+    await navigator.serviceWorker.ready;
+    return registration;
+}
+
+async function syncPushSubscriptionWithServer(subscription) {
+    if (!subscription) {
+        throw new Error('Missing push subscription');
+    }
+
+    const subscriptionJson = subscription.toJSON ? subscription.toJSON() : null;
+    const endpoint = String(subscription?.endpoint || subscriptionJson?.endpoint || '').trim();
+    const p256dh = String(subscriptionJson?.keys?.p256dh || '').trim();
+    const auth = String(subscriptionJson?.keys?.auth || '').trim();
+
+    if (!endpoint || !p256dh || !auth) {
+        throw new Error('Invalid push subscription payload');
+    }
+
+    const result = await postForm('/api/push/subscribe', {
+        csrf_token: getCsrfToken(),
+        endpoint,
+        p256dh,
+        auth
+    });
+
+    if (!result?.success) {
+        throw new Error(result?.error || 'Unable to save push subscription');
+    }
+
+    if (result.csrf_token) {
+        window.CSRF_TOKEN = result.csrf_token;
+    }
+}
+
+async function unsubscribePushSubscriptionOnServer(subscription) {
+    const endpoint = String(subscription?.endpoint || '').trim();
+    if (!endpoint) {
+        return;
+    }
+
+    try {
+        const result = await postForm('/api/push/unsubscribe', {
+            csrf_token: getCsrfToken(),
+            endpoint
+        });
+        if (result?.csrf_token) {
+            window.CSRF_TOKEN = result.csrf_token;
+        }
+    } catch {
+        // Best effort only.
+    }
+}
+
+async function enableWebPushNotifications() {
+    const status = await fetchWebPushStatus();
+    if (!status?.configured || !status?.vapid_public_key) {
+        throw new Error('Web push is not configured on the server');
+    }
+
+    if (!('PushManager' in window)) {
+        throw new Error('Push notifications are not supported in this browser');
+    }
+
+    if (typeof Notification === 'undefined') {
+        throw new Error('Browser notifications are unavailable');
+    }
+
+    if (Notification.permission === 'default') {
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') {
+            throw new Error('Browser notification permission is required for web push');
+        }
+    }
+
+    if (Notification.permission !== 'granted') {
+        throw new Error('Browser notification permission is blocked');
+    }
+
+    const registration = await getServiceWorkerRegistration();
+    const existingSubscription = await registration.pushManager.getSubscription();
+    let subscription = existingSubscription;
+
+    if (!subscription) {
+        const applicationServerKey = base64UrlToUint8Array(status.vapid_public_key);
+        if (!applicationServerKey) {
+            throw new Error('Invalid VAPID public key');
+        }
+
+        subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey
+        });
+    }
+
+    await syncPushSubscriptionWithServer(subscription);
+    window.WEB_PUSH_NOTIFICATIONS_ENABLED = true;
+}
+
+async function disableWebPushNotifications() {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        window.WEB_PUSH_NOTIFICATIONS_ENABLED = false;
+        return;
+    }
+
+    const registration = await getServiceWorkerRegistration();
+    const subscription = await registration.pushManager.getSubscription();
+    if (!subscription) {
+        window.WEB_PUSH_NOTIFICATIONS_ENABLED = false;
+        return;
+    }
+
+    await unsubscribePushSubscriptionOnServer(subscription);
+    await subscription.unsubscribe().catch(() => {});
+    window.WEB_PUSH_NOTIFICATIONS_ENABLED = false;
+}
+
+async function initWebPushNotifications() {
+    try {
+        const status = await fetchWebPushStatus(true);
+        if (!status?.configured) {
+            return;
+        }
+
+        if (!window.WEB_PUSH_NOTIFICATIONS_ENABLED) {
+            return;
+        }
+
+        await enableWebPushNotifications();
+    } catch {
+        // Keep polling fallback active if push setup fails.
+    }
+}
+
 
 function applyNotificationSettingState(setting, enabled) {
     const isEnabled = Boolean(enabled);
     if (setting === 'browser_notifications') {
         window.BROWSER_NOTIFICATIONS_ENABLED = isEnabled;
+        return;
+    }
+    if (setting === 'web_push_notifications') {
+        window.WEB_PUSH_NOTIFICATIONS_ENABLED = isEnabled;
         return;
     }
     if (setting === 'sound_friend_request') {
@@ -475,9 +661,26 @@ function bindNotificationSettingsToggles() {
                 if (setting === 'browser_notifications' && enabled && typeof Notification !== 'undefined' && Notification.permission === 'default') {
                     Notification.requestPermission();
                 }
+                if (setting === 'web_push_notifications') {
+                    if (enabled) {
+                        await enableWebPushNotifications();
+                    } else {
+                        await disableWebPushNotifications();
+                    }
+                }
                 setNotificationSettingsStatus('Saved', 'success');
             } catch (error) {
                 toggleNode.checked = previousEnabled;
+                applyNotificationSettingState(setting, previousEnabled);
+
+                if (setting === 'web_push_notifications' && enabled) {
+                    postForm('/settings/notifications', {
+                        csrf_token: getCsrfToken(),
+                        setting,
+                        enabled: '0'
+                    }).catch(() => {});
+                }
+
                 setNotificationSettingsStatus('Failed to save. Please try again.', 'error');
                 showToast(error.message || 'Unable to save notification setting', 'error');
             } finally {
@@ -499,6 +702,7 @@ function getNotificationSoundBucket(notificationOrType) {
     }
 
     if (normalizedType === 'friend_request') return 'friend_request';
+    if (normalizedType === 'poke') return 'poke';
     if (normalizedType === 'message') return 'new_message';
     if (normalizedType === 'call') return 'call';
     return 'other';
@@ -510,6 +714,9 @@ function isNotificationSoundEnabled(bucket) {
     }
     if (bucket === 'new_message') {
         return Boolean(window.NOTIFICATION_SOUND_NEW_MESSAGE_ENABLED);
+    }
+    if (bucket === 'poke') {
+        return Boolean(window.NOTIFICATION_SOUND_OTHER_ENABLED);
     }
     if (bucket === 'call') {
         return Boolean(window.NOTIFICATION_SOUND_OTHER_ENABLED);
@@ -989,6 +1196,7 @@ function getNotificationIconClass(toast) {
     const title = String(meta?.title || '').toLowerCase();
 
     if (type === 'message') return 'fa-solid fa-message';
+    if (type === 'poke') return 'fa-solid fa-hand-point-right';
     if (type === 'call' || title === 'incoming call') return 'fa-solid fa-phone';
     if (type === 'friend_request' || title === 'friend request'
         || type === 'friend_request_accepted' || title === 'friend request accepted') return 'fa-solid fa-user-plus';
@@ -1125,6 +1333,10 @@ function getNotificationAction(toast) {
         return { href: meta.link };
     }
 
+    if (type === 'poke' || title === 'call poke') {
+        return { href: withPokeJoinIntent(meta.link) };
+    }
+
     if (type === 'friend_request' || title === 'friend request') {
         return { href: meta.link };
     }
@@ -1142,6 +1354,24 @@ function getNotificationAction(toast) {
     }
 
     return null;
+}
+
+function withPokeJoinIntent(linkValue) {
+    const rawLink = String(linkValue || '').trim();
+    if (!rawLink) return rawLink;
+
+    try {
+        const targetUrl = new URL(rawLink, window.location.origin);
+        if (targetUrl.searchParams.get('join_call') !== '1') {
+            targetUrl.searchParams.set('join_call', '1');
+        }
+        if (!targetUrl.searchParams.get('join_source')) {
+            targetUrl.searchParams.set('join_source', 'poke');
+        }
+        return targetUrl.pathname + targetUrl.search + targetUrl.hash;
+    } catch {
+        return rawLink;
+    }
 }
 
 async function handleToastHistoryClick(event) {
@@ -1457,6 +1687,8 @@ async function clearAllNotifications() {
 
     if (btn) btn.disabled = false;
 }
+
+window.initWebPushNotifications = initWebPushNotifications;
 
 function bindTwofaFrequencyRadios() {
     const radios = Array.from(document.querySelectorAll('[data-twofa-frequency]'));

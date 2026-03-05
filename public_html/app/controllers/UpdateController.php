@@ -137,6 +137,40 @@ class UpdateController extends Controller {
                     KEY idx_poll_votes_option (poll_option_id, poll_id)
                 )",
             ],
+            '0.2.6' => [
+                "CREATE TABLE IF NOT EXISTS push_subscriptions (
+                    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                    user_id INT NOT NULL,
+                    endpoint VARCHAR(500) NOT NULL,
+                    p256dh_key TEXT NOT NULL,
+                    auth_key TEXT NOT NULL,
+                    user_agent VARCHAR(255) NULL,
+                    fail_count INT NOT NULL DEFAULT 0,
+                    last_http_status SMALLINT NULL,
+                    last_error TEXT NULL,
+                    failed_at TIMESTAMP NULL,
+                    last_used_at TIMESTAMP NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                    UNIQUE KEY uniq_push_subscriptions_endpoint (endpoint),
+                    KEY idx_push_subscriptions_user (user_id),
+                    KEY idx_push_subscriptions_failed (failed_at, fail_count)
+                )",
+                "CREATE TABLE IF NOT EXISTS push_delivery_logs (
+                    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                    subscription_id BIGINT NOT NULL,
+                    status ENUM('success','retryable','permanent_fail') NOT NULL,
+                    http_status SMALLINT NULL,
+                    error_message TEXT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (subscription_id) REFERENCES push_subscriptions(id) ON DELETE CASCADE,
+                    KEY idx_push_delivery_logs_subscription (subscription_id, created_at)
+                )",
+            ],
+            '0.2.7' => [
+                "ALTER TABLE notifications MODIFY COLUMN type ENUM('message','call','friend_request','friend_request_accepted','report','poke') NOT NULL",
+            ],
         ];
     }
 

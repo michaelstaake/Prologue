@@ -1190,6 +1190,13 @@
                     <span class="text-zinc-100">Browser notifications</span>
                     <input type="checkbox" data-notification-setting="browser_notifications" <?= $browserNotif ? 'checked' : '' ?> class="w-6 h-6 accent-emerald-500">
                 </label>
+                <label class="flex items-center justify-between gap-4 rounded-xl border border-zinc-700 bg-zinc-800/30 px-4 py-3">
+                    <div>
+                        <span class="text-zinc-100">Web push notifications</span>
+                        <span class="block text-xs text-zinc-500 mt-0.5">Receive alerts even when this tab is not open.</span>
+                    </div>
+                    <input type="checkbox" data-notification-setting="web_push_notifications" <?= !empty($webPushNotif) ? 'checked' : '' ?> class="w-6 h-6 accent-emerald-500">
+                </label>
                 <div class="flex items-center justify-between gap-4 rounded-xl border border-zinc-700 bg-zinc-800/30 px-4 py-3">
                     <span class="text-zinc-100">Sound: New friend request</span>
                     <div class="flex items-center gap-3">

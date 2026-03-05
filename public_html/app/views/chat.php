@@ -316,16 +316,17 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                         $memberIsSelf = $memberId === (int)$currentUserId;
                         $memberIsOwner = $memberId === (int)$chat->created_by;
                         $memberIsModerator = strtolower((string)($member->group_role ?? 'member')) === 'moderator';
+                        $canPokeMember = $isGroupMember && !$memberIsSelf;
                         $canRoleManageMember = $canManageGroupSettings && !$memberIsOwner && !$memberIsSelf;
                         $canMuteManageMember = $canModerateMembers && !$memberIsOwner && !$memberIsModerator && !$memberIsSelf;
                         $canRemoveMember = $canModerateMembers && !$memberIsOwner && !$memberIsSelf;
-                        $hasMemberManageActions = $canRoleManageMember || $canMuteManageMember || $canRemoveMember;
+                        $hasMemberManageActions = $canPokeMember || $canRoleManageMember || $canMuteManageMember || $canRemoveMember;
                     ?>
                     <?php if ($hasMemberManageActions): ?>
                     <span class="relative inline-flex items-center">
                         <button
                             type="button"
-                            class="inline-flex items-center text-zinc-300 hover:text-zinc-100"
+                            class="inline-flex items-center justify-center w-9 h-9 rounded-full text-zinc-300 hover:text-zinc-100 hover:bg-zinc-700/70"
                             title="User actions"
                             aria-label="User actions"
                             aria-expanded="false"
@@ -335,31 +336,36 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
                         >
                             <i class="fa-solid fa-ellipsis-vertical" aria-hidden="true"></i>
                         </button>
-                        <div id="group-member-menu-<?= $memberId ?>" data-group-member-menu class="hidden absolute right-0 top-full mt-2 min-w-36 bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl p-1.5 z-30">
+                        <div id="group-member-menu-<?= $memberId ?>" data-group-member-menu class="hidden absolute right-0 top-full mt-2 min-w-44 bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl p-2 z-30">
+                            <?php if ($canPokeMember): ?>
+                            <button type="button" data-group-member-action class="w-full text-left px-3 py-2.5 min-h-10 rounded-lg hover:bg-zinc-800 text-sm text-emerald-300" onclick='pokeGroupMember(<?= $memberId ?>, <?= $memberUsernameJson ?>)'>
+                                <i class="fa-solid fa-hand-point-right mr-2" aria-hidden="true"></i>Poke
+                            </button>
+                            <?php endif; ?>
                             <?php if ($canRoleManageMember): ?>
                                 <?php if ($memberIsModerator): ?>
-                                <button type="button" data-group-member-action class="w-full text-left px-2.5 py-2 rounded-lg hover:bg-zinc-800 text-sm text-sky-300" onclick='demoteGroupModerator(<?= $memberId ?>, <?= $memberUsernameJson ?>)'>
+                                <button type="button" data-group-member-action class="w-full text-left px-3 py-2.5 min-h-10 rounded-lg hover:bg-zinc-800 text-sm text-sky-300" onclick='demoteGroupModerator(<?= $memberId ?>, <?= $memberUsernameJson ?>)'>
                                     <i class="fa-solid fa-user-minus mr-2" aria-hidden="true"></i>Demote
                                 </button>
                                 <?php else: ?>
-                                <button type="button" data-group-member-action class="w-full text-left px-2.5 py-2 rounded-lg hover:bg-zinc-800 text-sm text-sky-300" onclick='promoteGroupModerator(<?= $memberId ?>, <?= $memberUsernameJson ?>)'>
+                                <button type="button" data-group-member-action class="w-full text-left px-3 py-2.5 min-h-10 rounded-lg hover:bg-zinc-800 text-sm text-sky-300" onclick='promoteGroupModerator(<?= $memberId ?>, <?= $memberUsernameJson ?>)'>
                                     <i class="fa-solid fa-user-shield mr-2" aria-hidden="true"></i>Promote
                                 </button>
                                 <?php endif; ?>
                             <?php endif; ?>
                             <?php if ($canMuteManageMember): ?>
                                 <?php if ((int)($member->is_group_muted ?? 0) === 1): ?>
-                                <button type="button" data-group-member-action class="w-full text-left px-2.5 py-2 rounded-lg hover:bg-zinc-800 text-sm text-amber-300" onclick='unmuteGroupMember(<?= $memberId ?>, <?= $memberUsernameJson ?>)'>
+                                <button type="button" data-group-member-action class="w-full text-left px-3 py-2.5 min-h-10 rounded-lg hover:bg-zinc-800 text-sm text-amber-300" onclick='unmuteGroupMember(<?= $memberId ?>, <?= $memberUsernameJson ?>)'>
                                     <i class="fa-solid fa-volume-high mr-2" aria-hidden="true"></i>Unmute
                                 </button>
                                 <?php else: ?>
-                                <button type="button" data-group-member-action class="w-full text-left px-2.5 py-2 rounded-lg hover:bg-zinc-800 text-sm text-amber-300" onclick='muteGroupMember(<?= $memberId ?>, <?= $memberUsernameJson ?>)'>
+                                <button type="button" data-group-member-action class="w-full text-left px-3 py-2.5 min-h-10 rounded-lg hover:bg-zinc-800 text-sm text-amber-300" onclick='muteGroupMember(<?= $memberId ?>, <?= $memberUsernameJson ?>)'>
                                     <i class="fa-solid fa-volume-xmark mr-2" aria-hidden="true"></i>Mute
                                 </button>
                                 <?php endif; ?>
                             <?php endif; ?>
                             <?php if ($canRemoveMember): ?>
-                                <button type="button" data-group-member-action class="w-full text-left px-2.5 py-2 rounded-lg hover:bg-zinc-800 text-sm text-red-300" onclick='removeGroupMember(<?= $memberId ?>, <?= $memberUsernameJson ?>)'>
+                                <button type="button" data-group-member-action class="w-full text-left px-3 py-2.5 min-h-10 rounded-lg hover:bg-zinc-800 text-sm text-red-300" onclick='removeGroupMember(<?= $memberId ?>, <?= $memberUsernameJson ?>)'>
                                     <i class="fa-solid fa-trash mr-2" aria-hidden="true"></i>Delete
                                 </button>
                             <?php endif; ?>

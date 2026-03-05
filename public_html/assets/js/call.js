@@ -116,6 +116,128 @@ function setChatUserInActiveCall(inActiveCall) {
     applyVoiceCallButtonState();
 }
 
+async function pokeGroupMember(userId, username) {
+    const targetUserId = Number(userId || 0);
+
+    // Derive chat context from state first, then DOM as a safe fallback.
+    let chatId = Number(currentChat?.id || 0);
+    let chatType = normalizeChatType(currentChat?.type || '');
+    if (chatId <= 0) {
+        const chatView = document.getElementById('chat-view');
+        chatId = Number(chatView?.dataset?.chatId || 0);
+        chatType = normalizeChatType(chatView?.dataset?.chatType || '');
+    }
+
+    if (chatId <= 0) {
+        showToast('Chat ID missing', 'error');
+        return;
+    }
+
+    if (chatType !== 'group') {
+        showToast('Poke is only available in group chats', 'error');
+        return;
+    }
+
+    if (targetUserId <= 0) {
+        showToast('Invalid user selected', 'error');
+        return;
+    }
+
+    const memberNode = document.querySelector(`[data-group-member-user-id="${targetUserId}"]`);
+    const targetIsInCall = memberNode?.getAttribute('data-group-member-in-call') === '1';
+    if (targetIsInCall) {
+        showToast(`${String(username || 'User')} is already in the call`, 'info');
+        return;
+    }
+
+    const result = await postForm('/api/calls/poke', {
+        csrf_token: getCsrfToken(),
+        chat_id: String(chatId),
+        target_user_id: String(targetUserId)
+    });
+
+    if (result?.success) {
+        showToast(`Poked ${String(username || 'user')}`, 'success');
+        return;
+    }
+
+    showToast(result?.error || 'Unable to send poke', 'error');
+}
+
+window.pokeGroupMember = pokeGroupMember;
+
+function consumePokeJoinIntentFromUrl() {
+    const params = new URLSearchParams(window.location.search || '');
+    if (params.get('join_call') !== '1') {
+        return null;
+    }
+
+    const joinSource = String(params.get('join_source') || '').trim().toLowerCase();
+    if (joinSource && joinSource !== 'poke') {
+        return null;
+    }
+
+    const expectedCallId = Number(params.get('call_id') || 0);
+
+    params.delete('join_call');
+    params.delete('join_source');
+    params.delete('call_id');
+
+    const nextQuery = params.toString();
+    const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash || ''}`;
+    window.history.replaceState({}, '', nextUrl);
+
+    return {
+        expectedCallId: Number.isFinite(expectedCallId) && expectedCallId > 0 ? expectedCallId : 0
+    };
+}
+
+async function maybeJoinGroupCallFromPokeIntent() {
+    const intent = consumePokeJoinIntentFromUrl();
+    if (!intent || !currentChat) {
+        return;
+    }
+
+    const chatType = normalizeChatType(currentChat?.type || '');
+    if (chatType !== 'group') {
+        return;
+    }
+
+    const alreadyInCall = Boolean(currentChat.user_in_active_call) || Boolean(currentUserInActiveCall) || Number(currentCallId || 0) > 0;
+    if (alreadyInCall) {
+        return;
+    }
+
+    let activeCall = null;
+    try {
+        const response = await fetch(`/api/calls/active/${Number(currentChat.id || 0)}`);
+        const payload = await response.json();
+        activeCall = payload?.call || null;
+    } catch {
+        activeCall = null;
+    }
+
+    const activeCallId = Number(activeCall?.id || 0);
+    if (activeCallId <= 0) {
+        showToast('That call already ended', 'info');
+        return;
+    }
+
+    if (intent.expectedCallId > 0 && intent.expectedCallId !== activeCallId) {
+        showToast('That call already ended', 'info');
+        return;
+    }
+
+    if (Number(activeCall?.current_user_joined || 0) > 0) {
+        setChatUserInActiveCall(true);
+        return;
+    }
+
+    await startVoiceCall({ showJoinConnectingOverlay: true, joiningOverlayMode: 'connecting' });
+}
+
+window.maybeJoinGroupCallFromPokeIntent = maybeJoinGroupCallFromPokeIntent;
+
 function hideCallConnectingOverlay() {
     if (callConnectingOverlayTimeout) {
         clearTimeout(callConnectingOverlayTimeout);
@@ -1370,7 +1492,9 @@ async function startVoiceCall(options = {}) {
     updateCallParticipantsPanelVisibility();
 
     const isCompactOutgoingRinging = !start.joined_existing && chatType === 'personal';
-    setCallOverlayMode(normalizeCallOverlayMode(options.initialOverlayMode || (isCompactOutgoingRinging ? 'hidden' : 'full')));
+    const isJoinedExistingGroupCall = start.joined_existing && chatType === 'group';
+    const defaultOverlayMode = (isCompactOutgoingRinging || isJoinedExistingGroupCall) ? 'hidden' : 'full';
+    setCallOverlayMode(normalizeCallOverlayMode(options.initialOverlayMode || defaultOverlayMode));
     if (start.joined_existing && (!options.silentStart || options.showJoinConnectingOverlay)) {
         showCallConnectingOverlay({
             durationMs: 3000,

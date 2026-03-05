@@ -627,4 +627,97 @@ class CallController extends Controller {
 
         $this->json(['success' => true]);
     }
+
+    public function pokeMember() {
+        Auth::requireAuth();
+        Auth::csrfValidate();
+
+        $chatId = (int)($_POST['chat_id'] ?? 0);
+        $targetUserId = (int)($_POST['target_user_id'] ?? 0);
+        $user = Auth::user();
+        $userId = (int)$user->id;
+
+        if ($chatId <= 0 || $targetUserId <= 0) {
+            $this->json(['error' => 'Invalid request'], 400);
+        }
+
+        if ($targetUserId === $userId) {
+            $this->json(['error' => 'You cannot poke yourself'], 400);
+        }
+
+        $chat = Database::query(
+            "SELECT id, chat_number, type
+             FROM chats
+             WHERE id = ?",
+            [$chatId]
+        )->fetch();
+        if (!$chat) {
+            $this->json(['error' => 'Chat not found'], 404);
+        }
+
+        if (!Chat::isGroupType($chat->type ?? null)) {
+            $this->json(['error' => 'Poke is only available in group chats'], 400);
+        }
+
+        $isRequesterMember = Database::query(
+            "SELECT id
+             FROM chat_members
+             WHERE chat_id = ?
+               AND user_id = ?
+             LIMIT 1",
+            [$chatId, $userId]
+        )->fetch();
+        if (!$isRequesterMember) {
+            $this->json(['error' => 'Access denied'], 403);
+        }
+
+        $isTargetMember = Database::query(
+            "SELECT id
+             FROM chat_members
+             WHERE chat_id = ?
+               AND user_id = ?
+             LIMIT 1",
+            [$chatId, $targetUserId]
+        )->fetch();
+        if (!$isTargetMember) {
+            $this->json(['error' => 'User is not in this group'], 404);
+        }
+
+        $activeCall = Database::query(
+            "SELECT id
+             FROM calls
+             WHERE chat_id = ?
+               AND status = 'active'
+             ORDER BY id DESC
+             LIMIT 1",
+            [$chatId]
+        )->fetch();
+        if (!$activeCall) {
+            $this->json(['error' => 'No active group call to poke for'], 409);
+        }
+
+        $callId = (int)($activeCall->id ?? 0);
+        if ($callId <= 0 || !$this->isUserActivelyInCall($callId, $userId)) {
+            $this->json(['error' => 'Join the call before poking other members'], 409);
+        }
+
+        if ($this->isUserActivelyInCall($callId, $targetUserId)) {
+            $this->json(['error' => 'User is already in the call'], 409);
+        }
+
+        $senderUsername = trim((string)($user->username ?? 'Someone'));
+        if ($senderUsername === '') {
+            $senderUsername = 'Someone';
+        }
+
+        Notification::create(
+            $targetUserId,
+            'poke',
+            'Call Poke',
+            $senderUsername . ' poked you to join the call',
+            '/c/' . User::formatUserNumber((int)$chat->chat_number) . '?join_call=1&join_source=poke&call_id=' . $callId
+        );
+
+        $this->json(['success' => true]);
+    }
 }

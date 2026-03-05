@@ -138,6 +138,7 @@
     <a href="#app-main-content" class="sr-only focus:not-sr-only">Skip to main content</a>
     <?php
         $browserNotificationsEnabled = false;
+        $webPushNotificationsEnabled = false;
         $friendRequestSoundEnabled = true;
         $newMessageSoundEnabled = true;
         $otherNotificationSoundEnabled = true;
@@ -150,6 +151,8 @@
         if ($currentUser) {
             $notificationSetting = Database::query('SELECT `value` FROM settings WHERE `key` = ?', ['browser_notifications_' . $currentUser->id])->fetchColumn();
             $browserNotificationsEnabled = ((int)$notificationSetting) === 1;
+            $webPushSetting = Database::query('SELECT `value` FROM settings WHERE `key` = ?', ['web_push_notifications_' . $currentUser->id])->fetchColumn();
+            $webPushNotificationsEnabled = ((int)$webPushSetting) === 1;
             $friendRequestSoundSetting = Database::query('SELECT `value` FROM settings WHERE `key` = ?', ['sound_friend_request_' . $currentUser->id])->fetchColumn();
             $newMessageSoundSetting = Database::query('SELECT `value` FROM settings WHERE `key` = ?', ['sound_new_message_' . $currentUser->id])->fetchColumn();
             $otherNotificationSoundSetting = Database::query('SELECT `value` FROM settings WHERE `key` = ?', ['sound_other_notifications_' . $currentUser->id])->fetchColumn();
@@ -656,6 +659,7 @@
     window.APP_VERSION = <?= json_encode(APP_VERSION) ?>;
     window.CSRF_TOKEN = <?= json_encode($csrf) ?>;
     window.BROWSER_NOTIFICATIONS_ENABLED = <?= $browserNotificationsEnabled ? 'true' : 'false' ?>;
+    window.WEB_PUSH_NOTIFICATIONS_ENABLED = <?= $webPushNotificationsEnabled ? 'true' : 'false' ?>;
     window.NOTIFICATION_SOUND_FRIEND_REQUEST_ENABLED = <?= $friendRequestSoundEnabled ? 'true' : 'false' ?>;
     window.NOTIFICATION_SOUND_NEW_MESSAGE_ENABLED = <?= $newMessageSoundEnabled ? 'true' : 'false' ?>;
     window.NOTIFICATION_SOUND_OTHER_ENABLED = <?= $otherNotificationSoundEnabled ? 'true' : 'false' ?>;

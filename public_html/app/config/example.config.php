@@ -464,13 +464,46 @@ CREATE TABLE call_signals (
 CREATE TABLE notifications (
 	id INT AUTO_INCREMENT PRIMARY KEY,
 	user_id INT NOT NULL,
-	type ENUM('message','call','friend_request','friend_request_accepted','report') NOT NULL,
+	type ENUM('message','call','friend_request','friend_request_accepted','report','poke') NOT NULL,
 	title VARCHAR(100) NOT NULL,
 	message TEXT NOT NULL,
 	link VARCHAR(255) NULL,
 	`read` TINYINT(1) DEFAULT 0,
 	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 	FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Web push subscriptions
+CREATE TABLE push_subscriptions (
+	id BIGINT AUTO_INCREMENT PRIMARY KEY,
+	user_id INT NOT NULL,
+	endpoint VARCHAR(500) NOT NULL,
+	p256dh_key TEXT NOT NULL,
+	auth_key TEXT NOT NULL,
+	user_agent VARCHAR(255) NULL,
+	fail_count INT NOT NULL DEFAULT 0,
+	last_http_status SMALLINT NULL,
+	last_error TEXT NULL,
+	failed_at TIMESTAMP NULL,
+	last_used_at TIMESTAMP NULL,
+	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+	FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+	UNIQUE KEY uniq_push_subscriptions_endpoint (endpoint),
+	KEY idx_push_subscriptions_user (user_id),
+	KEY idx_push_subscriptions_failed (failed_at, fail_count)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Web push delivery log (for retries and endpoint cleanup)
+CREATE TABLE push_delivery_logs (
+	id BIGINT AUTO_INCREMENT PRIMARY KEY,
+	subscription_id BIGINT NOT NULL,
+	status ENUM('success','retryable','permanent_fail') NOT NULL,
+	http_status SMALLINT NULL,
+	error_message TEXT NULL,
+	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	FOREIGN KEY (subscription_id) REFERENCES push_subscriptions(id) ON DELETE CASCADE,
+	KEY idx_push_delivery_logs_subscription (subscription_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Reports

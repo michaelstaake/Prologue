@@ -66,7 +66,8 @@ let callDurationBarState = null;
 let openAdminUserMenuId = 0;
 const REPORT_REASON_MAX_LENGTH = 200;
 const NOTIFICATION_SOUND_FILE_BY_BUCKET = {
-    friend_request: '/assets/sounds/friendrequest.wav',
+    friend_request: '/assets/sounds/notification.wav',
+    poke: '/assets/sounds/poke.wav',
     new_message: '/assets/sounds/newmessage.wav',
     call: '/assets/sounds/callringing.wav',
     other: '/assets/sounds/notification.wav'
@@ -1146,6 +1147,9 @@ async function init() {
         setChatUserInActiveCall(currentChat.user_in_active_call === true);
         setChatCallEnabled(currentChat.can_start_calls !== false);
         refreshChatCallStatusBar({ force: true });
+        if (typeof window.maybeJoinGroupCallFromPokeIntent === 'function') {
+            window.maybeJoinGroupCallFromPokeIntent().catch(() => {});
+        }
         if (chatPollIntervalId) {
             clearInterval(chatPollIntervalId);
         }
@@ -1288,6 +1292,10 @@ async function init() {
     if (hasNotificationHistory) {
         if (window.BROWSER_NOTIFICATIONS_ENABLED && typeof Notification !== 'undefined' && Notification.permission === 'default') {
             Notification.requestPermission();
+        }
+
+        if (typeof window.initWebPushNotifications === 'function') {
+            await window.initWebPushNotifications().catch(() => {});
         }
 
         await fetchNotifications().catch(() => {});
