@@ -1272,6 +1272,7 @@ async function init() {
     bindReportModal();
     bindPageToast();
     bindTrashDeleteModal();
+    bindTimezoneCombobox();
     bindTimezoneSuggestionModal();
     bindStatusMenu();
     bindNotificationSettingsToggles();
@@ -1401,6 +1402,186 @@ function bindTrashDeleteModal() {
     });
 }
 
+function resolveTimezoneDisplayLabel(offsetLabel) {
+    const offset = String(offsetLabel || '').trim();
+    if (!offset) return 'UTC (UTC+0)';
+
+    const timezoneOption = Array.from(document.querySelectorAll('[data-timezone-option]')).find(
+        (option) => String(option.getAttribute('data-timezone-offset') || '') === offset
+    );
+    if (timezoneOption) {
+        const label = String(timezoneOption.getAttribute('data-timezone-label') || '').trim();
+        if (label) {
+            return label;
+        }
+    }
+
+    return `UTC (${offset})`;
+}
+
+function bindTimezoneCombobox() {
+    const root = document.querySelector('[data-timezone-combobox]');
+    if (!root) return;
+
+    const searchInput = document.getElementById('timezone-search-input');
+    const hiddenInput = document.getElementById('timezone-hidden-input');
+    const selectedLabel = document.getElementById('timezone-selected-label');
+    const listbox = document.getElementById('timezone-options');
+    const emptyState = root.querySelector('[data-timezone-empty]');
+    const options = Array.from(root.querySelectorAll('[data-timezone-option]'));
+    if (!searchInput || !hiddenInput || !selectedLabel || !listbox || options.length === 0) return;
+
+    const normalize = (value) => String(value || '').toLowerCase().trim();
+    let activeOptionId = '';
+
+    const setAriaExpanded = (isExpanded) => {
+        searchInput.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+    };
+
+    const getVisibleOptions = () => options.filter((option) => !option.classList.contains('hidden'));
+
+    const setActiveOption = (option) => {
+        const visibleOptions = getVisibleOptions();
+        visibleOptions.forEach((visibleOption) => {
+            visibleOption.classList.remove('ring-1', 'ring-emerald-500/70');
+        });
+
+        if (!option) {
+            activeOptionId = '';
+            searchInput.removeAttribute('aria-activedescendant');
+            return;
+        }
+
+        option.classList.add('ring-1', 'ring-emerald-500/70');
+        activeOptionId = option.id;
+        searchInput.setAttribute('aria-activedescendant', activeOptionId);
+        option.scrollIntoView({ block: 'nearest' });
+    };
+
+    const updateSelectedOptionStyles = (selectedOffset) => {
+        options.forEach((option) => {
+            const optionOffset = String(option.getAttribute('data-timezone-offset') || '');
+            const isSelected = optionOffset === selectedOffset;
+            option.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+
+            option.classList.toggle('border-emerald-500', isSelected);
+            option.classList.toggle('bg-emerald-500/15', isSelected);
+            option.classList.toggle('text-emerald-200', isSelected);
+
+            option.classList.toggle('border-transparent', !isSelected);
+            option.classList.toggle('bg-zinc-800', !isSelected);
+            option.classList.toggle('text-zinc-200', !isSelected);
+        });
+    };
+
+    const applySelection = (option) => {
+        if (!option) return;
+
+        const offset = String(option.getAttribute('data-timezone-offset') || '').trim();
+        const label = String(option.getAttribute('data-timezone-label') || '').trim();
+        if (!offset || !label) return;
+
+        hiddenInput.value = offset;
+        selectedLabel.textContent = `Selected: ${label}`;
+        updateSelectedOptionStyles(offset);
+        window.USER_TIMEZONE = offset;
+    };
+
+    const filterOptions = () => {
+        const query = normalize(searchInput.value);
+        let visibleCount = 0;
+
+        options.forEach((option) => {
+            const label = normalize(option.getAttribute('data-timezone-label'));
+            const searchTerms = normalize(option.getAttribute('data-timezone-search'));
+            const shouldShow = query === '' || label.includes(query) || searchTerms.includes(query);
+            option.classList.toggle('hidden', !shouldShow);
+            if (shouldShow) {
+                visibleCount += 1;
+            }
+        });
+
+        if (emptyState) {
+            emptyState.classList.toggle('hidden', visibleCount > 0);
+        }
+
+        if (visibleCount > 0) {
+            setAriaExpanded(true);
+            setActiveOption(getVisibleOptions()[0] || null);
+        } else {
+            setAriaExpanded(false);
+            setActiveOption(null);
+        }
+    };
+
+    const currentOffset = String(hiddenInput.value || window.USER_TIMEZONE || 'UTC+0');
+    const currentOption = options.find((option) => String(option.getAttribute('data-timezone-offset') || '') === currentOffset) || options[0];
+    applySelection(currentOption);
+    searchInput.value = '';
+    filterOptions();
+
+    searchInput.addEventListener('focus', () => {
+        setAriaExpanded(getVisibleOptions().length > 0);
+    });
+
+    searchInput.addEventListener('input', () => {
+        filterOptions();
+    });
+
+    searchInput.addEventListener('keydown', (event) => {
+        const visibleOptions = getVisibleOptions();
+        if (visibleOptions.length === 0) return;
+
+        const activeIndex = visibleOptions.findIndex((option) => option.id === activeOptionId);
+
+        if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            const nextIndex = activeIndex < 0 ? 0 : Math.min(visibleOptions.length - 1, activeIndex + 1);
+            setActiveOption(visibleOptions[nextIndex]);
+            return;
+        }
+
+        if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            const previousIndex = activeIndex <= 0 ? 0 : activeIndex - 1;
+            setActiveOption(visibleOptions[previousIndex]);
+            return;
+        }
+
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            const optionToSelect = activeIndex >= 0 ? visibleOptions[activeIndex] : visibleOptions[0];
+            applySelection(optionToSelect);
+            searchInput.value = '';
+            filterOptions();
+            setAriaExpanded(false);
+            return;
+        }
+
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            const selectedOffset = String(hiddenInput.value || 'UTC+0');
+            const selectedOption = options.find((option) => String(option.getAttribute('data-timezone-offset') || '') === selectedOffset) || null;
+            if (selectedOption) {
+                applySelection(selectedOption);
+            }
+            searchInput.value = '';
+            filterOptions();
+            setAriaExpanded(false);
+        }
+    });
+
+    options.forEach((option) => {
+        option.addEventListener('click', () => {
+            applySelection(option);
+            searchInput.value = '';
+            filterOptions();
+            setAriaExpanded(false);
+            searchInput.focus();
+        });
+    });
+}
+
 function formatUtcOffsetAsTimezoneLabel(utcOffsetMinutes) {
     if (!Number.isFinite(utcOffsetMinutes)) return null;
 
@@ -1456,7 +1637,7 @@ function bindTimezoneSuggestionModal() {
     } catch {
     }
 
-    value.textContent = guessedTimezone;
+    value.textContent = resolveTimezoneDisplayLabel(guessedTimezone);
     modal.classList.remove('hidden');
 
     const closeModal = () => {
@@ -1480,7 +1661,7 @@ function bindTimezoneSuggestionModal() {
             if (result && result.success) {
                 const savedTimezone = String(result.timezone || guessedTimezone || 'UTC+0');
                 window.USER_TIMEZONE = savedTimezone;
-                showToast(`Time zone updated to ${savedTimezone}.`, 'success');
+                showToast(`Time zone updated to ${resolveTimezoneDisplayLabel(savedTimezone)}.`, 'success');
                 closeModal();
                 return;
             }

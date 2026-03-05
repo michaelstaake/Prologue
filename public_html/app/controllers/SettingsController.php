@@ -39,6 +39,8 @@ class SettingsController extends Controller {
         }
 
         $userTimezone = (string)(Setting::get('timezone_' . $settingPrefix) ?? 'UTC+0');
+        $timezoneEntries = TimezoneCatalog::getEntries();
+        $selectedTimezoneEntry = TimezoneCatalog::findEntryByOffset($userTimezone);
         $topLoadingBarEnabled = (string)(Setting::get('top_loading_bar_enabled_' . $settingPrefix) ?? '1') === '1';
         $systemMessagesAutoCombineEnabled = (string)(Setting::get('system_messages_auto_combine_' . $settingPrefix) ?? '1') === '1';
         $fontSizePreference = (string)(Setting::get('font_size_' . $settingPrefix) ?? 'default');
@@ -96,6 +98,8 @@ class SettingsController extends Controller {
             'otherNotificationSoundNotif' => (int)$otherNotificationSoundNotif,
             'outgoingCallRingSoundNotif' => (int)$outgoingCallRingSoundNotif,
             'userTimezone' => $userTimezone,
+            'timezoneEntries' => $timezoneEntries,
+            'selectedTimezoneLabel' => (string)($selectedTimezoneEntry['label'] ?? ('UTC (' . $userTimezone . ')')),
             'topLoadingBarEnabled' => $topLoadingBarEnabled,
             'systemMessagesAutoCombineEnabled' => $systemMessagesAutoCombineEnabled,
             'fontSizePreference' => $fontSizePreference,

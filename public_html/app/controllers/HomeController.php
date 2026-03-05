@@ -618,16 +618,7 @@ class HomeController extends Controller {
         Auth::csrfValidate();
         $userId = (int)Auth::user()->id;
 
-        $allowedTimezones = [
-            'UTC-12:00','UTC-11:00','UTC-10:00','UTC-9:30','UTC-9:00',
-            'UTC-8:00','UTC-7:00','UTC-6:00','UTC-5:00','UTC-4:30',
-            'UTC-4:00','UTC-3:30','UTC-3:00','UTC-2:00','UTC-1:00',
-            'UTC+0','UTC+1:00','UTC+2:00','UTC+3:00','UTC+3:30',
-            'UTC+4:00','UTC+4:30','UTC+5:00','UTC+5:30','UTC+5:45',
-            'UTC+6:00','UTC+6:30','UTC+7:00','UTC+8:00','UTC+8:30',
-            'UTC+8:45','UTC+9:00','UTC+9:30','UTC+10:00','UTC+10:30',
-            'UTC+11:00','UTC+12:00','UTC+12:45','UTC+13:00','UTC+14:00'
-        ];
+        $allowedTimezones = TimezoneCatalog::getAllowedOffsets();
 
         $timezone = trim((string)($_POST['timezone'] ?? 'UTC+0'));
         if (!in_array($timezone, $allowedTimezones, true)) {

@@ -970,26 +970,48 @@
             </div>
             <form method="POST" action="<?= htmlspecialchars(base_url('/settings/timezone'), ENT_QUOTES, 'UTF-8') ?>">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
-                <p class="text-sm text-zinc-300 mb-3">All times are stored in UTC. Select your local time zone to display them correctly.</p>
-                <select name="timezone" class="w-full rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-3 text-zinc-100 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                    <?php
-                        $timezoneOptions = [
-                            'UTC-12:00','UTC-11:00','UTC-10:00','UTC-9:30','UTC-9:00',
-                            'UTC-8:00','UTC-7:00','UTC-6:00','UTC-5:00','UTC-4:30',
-                            'UTC-4:00','UTC-3:30','UTC-3:00','UTC-2:00','UTC-1:00',
-                            'UTC+0','UTC+1:00','UTC+2:00','UTC+3:00','UTC+3:30',
-                            'UTC+4:00','UTC+4:30','UTC+5:00','UTC+5:30','UTC+5:45',
-                            'UTC+6:00','UTC+6:30','UTC+7:00','UTC+8:00','UTC+8:30',
-                            'UTC+8:45','UTC+9:00','UTC+9:30','UTC+10:00','UTC+10:30',
-                            'UTC+11:00','UTC+12:00','UTC+12:45','UTC+13:00','UTC+14:00'
-                        ];
-                        foreach ($timezoneOptions as $tz):
-                    ?>
-                        <option value="<?= htmlspecialchars($tz, ENT_QUOTES, 'UTF-8') ?>" <?= ($userTimezone ?? 'UTC+0') === $tz ? 'selected' : '' ?>>
-                            <?= htmlspecialchars($tz, ENT_QUOTES, 'UTF-8') ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
+                <p id="timezone-help-text" class="text-sm text-zinc-300 mb-3">All times are stored in UTC. Search by region, city, or UTC offset to choose your display time zone.</p>
+                <input type="hidden" name="timezone" id="timezone-hidden-input" value="<?= htmlspecialchars((string)($userTimezone ?? 'UTC+0'), ENT_QUOTES, 'UTF-8') ?>">
+                <div class="space-y-3" id="timezone-combobox" data-timezone-combobox>
+                    <label for="timezone-search-input" class="block text-xs font-semibold uppercase tracking-wide text-zinc-400">Search Time Zone</label>
+                    <input
+                        id="timezone-search-input"
+                        type="search"
+                        placeholder="Try America/New_York, Berlin, UTC+5:30"
+                        autocomplete="off"
+                        class="w-full rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-3 text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        role="combobox"
+                        aria-autocomplete="list"
+                        aria-controls="timezone-options"
+                        aria-expanded="false"
+                        aria-describedby="timezone-help-text timezone-selected-label"
+                    >
+                    <p id="timezone-selected-label" class="text-xs text-emerald-300">Selected: <?= htmlspecialchars((string)($selectedTimezoneLabel ?? ('UTC (' . (string)($userTimezone ?? 'UTC+0') . ')')), ENT_QUOTES, 'UTF-8') ?></p>
+                    <div id="timezone-options" class="max-h-64 overflow-y-auto rounded-xl border border-zinc-700 bg-zinc-800/70 p-1.5 space-y-1" role="listbox" aria-label="Time zone options">
+                        <?php foreach (($timezoneEntries ?? []) as $index => $timezoneEntry): ?>
+                            <?php
+                                $tzOffset = (string)($timezoneEntry['offset'] ?? 'UTC+0');
+                                $tzLabel = (string)($timezoneEntry['label'] ?? ('UTC (' . $tzOffset . ')'));
+                                $tzSearch = (string)($timezoneEntry['search'] ?? '');
+                                $isSelected = ((string)($userTimezone ?? 'UTC+0') === $tzOffset);
+                            ?>
+                            <button
+                                id="timezone-option-<?= (int)$index ?>"
+                                type="button"
+                                class="timezone-option w-full rounded-lg border px-3 py-2 text-left text-sm transition <?= $isSelected ? 'border-emerald-500 bg-emerald-500/15 text-emerald-200' : 'border-transparent bg-zinc-800 text-zinc-200 hover:border-zinc-600 hover:bg-zinc-700/70' ?>"
+                                role="option"
+                                aria-selected="<?= $isSelected ? 'true' : 'false' ?>"
+                                data-timezone-option
+                                data-timezone-offset="<?= htmlspecialchars($tzOffset, ENT_QUOTES, 'UTF-8') ?>"
+                                data-timezone-label="<?= htmlspecialchars($tzLabel, ENT_QUOTES, 'UTF-8') ?>"
+                                data-timezone-search="<?= htmlspecialchars($tzSearch, ENT_QUOTES, 'UTF-8') ?>"
+                            >
+                                <?= htmlspecialchars($tzLabel, ENT_QUOTES, 'UTF-8') ?>
+                            </button>
+                        <?php endforeach; ?>
+                        <p class="hidden rounded-lg border border-zinc-700 bg-zinc-900/60 px-3 py-2 text-sm text-zinc-400" data-timezone-empty>No matches found. Try another city, region, or offset.</p>
+                    </div>
+                </div>
                 <div class="mt-4 flex gap-2">
                     <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 px-6 py-2 rounded-xl">Save time zone</button>
                     <button type="button" data-modal-close="cp-timezone-modal" class="bg-zinc-700 hover:bg-zinc-600 px-6 py-2 rounded-xl">Cancel</button>
