@@ -136,7 +136,7 @@
             <?php if (!$hasRequests): ?>
                 <p class="text-zinc-400 text-sm">No pending requests.</p>
             <?php else: ?>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
                     <?php foreach ($incomingRequests as $request): ?>
                         <?php $requestAvatar = User::avatarUrl($request); ?>
                         <div class="bg-zinc-800 rounded-xl p-3">
@@ -185,7 +185,7 @@
         </section>
     <?php else: ?>
         <section>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
                 <?php if (empty($friendList)): ?>
                     <p class="text-zinc-400 text-sm">No friends in this list.</p>
                 <?php else: ?>
