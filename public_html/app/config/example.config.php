@@ -599,8 +599,9 @@ define('DB_USER', getenv('DB_USER') ?: $CONFIG_DB_USER);
 define('DB_PASS', getenv('DB_PASS') ?: $CONFIG_DB_PASS);
 define('DB_NAME', getenv('DB_NAME') ?: $CONFIG_DB_NAME);
 
-$scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-$host = $_SERVER['HTTP_HOST'] ?? 'localhost:8088';
+require_once __DIR__ . '/../core/RequestOrigin.php';
+
+$resolvedOrigin = prologue_resolve_request_origin();
 
 $appBasePath = trim((string)(getenv('APP_BASE_PATH') ?: $CONFIG_APP_SUBFOLDER), " \t\n\r\0\x0B/");
 if ($appBasePath === '') {
@@ -614,8 +615,7 @@ $appUrlFromEnv = trim((string)(getenv('APP_URL') ?: $CONFIG_APP_URL));
 if ($appUrlFromEnv !== '') {
 	define('APP_URL', rtrim($appUrlFromEnv, '/'));
 } else {
-	$basePathSuffix = APP_BASE_PATH !== '' ? '/' . APP_BASE_PATH : '';
-	define('APP_URL', rtrim($scheme . '://' . $host . $basePathSuffix, '/'));
+	define('APP_URL', prologue_origin_base_url($resolvedOrigin, APP_BASE_PATH));
 }
 
 $storageRootFromEnv = trim((string)(getenv('STORAGE_FILESYSTEM_ROOT') ?: $CONFIG_STORAGE_FILESYSTEM_ROOT));
@@ -631,10 +631,8 @@ if (trim($databaseSchemaSqlFromEnv) !== '') {
 
 function base_url($path = '') {
 	$base = APP_URL;
-	if (PHP_SAPI !== 'cli' && isset($_SERVER['HTTP_HOST']) && getenv('APP_URL') === false) {
-		$requestScheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-		$basePathSuffix = APP_BASE_PATH !== '' ? '/' . APP_BASE_PATH : '';
-		$base = $requestScheme . '://' . $_SERVER['HTTP_HOST'] . $basePathSuffix;
+	if (PHP_SAPI !== 'cli' && getenv('APP_URL') === false) {
+		$base = prologue_origin_base_url(prologue_resolve_request_origin(), APP_BASE_PATH);
 	}
 
 	if ($path === '' || $path === '/') {

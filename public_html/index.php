@@ -1,30 +1,18 @@
 <?php
 date_default_timezone_set('UTC');
 
+require_once __DIR__ . '/app/core/RequestOrigin.php';
+
 function is_https_request(): bool {
-    if (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') {
-        return true;
-    }
-
-    if ((int)($_SERVER['SERVER_PORT'] ?? 0) === 443) {
-        return true;
-    }
-
-    $forwardedProto = strtolower(trim((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')));
-    if ($forwardedProto !== '') {
-        return in_array('https', array_map('trim', explode(',', $forwardedProto)), true);
-    }
-
-    return false;
+    return prologue_is_https_request();
 }
 
 function is_local_host_request(): bool {
-    $host = strtolower(trim((string)($_SERVER['HTTP_HOST'] ?? '')));
+    $origin = prologue_resolve_request_origin();
+    $host = strtolower(trim((string)($origin['host'] ?? '')));
     if ($host === '') {
         return false;
     }
-
-    $host = preg_replace('/:\\d+$/', '', $host);
 
     return in_array($host, ['localhost', '127.0.0.1', '::1'], true);
 }
