@@ -149,6 +149,22 @@ class AdminController extends Controller {
         $this->redirect('/settings');
     }
 
+    public function savePushSettings() {
+        $this->requireAdminUser();
+        Auth::csrfValidate();
+
+        $publicKey = trim((string)($_POST['push_vapid_public_key'] ?? ''));
+        $privateKey = trim((string)($_POST['push_vapid_private_key'] ?? ''));
+
+        Setting::set('push_vapid_public_key', $publicKey);
+        if ($privateKey !== '') {
+            Setting::set('push_vapid_private_key', $privateKey);
+        }
+
+        $this->flash('success', 'push_saved');
+        $this->redirect('/settings');
+    }
+
     public function sendTestMail() {
         $user = $this->requireAdminUser();
         Auth::csrfValidate();

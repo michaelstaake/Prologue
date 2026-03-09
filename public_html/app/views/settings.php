@@ -55,6 +55,9 @@
         } elseif ($flashSuccess === 'mail_saved') {
             $toastMessage = 'Mail settings saved.';
             $toastKind = 'success';
+        } elseif ($flashSuccess === 'push_saved') {
+            $toastMessage = 'Push notification settings saved.';
+            $toastKind = 'success';
         } elseif ($flashSuccess === 'mail_test_sent') {
             $toastMessage = 'Test email sent — check your inbox to confirm it arrived.';
             $toastKind = 'success';
@@ -273,6 +276,10 @@
             <button type="button" data-modal-open="cp-announcement-modal" class="bg-zinc-900 border border-zinc-700 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 hover:bg-zinc-800 transition cursor-pointer aspect-[2/1]">
                 <i class="fa-solid fa-bullhorn text-2xl text-emerald-400"></i>
                 <span class="text-sm text-zinc-200 font-medium">Announcement</span>
+            </button>
+            <button type="button" data-modal-open="cp-push-modal" class="bg-zinc-900 border border-zinc-700 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 hover:bg-zinc-800 transition cursor-pointer aspect-[2/1]">
+                <i class="fa-solid fa-bell text-2xl text-emerald-400"></i>
+                <span class="text-sm text-zinc-200 font-medium">Push Notifications</span>
             </button>
         </div>
     </div>
@@ -738,6 +745,37 @@
                 </div>
                 <div class="pt-2">
                     <button type="submit" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-medium transition">Save announcement</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Push Notifications Modal -->
+<div id="cp-push-modal" class="<?= $modalOverlayClass ?>" role="dialog" aria-modal="true">
+    <div class="<?= $modalBackdropClass ?>" data-modal-close="cp-push-modal"></div>
+    <div class="<?= $modalCenterClass ?>">
+        <div class="<?= $modalBoxClass ?>" data-modal-box>
+            <div class="mb-4 flex items-center justify-between">
+                <h3 class="text-xl font-semibold">Push Notifications</h3>
+                <button type="button" data-modal-close="cp-push-modal" class="rounded-lg px-2 py-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200">&times;</button>
+            </div>
+            <p class="text-sm text-zinc-400 mb-5">VAPID keys are used to send browser push notifications. If environment variables are set, they take priority over these values. Leave the private key field blank to keep the current key.</p>
+            <?php if (!empty($push_vapid_configured)): ?>
+                <p class="text-sm text-emerald-400 mb-5"><i class="fa-solid fa-circle-check mr-1"></i> Push notifications are configured and active.</p>
+            <?php endif; ?>
+            <form method="POST" action="<?= htmlspecialchars(base_path('/admin/push'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-4">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
+                <div>
+                    <label for="push_vapid_public_key" class="block text-sm text-zinc-400 mb-1">VAPID Public Key</label>
+                    <input type="text" id="push_vapid_public_key" name="push_vapid_public_key" value="<?= htmlspecialchars((string)($push_vapid_public_key ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="Base64url-encoded public key" autocomplete="off" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-zinc-100">
+                </div>
+                <div>
+                    <label for="push_vapid_private_key" class="block text-sm text-zinc-400 mb-1">VAPID Private Key (PEM)</label>
+                    <textarea id="push_vapid_private_key" name="push_vapid_private_key" rows="5" placeholder="Leave blank to keep current key" autocomplete="off" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-zinc-100 font-mono text-xs"></textarea>
+                </div>
+                <div class="pt-2">
+                    <button type="submit" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-medium transition">Save push settings</button>
                 </div>
             </form>
         </div>

@@ -244,6 +244,8 @@ class ErrorHandler {
                 return 'Not Found';
             case 419:
                 return 'Session Expired';
+            case 424:
+                return 'Failed Dependency';
             case 500:
                 return 'Server Error';
             default:
@@ -259,6 +261,8 @@ class ErrorHandler {
                 return 'The page you are looking for could not be found.';
             case 419:
                 return 'Your session has expired or the request could not be verified. Please go back and try again.';
+            case 424:
+                return 'Prologue has not been installed yet. Please initialize the application.';
             case 500:
                 return 'Something went wrong on our side.';
             default:

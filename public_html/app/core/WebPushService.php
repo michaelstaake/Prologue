@@ -215,6 +215,9 @@ class WebPushService {
     private static function getVapidPrivateKeyPem(): ?string {
         $raw = trim((string)(getenv('PUSH_VAPID_PRIVATE_KEY') ?: ''));
         if ($raw === '') {
+            $raw = trim((string)(Setting::get('push_vapid_private_key') ?? ''));
+        }
+        if ($raw === '') {
             return null;
         }
 
@@ -222,7 +225,6 @@ class WebPushService {
             return $raw;
         }
 
-        // Expect a PEM-encoded private key in PUSH_VAPID_PRIVATE_KEY.
         return null;
     }
 

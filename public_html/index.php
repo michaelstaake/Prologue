@@ -194,6 +194,9 @@ try {
     }
 } catch (Throwable $exception) {
 }
+if (!isset($dbVersion) && $requestPath !== '/install') {
+    ErrorHandler::abort(424, 'Prologue has not been installed yet.');
+}
 if (strpos($requestPath, '/api') === 0) {
     RateLimiter::enforceApiLimit($requestPath, $_SERVER['REQUEST_METHOD'] ?? 'GET');
 }
@@ -339,6 +342,7 @@ $router->post('/admin/attachments', 'AdminController@saveAttachmentSettings');
 $router->post('/admin/announcement', 'AdminController@saveAnnouncementSettings');
 $router->post('/admin/more', 'AdminController@saveMoreSettings');
 $router->post('/admin/captcha', 'AdminController@saveCaptchaSettings');
+$router->post('/admin/push', 'AdminController@savePushSettings');
 
 // Settings
 $router->post('/settings/account/email', 'HomeController@saveAccountEmail');
