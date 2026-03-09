@@ -643,4 +643,11 @@ function base_url($path = '') {
 
 	return rtrim($base, '/') . '/' . ltrim($path, '/');
 }
+function base_path(string $path = ''): string {
+	$prefix = APP_BASE_PATH !== '' ? '/' . APP_BASE_PATH : '';
+	if ($path === '' || $path === '/') {
+		return $prefix . '/';
+	}
+	return $prefix . '/' . ltrim($path, '/');
+}
 define('CSRF_SECRET', $CONFIG_CSRF_SECRET);

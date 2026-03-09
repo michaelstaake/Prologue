@@ -23,13 +23,13 @@
     <p class="mb-2 text-zinc-400">Enter the 6-digit code we sent to</p>
     <p class="mb-8 text-zinc-200 font-medium"><?= htmlspecialchars($email, ENT_QUOTES, 'UTF-8') ?></p>
 
-    <form method="POST" action="<?= htmlspecialchars(base_url('/verify-email'), ENT_QUOTES, 'UTF-8') ?>">
+    <form method="POST" action="<?= htmlspecialchars(base_path('/verify-email'), ENT_QUOTES, 'UTF-8') ?>">
         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
         <input type="text" name="code" maxlength="6" placeholder="123456" class="w-64 text-center text-4xl tracking-widest bg-zinc-800 border border-zinc-700 rounded-2xl px-8 py-6" required>
         <button type="submit" class="mt-8 w-full bg-emerald-600 hover:bg-emerald-500 py-4 rounded-2xl font-semibold">Verify email</button>
     </form>
 
-    <form method="POST" action="<?= htmlspecialchars(base_url('/verify-email/resend'), ENT_QUOTES, 'UTF-8') ?>" class="mt-4">
+    <form method="POST" action="<?= htmlspecialchars(base_path('/verify-email/resend'), ENT_QUOTES, 'UTF-8') ?>" class="mt-4">
         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
         <button type="submit" class="text-sm text-emerald-400 hover:text-emerald-300">Resend code</button>
     </form>

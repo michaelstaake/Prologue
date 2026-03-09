@@ -376,7 +376,7 @@
                 <button type="button" data-modal-close="cp-mail-modal" class="rounded-lg px-2 py-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200">&times;</button>
             </div>
             <p class="text-sm text-zinc-400 mb-5">SMTP settings used to send verification and notification emails. Leave the password field blank to keep the current password.</p>
-            <form method="POST" action="<?= htmlspecialchars(base_url('/admin/mail'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-4">
+            <form method="POST" action="<?= htmlspecialchars(base_path('/admin/mail'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-4">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div class="sm:col-span-2">
@@ -410,7 +410,7 @@
             </form>
             <div class="mt-5 pt-5 border-t border-zinc-700">
                 <p class="text-sm text-zinc-400 mb-3">Send a test email to your account address to verify the settings above are working.</p>
-                <form method="POST" action="<?= htmlspecialchars(base_url('/admin/mail/test'), ENT_QUOTES, 'UTF-8') ?>">
+                <form method="POST" action="<?= htmlspecialchars(base_path('/admin/mail/test'), ENT_QUOTES, 'UTF-8') ?>">
                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
                     <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 bg-zinc-700 hover:bg-zinc-600 text-zinc-100 rounded-xl font-medium transition">
                         <i class="fa-regular fa-paper-plane"></i>
@@ -432,7 +432,7 @@
                 <button type="button" data-modal-close="cp-accounts-modal" class="rounded-lg px-2 py-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200">&times;</button>
             </div>
             <p class="text-sm text-zinc-400 mb-5">Control how new accounts are created and verified.</p>
-            <form method="POST" action="<?= htmlspecialchars(base_url('/admin/accounts'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-4">
+            <form method="POST" action="<?= htmlspecialchars(base_path('/admin/accounts'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-4">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
                 <label class="flex items-center justify-between gap-4 rounded-xl border border-zinc-700 bg-zinc-800/30 px-4 py-3 cursor-pointer">
                     <div>
@@ -508,7 +508,7 @@
                     return isset($enabledTypes[$ext]) ? 'checked' : '';
                 };
             ?>
-            <form method="POST" action="<?= htmlspecialchars(base_url('/admin/attachments'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-5" id="cp-attachments-type-form">
+            <form method="POST" action="<?= htmlspecialchars(base_path('/admin/attachments'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-5" id="cp-attachments-type-form">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
                 <div class="flex items-center justify-end">
                     <button type="button" id="cp-attachments-select-all-btn" class="text-xs text-zinc-400 hover:text-zinc-200 underline underline-offset-2">Select all</button>
@@ -600,7 +600,7 @@
             <div class="mt-5 pt-5 border-t border-zinc-700">
                 <h4 class="text-sm font-semibold text-zinc-200 mb-3">Captcha</h4>
                 <p class="text-xs text-zinc-500 mb-4">Protect login, registration, and password reset forms with a captcha challenge.</p>
-                <form method="POST" action="<?= htmlspecialchars(base_url('/admin/captcha'), ENT_QUOTES, 'UTF-8') ?>">
+                <form method="POST" action="<?= htmlspecialchars(base_path('/admin/captcha'), ENT_QUOTES, 'UTF-8') ?>">
                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
                     <div class="mb-4">
                         <label for="cp_captcha_provider" class="block text-sm text-zinc-400 mb-1">Provider</label>
@@ -648,7 +648,7 @@
                 <h3 class="text-xl font-semibold">Errors & Logging</h3>
                 <button type="button" data-modal-close="cp-errors-modal" class="rounded-lg px-2 py-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200">&times;</button>
             </div>
-            <form method="POST" action="<?= htmlspecialchars(base_url('/admin/more'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-4">
+            <form method="POST" action="<?= htmlspecialchars(base_path('/admin/more'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-4">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
                 <?php if (!empty($check_for_updates)): ?><input type="hidden" name="check_for_updates" value="1"><?php endif; ?>
                 <label class="flex items-center justify-between gap-4 rounded-xl border border-zinc-700 bg-zinc-800/30 px-4 py-3 cursor-pointer">
@@ -682,7 +682,7 @@
                 <h3 class="text-xl font-semibold">Updates</h3>
                 <button type="button" data-modal-close="cp-updates-modal" class="rounded-lg px-2 py-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200">&times;</button>
             </div>
-            <form method="POST" action="<?= htmlspecialchars(base_url('/admin/more'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-4">
+            <form method="POST" action="<?= htmlspecialchars(base_path('/admin/more'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-4">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
                 <?php if (!empty($error_display)): ?><input type="hidden" name="error_display" value="1"><?php endif; ?>
                 <?php if (!empty($attachment_logging)): ?><input type="hidden" name="attachment_logging" value="1"><?php endif; ?>
@@ -695,7 +695,7 @@
                 </label>
                 <div class="pt-1">
                     <p class="text-xs text-zinc-500 mb-2">Run the same update check immediately.</p>
-                    <button type="submit" formaction="<?= htmlspecialchars(base_url('/admin/check-updates'), ENT_QUOTES, 'UTF-8') ?>" class="w-full flex items-center justify-between gap-4 rounded-xl border border-zinc-700 bg-zinc-800/30 px-4 py-3 text-left text-zinc-100 hover:bg-zinc-800/50 transition">
+                    <button type="submit" formaction="<?= htmlspecialchars(base_path('/admin/check-updates'), ENT_QUOTES, 'UTF-8') ?>" class="w-full flex items-center justify-between gap-4 rounded-xl border border-zinc-700 bg-zinc-800/30 px-4 py-3 text-left text-zinc-100 hover:bg-zinc-800/50 transition">
                         <span class="block">Check for updates now</span>
                         <span class="text-xs text-zinc-400">Run</span>
                     </button>
@@ -718,7 +718,7 @@
                 <button type="button" data-modal-close="cp-announcement-modal" class="rounded-lg px-2 py-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200">&times;</button>
             </div>
             <p class="text-sm text-zinc-400 mb-5">Show a plain text alert on the dashboard for all users. Leave blank to hide it.</p>
-            <form method="POST" action="<?= htmlspecialchars(base_url('/admin/announcement'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-4">
+            <form method="POST" action="<?= htmlspecialchars(base_path('/admin/announcement'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-4">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
                 <?php $currentAnnouncementStyle = (string)($announcement_style ?? 'orange'); ?>
                 <div>
@@ -760,7 +760,7 @@
             </div>
             <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
                 <p class="text-sm text-zinc-400">Generated: <?= (int)$inviteCount ?> / <?= (int)$inviteLimit ?></p>
-                <form method="POST" action="<?= htmlspecialchars(base_url('/settings/invites/generate'), ENT_QUOTES, 'UTF-8') ?>">
+                <form method="POST" action="<?= htmlspecialchars(base_path('/settings/invites/generate'), ENT_QUOTES, 'UTF-8') ?>">
                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
                     <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 px-4 py-2 rounded-lg disabled:bg-zinc-700 disabled:text-zinc-400 disabled:cursor-not-allowed" <?= $inviteCount >= $inviteLimit ? 'disabled' : '' ?>>
                         Generate invite code
@@ -779,7 +779,7 @@
                                     <i class="fa-regular fa-copy"></i>
                                 </button>
                                 <?php if (!$invite->used_by): ?>
-                                    <form method="POST" action="<?= htmlspecialchars(base_url('/settings/invites/delete'), ENT_QUOTES, 'UTF-8') ?>" onsubmit="return confirm('Delete this invite code?');">
+                                    <form method="POST" action="<?= htmlspecialchars(base_path('/settings/invites/delete'), ENT_QUOTES, 'UTF-8') ?>" onsubmit="return confirm('Delete this invite code?');">
                                         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
                                         <input type="hidden" name="invite_code" value="<?= htmlspecialchars($invite->code, ENT_QUOTES, 'UTF-8') ?>">
                                         <button type="submit" class="text-zinc-500 hover:text-red-300" title="Delete invite code"><i class="fa-regular fa-trash-can"></i></button>
@@ -817,7 +817,7 @@
             <?php if (!$usernameCanChangeNow && !empty($usernameChangeAvailableAt)): ?>
                 <p class="text-sm text-amber-300 mb-4">Username recently changed. You can change it again on <?= htmlspecialchars($usernameChangeAvailableAt, ENT_QUOTES, 'UTF-8') ?></p>
             <?php endif; ?>
-            <form method="POST" action="<?= htmlspecialchars(base_url('/settings/profile/username'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-3">
+            <form method="POST" action="<?= htmlspecialchars(base_path('/settings/profile/username'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-3">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
                 <label class="block text-sm text-zinc-300">New username</label>
                 <input type="text" name="username" value="<?= htmlspecialchars($user->username, ENT_QUOTES, 'UTF-8') ?>" minlength="4" maxlength="32" pattern="[a-z][a-z0-9]{3,31}" autocapitalize="none" spellcheck="false" data-modal-autofocus required <?= $usernameCanChangeNow ? '' : 'disabled' ?> class="w-full rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-3 text-zinc-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-50">
@@ -851,7 +851,7 @@
                     Enter the verification code within <?= (int)$pendingEmailMinutes ?> minute<?= $pendingEmailMinutes === 1 ? '' : 's' ?>.
                 </div>
             <?php endif; ?>
-            <form method="POST" action="<?= htmlspecialchars(base_url('/settings/account/email'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-3">
+            <form method="POST" action="<?= htmlspecialchars(base_path('/settings/account/email'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-3">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
                 <label class="block text-sm text-zinc-300">New email address</label>
                 <input type="email" name="email" id="cp-change-email-input" data-current-email="<?= htmlspecialchars((string)$user->email, ENT_QUOTES, 'UTF-8') ?>" value="<?= htmlspecialchars($pendingEmailValue, ENT_QUOTES, 'UTF-8') ?>" <?= empty($pendingEmailChange) ? 'data-modal-autofocus' : '' ?> inputmode="email" autocomplete="email" required class="w-full rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-3 text-zinc-100 focus:outline-none focus:ring-2 focus:ring-emerald-500">
@@ -863,7 +863,7 @@
             </form>
             <?php if (!empty($pendingEmailChange)): ?>
                 <div class="my-5 h-px bg-zinc-700"></div>
-                <form method="POST" action="<?= htmlspecialchars(base_url('/settings/account/email/verify'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-3">
+                <form method="POST" action="<?= htmlspecialchars(base_path('/settings/account/email/verify'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-3">
                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
                     <p class="text-sm text-zinc-300">Enter the code sent to <span class="font-semibold text-zinc-100"><?= htmlspecialchars($pendingEmailChange->new_email, ENT_QUOTES, 'UTF-8') ?></span>.</p>
                     <label class="block text-sm text-zinc-300">Verification code</label>
@@ -887,7 +887,7 @@
                 <h3 class="text-xl font-semibold">Change Password</h3>
                 <button type="button" data-modal-close="cp-password-modal" class="rounded-lg px-2 py-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200">&times;</button>
             </div>
-            <form method="POST" action="<?= htmlspecialchars(base_url('/settings/account/password'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-3">
+            <form method="POST" action="<?= htmlspecialchars(base_path('/settings/account/password'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-3">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
                 <label class="block text-sm text-zinc-300">Current password</label>
                 <input type="password" name="current_password" data-modal-autofocus required class="w-full rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-3 text-zinc-100 focus:outline-none focus:ring-2 focus:ring-emerald-500">
@@ -968,7 +968,7 @@
                 <h3 class="text-xl font-semibold">Time Zone</h3>
                 <button type="button" data-modal-close="cp-timezone-modal" class="rounded-lg px-2 py-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200">&times;</button>
             </div>
-            <form method="POST" action="<?= htmlspecialchars(base_url('/settings/timezone'), ENT_QUOTES, 'UTF-8') ?>">
+            <form method="POST" action="<?= htmlspecialchars(base_path('/settings/timezone'), ENT_QUOTES, 'UTF-8') ?>">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
                 <p id="timezone-help-text" class="text-sm text-zinc-300 mb-3">All times are stored in UTC. Search by region, city, or UTC offset to choose your display time zone.</p>
                 <input type="hidden" name="timezone" id="timezone-hidden-input" value="<?= htmlspecialchars((string)($userTimezone ?? 'UTC+0'), ENT_QUOTES, 'UTF-8') ?>">
@@ -1054,7 +1054,7 @@
                                 <p class="text-zinc-300"><span class="text-zinc-400">IP:</span> <?= htmlspecialchars((string)$session->ip_address, ENT_QUOTES, 'UTF-8') ?></p>
                                 <p class="text-zinc-300"><span class="text-zinc-400">Browser:</span> <?= htmlspecialchars((string)$session->browser, ENT_QUOTES, 'UTF-8') ?></p>
                             </div>
-                            <form method="POST" action="<?= htmlspecialchars(base_url('/settings/sessions/exit'), ENT_QUOTES, 'UTF-8') ?>" onsubmit="return confirm('End this session?');">
+                            <form method="POST" action="<?= htmlspecialchars(base_path('/settings/sessions/exit'), ENT_QUOTES, 'UTF-8') ?>" onsubmit="return confirm('End this session?');">
                                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
                                 <input type="hidden" name="session_id" value="<?= (int)$session->id ?>">
                                 <button type="submit" class="text-red-300 hover:text-red-200 underline decoration-red-400 whitespace-nowrap">Exit session</button>
@@ -1107,7 +1107,7 @@
                         <p class="text-xs text-zinc-500 mb-1">Or enter this key manually:</p>
                         <div class="bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 font-mono text-sm text-zinc-300 break-all select-all"><?= htmlspecialchars($totpSecretDisplay, ENT_QUOTES, 'UTF-8') ?></div>
                     </div>
-                    <form method="POST" action="<?= htmlspecialchars(base_url('/settings/2fa/totp/confirm'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-3">
+                    <form method="POST" action="<?= htmlspecialchars(base_path('/settings/2fa/totp/confirm'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-3">
                         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
                         <div>
                             <label class="block text-sm text-zinc-400 mb-1">Enter the 6-digit code from your app to confirm</label>
@@ -1153,7 +1153,7 @@
                         <span class="text-zinc-200 font-medium"><?= $totpRecoveryCodesRemaining ?> <span class="text-zinc-500 font-normal">of 8</span></span>
                     </div>
 
-                    <form method="POST" action="<?= htmlspecialchars(base_url('/settings/2fa/totp/disable'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-3 border-t border-zinc-700 pt-5">
+                    <form method="POST" action="<?= htmlspecialchars(base_path('/settings/2fa/totp/disable'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-3 border-t border-zinc-700 pt-5">
                         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
                         <p class="text-sm text-zinc-400">To disable, enter your current password:</p>
                         <input type="password" name="password" placeholder="Current password" required class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 focus:outline-none focus:border-emerald-500">
@@ -1165,7 +1165,7 @@
                 <!-- TOTP not configured -->
                 <div class="space-y-4">
                     <p class="text-zinc-400">Add an extra layer of security by using an authenticator app like Google Authenticator, Duo, or Authy.</p>
-                    <form method="POST" action="<?= htmlspecialchars(base_url('/settings/2fa/totp/setup'), ENT_QUOTES, 'UTF-8') ?>">
+                    <form method="POST" action="<?= htmlspecialchars(base_path('/settings/2fa/totp/setup'), ENT_QUOTES, 'UTF-8') ?>">
                         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
                         <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 py-3 rounded-xl font-semibold transition">Set up authenticator app</button>
                     </form>
@@ -1240,7 +1240,7 @@
                 <h3 class="text-xl font-semibold">Preferences</h3>
                 <button type="button" data-modal-close="cp-preferences-modal" class="rounded-lg px-2 py-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200">&times;</button>
             </div>
-            <form method="POST" action="<?= htmlspecialchars(base_url('/settings/preferences'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-4">
+            <form method="POST" action="<?= htmlspecialchars(base_path('/settings/preferences'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-4">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
                 <label class="flex items-center justify-between gap-4 rounded-xl border border-zinc-700 bg-zinc-800/30 px-4 py-3 cursor-pointer">
                     <div>

@@ -11,7 +11,7 @@
 
         <div class="mt-6 flex items-center justify-end gap-3">
             <a href="<?= htmlspecialchars(base_url('/c/' . (string)($chatNumberFormatted ?? '')), ENT_QUOTES, 'UTF-8') ?>" class="px-4 py-2 rounded-xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 text-zinc-200">Cancel</a>
-            <form method="post" action="<?= htmlspecialchars(base_url('/c/' . (string)($chatNumberFormatted ?? '') . '/delete'), ENT_QUOTES, 'UTF-8') ?>">
+            <form method="post" action="<?= htmlspecialchars(base_path('/c/' . (string)($chatNumberFormatted ?? '') . '/delete'), ENT_QUOTES, 'UTF-8') ?>">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars((string)($csrf ?? ''), ENT_QUOTES, 'UTF-8') ?>">
                 <button type="submit" class="px-4 py-2 rounded-xl bg-red-700 hover:bg-red-600 text-white">Delete chat</button>
             </form>

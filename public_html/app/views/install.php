@@ -9,7 +9,7 @@
     <?php endif; ?>
 
     <?php if (!empty($canInstall)): ?>
-        <form method="POST" action="<?= htmlspecialchars(base_url('/install'), ENT_QUOTES, 'UTF-8') ?>">
+        <form method="POST" action="<?= htmlspecialchars(base_path('/install'), ENT_QUOTES, 'UTF-8') ?>">
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
 
             <input

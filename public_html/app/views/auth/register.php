@@ -23,7 +23,7 @@
     <?php if ($toastMessage !== ''): ?>
         <div id="page-toast" data-toast-message="<?= htmlspecialchars($toastMessage, ENT_QUOTES, 'UTF-8') ?>" data-toast-kind="<?= htmlspecialchars($toastKind, ENT_QUOTES, 'UTF-8') ?>" class="hidden" aria-hidden="true"></div>
     <?php endif; ?>
-    <form method="POST" action="<?= htmlspecialchars(base_url('/register'), ENT_QUOTES, 'UTF-8') ?>">
+    <form method="POST" action="<?= htmlspecialchars(base_path('/register'), ENT_QUOTES, 'UTF-8') ?>">
         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
         <label for="register-username" class="block text-sm text-zinc-300 mb-2">Username</label>
         <input id="register-username" type="text" name="username" placeholder="Username" minlength="4" maxlength="32" pattern="[a-z][a-z0-9]{3,31}" title="Username must be 4-32 characters, start with a lowercase letter, and contain only lowercase letters and numbers." autocapitalize="none" spellcheck="false" aria-describedby="username-requirements" class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-4" required>

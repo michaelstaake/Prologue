@@ -10,7 +10,7 @@
     <?php if ($toastMessage !== ''): ?>
         <div id="page-toast" data-toast-message="<?= htmlspecialchars($toastMessage, ENT_QUOTES, 'UTF-8') ?>" data-toast-kind="<?= htmlspecialchars($toastKind, ENT_QUOTES, 'UTF-8') ?>" class="hidden" aria-hidden="true"></div>
     <?php endif; ?>
-    <form method="POST" action="<?= htmlspecialchars(base_url('/reset-password'), ENT_QUOTES, 'UTF-8') ?>">
+    <form method="POST" action="<?= htmlspecialchars(base_path('/reset-password'), ENT_QUOTES, 'UTF-8') ?>">
         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
         <input type="hidden" name="token" value="<?= htmlspecialchars($token ?? '', ENT_QUOTES, 'UTF-8') ?>">
         <label for="reset-password" class="block text-sm text-zinc-300 mb-2">New password</label>

@@ -39,7 +39,7 @@
     <?php if ($toastMessage !== ''): ?>
         <div id="page-toast" data-toast-message="<?= htmlspecialchars($toastMessage, ENT_QUOTES, 'UTF-8') ?>" data-toast-kind="<?= htmlspecialchars($toastKind, ENT_QUOTES, 'UTF-8') ?>" class="hidden" aria-hidden="true"></div>
     <?php endif; ?>
-    <form method="POST" action="<?= htmlspecialchars(base_url('/login'), ENT_QUOTES, 'UTF-8') ?>">
+    <form method="POST" action="<?= htmlspecialchars(base_path('/login'), ENT_QUOTES, 'UTF-8') ?>">
         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
         <label for="login-identifier" class="block text-sm text-zinc-300 mb-2">Email or username</label>
         <input id="login-identifier" type="text" name="identifier" placeholder="Email or username" class="w-full bg-zinc-800 border border-zinc-700 rounded-2xl px-5 py-4 mb-4" required autofocus>

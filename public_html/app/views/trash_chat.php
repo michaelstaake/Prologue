@@ -102,7 +102,7 @@ $renderStoredMentionsToPlain = static function (string $content, $mentionMap): s
         <div class="w-full max-w-md bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl p-6" role="dialog" aria-modal="true" aria-labelledby="trash-delete-modal-title">
             <h2 id="trash-delete-modal-title" class="text-lg font-semibold text-zinc-100">Delete chat permanently</h2>
             <p class="mt-2 text-sm text-zinc-400" id="trash-delete-modal-description">Are you sure you want to permanently delete this chat and all associated data?</p>
-            <form id="trash-delete-form" action="<?= htmlspecialchars(base_url('/trash/delete'), ENT_QUOTES, 'UTF-8') ?>" method="POST" class="mt-4">
+            <form id="trash-delete-form" action="<?= htmlspecialchars(base_path('/trash/delete'), ENT_QUOTES, 'UTF-8') ?>" method="POST" class="mt-4">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
                 <input type="hidden" id="trash-delete-chat-id" name="chat_id" value="">
                 <div class="flex items-center justify-end gap-3">
