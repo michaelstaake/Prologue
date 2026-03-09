@@ -197,6 +197,12 @@ try {
 if (!isset($dbVersion) && $requestPath !== '/install') {
     ErrorHandler::abort(424, 'Prologue has not been installed yet.');
 }
+if (!isset($dbVersion)) {
+    unset($_SESSION['user_id'], $_SESSION['auth_session_token'], $_SESSION['last_activity_touch_at']);
+    if (isset($_COOKIE['remember_me'])) {
+        Auth::clearRememberCookie();
+    }
+}
 if (strpos($requestPath, '/api') === 0) {
     RateLimiter::enforceApiLimit($requestPath, $_SERVER['REQUEST_METHOD'] ?? 'GET');
 }
