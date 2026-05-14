@@ -16,7 +16,8 @@ RUN echo "upload_max_filesize=512M\npost_max_size=512M" > /usr/local/etc/php/con
 
 COPY .docker/vhost.conf /etc/apache2/sites-available/000-default.conf
 COPY .docker/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+RUN sed -i 's/\r$//' /entrypoint.sh \
+	&& chmod +x /entrypoint.sh
 
 WORKDIR /var/www/html
 
