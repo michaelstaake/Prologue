@@ -65,6 +65,19 @@
                 ];
             }
 
+            if ($targetType === 'post') {
+                $postOwnerUsername = trim((string)($report->target_post_owner_username ?? ''));
+                $label = 'Post #' . (int)($report->target_id ?? 0);
+                if ($postOwnerUsername !== '') {
+                    $label .= ' by ' . $postOwnerUsername;
+                }
+
+                return [
+                    'label' => $label,
+                    'href' => base_url('/posts?post=' . (int)($report->target_id ?? 0))
+                ];
+            }
+
             return [
                 'label' => ucfirst($targetType) . ' #' . (int)($report->target_id ?? 0),
                 'href' => null
@@ -95,12 +108,13 @@
             <?php else: ?>
                 <?php foreach ($reportList as $report): ?>
                     <?php
+                        $isSystemReport = (int)($report->reporter_id ?? 0) <= 0;
                         $reporter = (object) [
-                            'username' => $report->reporter_username,
-                            'user_number' => $report->reporter_user_number,
-                            'avatar_filename' => $report->reporter_avatar_filename
+                            'username' => $isSystemReport ? 'AI moderation' : $report->reporter_username,
+                            'user_number' => $isSystemReport ? '' : $report->reporter_user_number,
+                            'avatar_filename' => $isSystemReport ? '' : $report->reporter_avatar_filename
                         ];
-                        $reporterAvatar = User::avatarUrl($reporter);
+                        $reporterAvatar = $isSystemReport ? '' : User::avatarUrl($reporter);
                         $target = $formatTarget($report);
                         $isPending = strtolower((string)($report->status ?? '')) === 'pending';
                     ?>
@@ -110,6 +124,10 @@
                                 <div class="flex items-center gap-3 mb-3">
                                     <?php if ($reporterAvatar): ?>
                                         <img src="<?= htmlspecialchars($reporterAvatar, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($report->reporter_username, ENT_QUOTES, 'UTF-8') ?> avatar" class="w-9 h-9 rounded-full object-cover border border-zinc-700">
+                                    <?php elseif ($isSystemReport): ?>
+                                        <div class="w-9 h-9 rounded-full border border-zinc-700 flex items-center justify-center bg-zinc-900 text-emerald-300">
+                                            <i class="fa-solid fa-robot text-sm"></i>
+                                        </div>
                                     <?php else: ?>
                                         <div class="w-9 h-9 rounded-full border border-zinc-700 flex items-center justify-center font-semibold text-sm <?= htmlspecialchars(User::avatarColorClasses($report->reporter_user_number), ENT_QUOTES, 'UTF-8') ?>">
                                             <?= htmlspecialchars(User::avatarInitial($report->reporter_username), ENT_QUOTES, 'UTF-8') ?>
@@ -117,9 +135,13 @@
                                     <?php endif; ?>
                                     <div class="min-w-0">
                                         <div class="text-sm text-zinc-400">Reporter</div>
-                                        <a href="<?= htmlspecialchars(base_url('/u/' . User::formatUserNumber((string)$report->reporter_user_number)), ENT_QUOTES, 'UTF-8') ?>" class="font-medium prologue-accent hover:text-emerald-300 hover:underline underline-offset-2">
-                                            <?= htmlspecialchars($report->reporter_username, ENT_QUOTES, 'UTF-8') ?>
-                                        </a>
+                                        <?php if ($isSystemReport): ?>
+                                            <span class="font-medium text-zinc-100">AI moderation</span>
+                                        <?php else: ?>
+                                            <a href="<?= htmlspecialchars(base_url('/u/' . User::formatUserNumber((string)$report->reporter_user_number)), ENT_QUOTES, 'UTF-8') ?>" class="font-medium prologue-accent hover:text-emerald-300 hover:underline underline-offset-2">
+                                                <?= htmlspecialchars($report->reporter_username, ENT_QUOTES, 'UTF-8') ?>
+                                            </a>
+                                        <?php endif; ?>
                                     </div>
                                 </div>
 

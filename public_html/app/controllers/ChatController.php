@@ -1198,6 +1198,20 @@ class ChatController extends Controller {
             $quotedUsername = (string)($quotedMessage->username ?? '');
         }
 
+        $aiModerationResult = null;
+        if (AiModerationService::isScanEnabled()) {
+            $moderationContent = $rawContent;
+            if ($quotedContent !== null && trim($quotedContent) !== '') {
+                $moderationContent .= "\n\nQuoted content:\n" . $quotedContent;
+            }
+
+            try {
+                $aiModerationResult = AiModerationService::moderateContent($moderationContent, 'chat message');
+            } catch (Throwable $exception) {
+                error_log('AI moderation unavailable for chat message: ' . $exception->getMessage());
+            }
+        }
+
         Database::query(
             "INSERT INTO messages (chat_id, user_id, content, quoted_message_id, quoted_user_id, quoted_content)
              VALUES (?, ?, ?, ?, ?, ?)",
@@ -1212,6 +1226,14 @@ class ChatController extends Controller {
         );
         $messageId = (int)Database::getInstance()->lastInsertId();
         Attachment::markPendingSubmitted($chatId, (int)$userId, $messageId, $attachmentIds);
+
+        if (is_array($aiModerationResult) && ($aiModerationResult['status'] ?? '') === 'flagged') {
+            Report::createAutomated(
+                'message',
+                $messageId,
+                AiModerationService::buildAutomatedReportReason('message', $aiModerationResult)
+            );
+        }
 
         // Notify other members
         $members = Database::query("SELECT user_id FROM chat_members WHERE chat_id = ? AND user_id != ?", [$chatId, $userId])->fetchAll();

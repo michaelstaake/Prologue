@@ -171,6 +171,10 @@ class UpdateController extends Controller {
             '0.2.7' => [
                 "ALTER TABLE notifications MODIFY COLUMN type ENUM('message','call','friend_request','friend_request_accepted','report','poke') NOT NULL",
             ],
+            '1.1.0' => [
+                "ALTER TABLE reports MODIFY COLUMN reporter_id INT NULL",
+                "ALTER TABLE reports MODIFY COLUMN target_type ENUM('user','chat','message','post') NOT NULL",
+            ],
         ];
     }
 

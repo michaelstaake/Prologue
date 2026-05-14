@@ -11,9 +11,26 @@ class PostController extends Controller {
             $this->json(['error' => 'Posts must be between 1 and 500 characters'], 400);
         }
 
+        $aiModerationResult = null;
+        if (AiModerationService::isScanEnabled()) {
+            try {
+                $aiModerationResult = AiModerationService::moderateContent($content, 'profile post');
+            } catch (Throwable $exception) {
+                error_log('AI moderation unavailable for profile post: ' . $exception->getMessage());
+            }
+        }
+
         $post = Post::create($userId, $content);
         if (!$post) {
             $this->json(['error' => 'Unable to create post'], 500);
+        }
+
+        if (is_array($aiModerationResult) && ($aiModerationResult['status'] ?? '') === 'flagged') {
+            Report::createAutomated(
+                'post',
+                (int)$post->id,
+                AiModerationService::buildAutomatedReportReason('post', $aiModerationResult)
+            );
         }
 
         $this->json(['success' => true, 'post_id' => (int)$post->id]);

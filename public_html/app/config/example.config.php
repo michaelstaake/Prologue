@@ -509,8 +509,8 @@ CREATE TABLE push_delivery_logs (
 -- Reports
 CREATE TABLE reports (
 	id INT AUTO_INCREMENT PRIMARY KEY,
-	reporter_id INT NOT NULL,
-	target_type ENUM('user','chat','message') NOT NULL,
+	reporter_id INT NULL,
+	target_type ENUM('user','chat','message','post') NOT NULL,
 	target_id INT NOT NULL,
 	reason TEXT NOT NULL,
 	status ENUM('pending','reviewed','dismissed') DEFAULT 'pending',

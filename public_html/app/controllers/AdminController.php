@@ -165,6 +165,58 @@ class AdminController extends Controller {
         $this->redirect('/settings');
     }
 
+    public function saveAiSettings() {
+        $this->requireAdminUser();
+        Auth::csrfValidate();
+
+        [$baseUrl, $model, $apiKey] = $this->readAiSettingsFromRequest();
+        $configChanged = $this->persistAiSettingsValues($baseUrl, $model, $apiKey);
+
+        if ($configChanged) {
+            AiModerationService::clearVerificationState();
+            Setting::set(AiModerationService::SETTING_SCAN_ENABLED, '0');
+            $this->flash('success', 'ai_saved_reverify');
+            $this->redirect('/settings');
+        }
+
+        $scanEnabled = isset($_POST['ai_scan_enabled']) && AiModerationService::isVerifiedForCurrentConfig();
+        Setting::set(AiModerationService::SETTING_SCAN_ENABLED, $scanEnabled ? '1' : '0');
+
+        $this->flash('success', 'ai_saved');
+        $this->redirect('/settings');
+    }
+
+    public function testAiSettings() {
+        $this->requireAdminUser();
+        Auth::csrfValidate();
+
+        [$baseUrl, $model, $apiKey] = $this->readAiSettingsFromRequest();
+        $configChanged = $this->persistAiSettingsValues($baseUrl, $model, $apiKey);
+
+        if ($baseUrl === '' || $model === '' || $apiKey === '') {
+            AiModerationService::markFailed('Base URL, model, and API key are required before testing the AI connection.');
+            Setting::set(AiModerationService::SETTING_SCAN_ENABLED, '0');
+            $this->flash('ai_test_error', 'Base URL, model, and API key are required before testing the AI connection.');
+            $this->redirect('/settings');
+        }
+
+        try {
+            AiModerationService::testConnectionWithConfig($baseUrl, $model, $apiKey);
+            AiModerationService::markVerified($baseUrl, $model, $apiKey);
+
+            $keepScanEnabled = !$configChanged && (string)(Setting::get(AiModerationService::SETTING_SCAN_ENABLED) ?? '0') === '1';
+            Setting::set(AiModerationService::SETTING_SCAN_ENABLED, $keepScanEnabled ? '1' : '0');
+
+            $this->flash('success', 'ai_test_passed');
+        } catch (Throwable $exception) {
+            AiModerationService::markFailed($exception->getMessage());
+            Setting::set(AiModerationService::SETTING_SCAN_ENABLED, '0');
+            $this->flash('ai_test_error', $exception->getMessage());
+        }
+
+        $this->redirect('/settings');
+    }
+
     public function sendTestMail() {
         $user = $this->requireAdminUser();
         Auth::csrfValidate();
@@ -207,24 +259,47 @@ class AdminController extends Controller {
         $this->redirect('/settings');
     }
 
-        public function recalculateStorageStats() {
-            $this->requireAdminUser();
-            Auth::csrfValidate();
+    private function readAiSettingsFromRequest(): array {
+        $baseUrl = AiModerationService::normalizeBaseUrl((string)($_POST['ai_base_url'] ?? ''));
+        $model = AiModerationService::normalizeModel((string)($_POST['ai_model'] ?? ''));
+        $postedApiKey = trim((string)($_POST['ai_api_key'] ?? ''));
+        $apiKey = $postedApiKey !== '' ? $postedApiKey : AiModerationService::getConfiguredApiKey();
 
-            try {
-                $stats = $this->calculateStorageStats();
+        return [$baseUrl, $model, $apiKey];
+    }
 
-                Setting::set('storage_total_bytes_cached', (string)$stats['total_storage_bytes']);
-                Setting::set('storage_dedup_saved_bytes_cached', (string)$stats['dedup_saved_bytes']);
-                Setting::set('storage_stats_last_recalculated_at', gmdate('Y-m-d H:i:s'));
+    private function persistAiSettingsValues(string $baseUrl, string $model, string $apiKey): bool {
+        $currentBaseUrl = AiModerationService::getConfiguredBaseUrl();
+        $currentModel = AiModerationService::getConfiguredModel();
+        $currentApiKey = AiModerationService::getConfiguredApiKey();
 
-                $this->flash('success', 'storage_recalculated');
-            } catch (Throwable $exception) {
-                $this->flash('error', 'storage_recalculate_failed');
-            }
+        Setting::set(AiModerationService::SETTING_BASE_URL, $baseUrl);
+        Setting::set(AiModerationService::SETTING_MODEL, $model);
+        Setting::set(AiModerationService::SETTING_API_KEY, $apiKey);
 
-            $this->redirect('/settings');
+        return $currentBaseUrl !== $baseUrl
+            || $currentModel !== $model
+            || $currentApiKey !== $apiKey;
+    }
+
+    public function recalculateStorageStats() {
+        $this->requireAdminUser();
+        Auth::csrfValidate();
+
+        try {
+            $stats = $this->calculateStorageStats();
+
+            Setting::set('storage_total_bytes_cached', (string)$stats['total_storage_bytes']);
+            Setting::set('storage_dedup_saved_bytes_cached', (string)$stats['dedup_saved_bytes']);
+            Setting::set('storage_stats_last_recalculated_at', gmdate('Y-m-d H:i:s'));
+
+            $this->flash('success', 'storage_recalculated');
+        } catch (Throwable $exception) {
+            $this->flash('error', 'storage_recalculate_failed');
         }
+
+        $this->redirect('/settings');
+    }
 
     public function checkForUpdatesNow() {
         $user = $this->requireAdminUser();

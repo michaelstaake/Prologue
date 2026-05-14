@@ -10,6 +10,7 @@
         $flashSuccess = flash_get('success');
         $flashError = flash_get('error');
         $mailTestError = flash_get('mail_test_error');
+        $aiTestError = flash_get('ai_test_error');
 
         // Settings flash messages
         if ($flashSuccess === 'email_saved') {
@@ -58,6 +59,18 @@
         } elseif ($flashSuccess === 'push_saved') {
             $toastMessage = 'Push notification settings saved.';
             $toastKind = 'success';
+        } elseif ($flashSuccess === 'ai_saved') {
+            $toastMessage = 'AI settings saved.';
+            $toastKind = 'success';
+            $autoOpenModalId = 'cp-ai-modal';
+        } elseif ($flashSuccess === 'ai_saved_reverify') {
+            $toastMessage = 'AI settings saved. Run a successful test before enabling scanning.';
+            $toastKind = 'success';
+            $autoOpenModalId = 'cp-ai-modal';
+        } elseif ($flashSuccess === 'ai_test_passed') {
+            $toastMessage = 'AI connection test passed. You can now enable AI message scanning.';
+            $toastKind = 'success';
+            $autoOpenModalId = 'cp-ai-modal';
         } elseif ($flashSuccess === 'mail_test_sent') {
             $toastMessage = 'Test email sent — check your inbox to confirm it arrived.';
             $toastKind = 'success';
@@ -187,6 +200,10 @@
             $toastKind = 'error';
             $autoOpenModalId = 'cp-2fa-modal';
         }
+
+        if (!empty($aiTestError) && $autoOpenModalId === '') {
+            $autoOpenModalId = 'cp-ai-modal';
+        }
     ?>
 
     <?php if ($toastMessage !== ''): ?>
@@ -203,6 +220,13 @@
         <div class="max-w-2xl rounded-xl border border-red-700 bg-red-950/60 px-5 py-4">
             <p class="text-sm font-semibold text-red-300 mb-1">Test email failed</p>
             <p class="text-sm text-red-200 break-words"><?= htmlspecialchars($mailTestError, ENT_QUOTES, 'UTF-8') ?></p>
+        </div>
+    <?php endif; ?>
+
+    <?php if (!empty($aiTestError)): ?>
+        <div class="max-w-2xl rounded-xl border border-red-700 bg-red-950/60 px-5 py-4">
+            <p class="text-sm font-semibold text-red-300 mb-1">AI connection test failed</p>
+            <p class="text-sm text-red-200 break-words"><?= htmlspecialchars($aiTestError, ENT_QUOTES, 'UTF-8') ?></p>
         </div>
     <?php endif; ?>
 
@@ -280,6 +304,10 @@
             <button type="button" data-modal-open="cp-push-modal" class="bg-zinc-900 border border-zinc-700 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 hover:bg-zinc-800 transition cursor-pointer aspect-[2/1]">
                 <i class="fa-solid fa-bell text-2xl text-emerald-400"></i>
                 <span class="text-sm text-zinc-200 font-medium">Push Notifications</span>
+            </button>
+            <button type="button" data-modal-open="cp-ai-modal" class="bg-zinc-900 border border-zinc-700 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 hover:bg-zinc-800 transition cursor-pointer aspect-[2/1]">
+                <i class="fa-solid fa-robot text-2xl text-emerald-400"></i>
+                <span class="text-sm text-zinc-200 font-medium">AI Features</span>
             </button>
         </div>
     </div>
@@ -776,6 +804,92 @@
                 </div>
                 <div class="pt-2">
                     <button type="submit" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-medium transition">Save push settings</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- AI Features Modal -->
+<div id="cp-ai-modal" class="<?= $modalOverlayClass ?>" role="dialog" aria-modal="true">
+    <div class="<?= $modalBackdropClass ?>" data-modal-close="cp-ai-modal"></div>
+    <div class="<?= $modalCenterClass ?>">
+        <div class="<?= $modalBoxClass ?>" data-modal-box>
+            <div class="mb-4 flex items-center justify-between">
+                <h3 class="text-xl font-semibold">AI Features</h3>
+                <button type="button" data-modal-close="cp-ai-modal" class="rounded-lg px-2 py-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200">&times;</button>
+            </div>
+            <p class="text-sm text-zinc-400 mb-5">Connect an OpenAI-compatible endpoint, verify it with a test request, then enable AI message scanning for chat messages and profile posts.</p>
+            <?php
+                $aiVerifiedCurrent = !empty($ai_verified_current);
+                $aiLastTestStatus = strtolower(trim((string)($ai_last_test_status ?? 'pending')));
+                $aiStatusLabel = $aiVerifiedCurrent ? 'Verified' : ($aiLastTestStatus === 'failed' ? 'Failed' : 'Test required');
+                $aiStatusClasses = $aiVerifiedCurrent
+                    ? 'border-emerald-600 text-emerald-300 bg-emerald-900/30'
+                    : ($aiLastTestStatus === 'failed'
+                        ? 'border-red-600 text-red-300 bg-red-900/30'
+                        : 'border-amber-600 text-amber-300 bg-amber-900/30');
+            ?>
+            <div class="mb-5 rounded-xl border border-zinc-700 bg-zinc-800/30 px-4 py-3 space-y-2">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <p class="text-sm font-medium text-zinc-100">Connection status</p>
+                        <p class="text-xs text-zinc-500 mt-1">
+                            <?= $aiVerifiedCurrent
+                                ? 'The saved AI settings were tested successfully and can be used for moderation.'
+                                : 'Run the test successfully before enabling AI message scanning.' ?>
+                        </p>
+                    </div>
+                    <span class="shrink-0 rounded-full border px-2 py-1 text-xs <?= $aiStatusClasses ?>"><?= htmlspecialchars($aiStatusLabel, ENT_QUOTES, 'UTF-8') ?></span>
+                </div>
+                <?php if (!empty($ai_last_tested_at)): ?>
+                    <p class="text-xs text-zinc-400">Last tested: <?= htmlspecialchars((string)$ai_last_tested_at, ENT_QUOTES, 'UTF-8') ?> UTC</p>
+                <?php endif; ?>
+                <?php if (!empty($ai_api_key_configured)): ?>
+                    <p class="text-xs text-zinc-400">Saved API key: <?= htmlspecialchars((string)($ai_api_key_masked ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
+                <?php endif; ?>
+                <?php if (!$aiVerifiedCurrent && !empty($ai_last_test_error)): ?>
+                    <p class="text-xs text-red-300 break-words">Last error: <?= htmlspecialchars((string)$ai_last_test_error, ENT_QUOTES, 'UTF-8') ?></p>
+                <?php endif; ?>
+            </div>
+            <form method="POST" action="<?= htmlspecialchars(base_path('/admin/ai'), ENT_QUOTES, 'UTF-8') ?>" class="space-y-4">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
+                <div>
+                    <label for="ai_base_url" class="block text-sm text-zinc-400 mb-1">OpenAI-compatible URL</label>
+                    <input type="text" id="ai_base_url" name="ai_base_url" value="<?= htmlspecialchars((string)($ai_base_url ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="https://api.openai.com/v1" autocomplete="off" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-zinc-100">
+                    <p class="text-xs text-zinc-500 mt-1">Use the API base URL. Prologue will call the chat completions endpoint from this base.</p>
+                </div>
+                <div>
+                    <label for="ai_model" class="block text-sm text-zinc-400 mb-1">Model</label>
+                    <input type="text" id="ai_model" name="ai_model" value="<?= htmlspecialchars((string)($ai_model ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="gpt-4.1-mini" autocomplete="off" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-zinc-100">
+                </div>
+                <div>
+                    <label for="ai_api_key" class="block text-sm text-zinc-400 mb-1">API key</label>
+                    <input type="password" id="ai_api_key" name="ai_api_key" value="" placeholder="<?= !empty($ai_api_key_configured) ? 'Leave blank to keep current key' : 'Enter API key' ?>" autocomplete="new-password" class="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-zinc-100">
+                    <?php if (!empty($ai_api_key_configured)): ?>
+                        <p class="text-xs text-zinc-500 mt-1">Leave this blank to keep the saved key.</p>
+                    <?php endif; ?>
+                </div>
+                <div class="rounded-xl border border-amber-700 bg-amber-950/40 px-4 py-3">
+                    <p class="text-sm font-medium text-amber-200">Privacy notice</p>
+                    <p class="mt-1 text-xs text-amber-100/90">Sending content to a third-party AI service may affect the privacy of your users. Before enabling AI message scanning, ensure all users acknowledge that their messages may be scanned by a third-party AI service. When possible, prefer an AI model hosted on servers you control instead of a third-party provider.</p>
+                </div>
+                <label class="flex items-center justify-between gap-4 rounded-xl border border-zinc-700 bg-zinc-800/30 px-4 py-3 <?= $aiVerifiedCurrent ? 'cursor-pointer' : 'opacity-70' ?>">
+                    <div>
+                        <span class="block text-zinc-100">AI message scanning</span>
+                        <span class="block text-xs text-zinc-500 mt-0.5">Scan chat messages and profile posts for rude, phishing, or adult content, then auto-report flagged content for admin review.</span>
+                    </div>
+                    <input type="checkbox" name="ai_scan_enabled" value="1" <?= !empty($ai_scan_enabled) ? 'checked' : '' ?> <?= $aiVerifiedCurrent ? '' : 'disabled' ?> class="w-5 h-5 accent-emerald-500 shrink-0">
+                </label>
+                <?php if (!$aiVerifiedCurrent): ?>
+                    <p class="text-xs text-amber-300">Run a successful test first to unlock AI message scanning.</p>
+                <?php endif; ?>
+                <div class="pt-2 flex flex-wrap items-center gap-3">
+                    <button type="submit" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-medium transition">Save AI settings</button>
+                    <button type="submit" formaction="<?= htmlspecialchars(base_path('/admin/ai/test'), ENT_QUOTES, 'UTF-8') ?>" class="inline-flex items-center gap-2 px-5 py-2.5 bg-zinc-700 hover:bg-zinc-600 text-zinc-100 rounded-xl font-medium transition">
+                        <i class="fa-solid fa-vial-circle-check"></i>
+                        Test connection
+                    </button>
                 </div>
             </form>
         </div>

@@ -49,13 +49,18 @@ class ReportController extends Controller {
                     target_user.user_number AS target_user_number,
                     target_chat.chat_number AS target_chat_number,
                     target_message.chat_id AS target_message_chat_id,
-                    message_chat.chat_number AS target_message_chat_number
+                          message_chat.chat_number AS target_message_chat_number,
+                          target_post.user_id AS target_post_owner_id,
+                          target_post_owner.username AS target_post_owner_username,
+                          target_post_owner.user_number AS target_post_owner_user_number
              FROM reports r
-             JOIN users reporter ON reporter.id = r.reporter_id
+                      LEFT JOIN users reporter ON reporter.id = r.reporter_id
              LEFT JOIN users target_user ON r.target_type = 'user' AND target_user.id = r.target_id
              LEFT JOIN chats target_chat ON r.target_type = 'chat' AND target_chat.id = r.target_id
              LEFT JOIN messages target_message ON r.target_type = 'message' AND target_message.id = r.target_id
              LEFT JOIN chats message_chat ON message_chat.id = target_message.chat_id
+                      LEFT JOIN posts target_post ON r.target_type = 'post' AND target_post.id = r.target_id
+                      LEFT JOIN users target_post_owner ON target_post_owner.id = target_post.user_id
              {$whereSql}
              ORDER BY r.created_at DESC",
             []
@@ -118,7 +123,7 @@ class ReportController extends Controller {
         $targetId = (int)($_POST['target_id'] ?? 0);
         $reason = trim($_POST['reason'] ?? '');
 
-        if (!in_array($type, ['user', 'chat', 'message'], true) || $targetId <= 0 || $reason === '' || mb_strlen($reason) > 1000) {
+        if (!in_array($type, Report::TARGET_TYPES, true) || $targetId <= 0 || $reason === '' || mb_strlen($reason) > 1000) {
             $this->json(['error' => 'Invalid report'], 400);
         }
 
@@ -155,13 +160,23 @@ class ReportController extends Controller {
             }
         }
 
-        Database::query("INSERT INTO reports (reporter_id, target_type, target_id, reason) VALUES (?, ?, ?, ?)", 
-            [$userId, $type, $targetId, $reason]);
+        if ($type === 'post') {
+            $targetPost = Database::query("SELECT user_id FROM posts WHERE id = ?", [$targetId])->fetch();
+            if (!$targetPost) {
+                $this->json(['error' => 'Invalid report target'], 404);
+            }
 
-        $admins = Database::query("SELECT id FROM users WHERE role = 'admin'")->fetchAll();
-        foreach ($admins as $admin) {
-            Notification::create($admin->id, 'report', 'New Report', 'A new report was submitted and is pending review.', '/reports');
+            if ((int)$targetPost->user_id === (int)$userId) {
+                $this->json(['error' => 'You cannot report your own content'], 400);
+            }
         }
+
+        $reportId = Report::create((int)$userId, $type, $targetId, $reason);
+        if ($reportId === null) {
+            $this->json(['error' => 'Invalid report'], 400);
+        }
+
+        Report::notifyAdmins();
 
         $this->json(['success' => true]);
     }

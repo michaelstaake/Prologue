@@ -336,6 +336,8 @@ $router->post('/admin/attachments', 'AdminController@saveAttachmentSettings');
 $router->post('/admin/announcement', 'AdminController@saveAnnouncementSettings');
 $router->post('/admin/more', 'AdminController@saveMoreSettings');
 $router->post('/admin/captcha', 'AdminController@saveCaptchaSettings');
+$router->post('/admin/ai', 'AdminController@saveAiSettings');
+$router->post('/admin/ai/test', 'AdminController@testAiSettings');
 $router->post('/admin/push', 'AdminController@savePushSettings');
 
 // Settings
