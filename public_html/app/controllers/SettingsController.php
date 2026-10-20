@@ -79,7 +79,6 @@ class SettingsController extends Controller {
             $qr = new QRCode($uri, ['s' => 'qrm', 'sf' => 6]);
             $image = $qr->render_image();
             imagepng($image);
-            imagedestroy($image);
             $pngData = ob_get_clean();
             $totpQrDataUri = 'data:image/png;base64,' . base64_encode($pngData);
         }

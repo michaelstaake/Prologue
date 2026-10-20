@@ -48,7 +48,6 @@ class QRCode {
 
 		header('Content-Type: image/png');
 		imagepng($image);
-		imagedestroy($image);
 	}
 
 	public function render_image() {

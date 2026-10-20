@@ -118,7 +118,6 @@ class WebPushService {
         $responseBody = curl_exec($ch);
         $curlError = curl_error($ch);
         $statusCode = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-        curl_close($ch);
 
         if ($statusCode >= 200 && $statusCode < 300) {
             return [

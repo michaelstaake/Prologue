@@ -46,7 +46,6 @@ class GoogleRecaptchaV2CaptchaProvider implements CaptchaProviderInterface {
         ]);
 
         $response = curl_exec($ch);
-        curl_close($ch);
 
         if ($response === false) {
             return false;
